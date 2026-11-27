@@ -188,7 +188,9 @@ cost is why the declaration is the fact and the derivation is the fallback.
 ## Model input at a recorded child call
 
 After the host authorizes a saved recording, `readInvocationModelInput` reads
-one child model call through the opened recording. A `RecordedModelCall` names
+one child model call through the opened recording. The reader trusts the
+`SavedRecording` handle produced by `openSavedRecording`.
+A `RecordedModelCall` names
 the engine run, the original log owner, the full mount path, the runtime stage,
 and the commit's index on the native child log. Use the native index, which can
 differ from the visible replay position when the presentation skips the input

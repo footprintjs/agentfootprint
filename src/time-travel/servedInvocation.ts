@@ -51,7 +51,13 @@ const unavailable = (reason: UnavailableReason): RecordedModelInput =>
 function addressOf(value: unknown): RecordedModelCall | undefined {
   const limits = RECORDING_PARTS_LIMITS;
   try {
-    const { engineRunId, logRunId, invocationPath, commitIdx, runtimeStageId } = ownData(value);
+    const { engineRunId, logRunId, invocationPath, commitIdx, runtimeStageId } = ownData(value, [
+      'engineRunId',
+      'logRunId',
+      'invocationPath',
+      'commitIdx',
+      'runtimeStageId',
+    ]);
     const path = readOwnList(invocationPath, limits.pathSegments);
     if (
       !isName(engineRunId) ||

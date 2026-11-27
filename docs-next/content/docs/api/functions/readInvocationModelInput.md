@@ -6,7 +6,7 @@ title: readInvocationModelInput
 
 > **readInvocationModelInput**(`recording`, `position`, `options?`): `Promise`\<[`RecordedModelInput`](/docs/api/type-aliases/RecordedModelInput)\>
 
-Defined in: [src/time-travel/servedInvocation.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedInvocation.ts#L162)
+Defined in: [src/time-travel/servedInvocation.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedInvocation.ts#L168)
 
 Read model input and its original receipt for one exact native child commit.
 The caller supplies an already authorized recording opened by

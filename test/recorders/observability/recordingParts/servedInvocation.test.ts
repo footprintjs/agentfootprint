@@ -10,7 +10,7 @@ import {
 } from '../../../../src/index.js';
 import { conversationRedaction } from '../../../../src/doors/security.js';
 import { Sequence } from '../../../../src/core-flow/Sequence.js';
-import { openSavedRecording, recordRun } from '../../../../src/observe.js';
+import { openSavedRecording, recordRun, type Recording } from '../../../../src/observe.js';
 import type { LLMRequest } from '../../../../src/provider-contract/types.js';
 import {
   epochLocations,
@@ -340,4 +340,121 @@ it('refuses foreign native bytes and an unsupported commit without displaying a 
     status: 'unavailable',
     reason: 'unreadable-commit',
   });
+});
+
+async function savedWhole(recording: Recording) {
+  const store = inMemoryArtifacts();
+  const saved = await openSavedRecording(
+    counted(store).artifacts,
+    await fileWhole(store, recording),
+  );
+  if (saved.status !== 'ready') throw new Error('Missing fixture recording');
+  return saved;
+}
+
+type NativeFixtureUnit = {
+  treeContext: { history: { runtimeStageId: string; overwrite: Record<string, unknown> }[] };
+};
+
+it.each(['dynamic', 'dynamic-grouped'] as const)(
+  'refuses an adjacent native non-call stop in %s even with its correct stage stamp',
+  async (reactMode) => {
+    const { recording } = await childRecording({ reactMode });
+    const saved = await savedWhole(recording);
+    const call = recording.events.find((event) => event.type === 'agentfootprint.stream.llm_start');
+    const origin = call?.meta.sourcePosition;
+    if (!call || !origin) throw new Error('Missing fixture model call');
+    const unit = await saved.readInvocation(origin.drillPath.at(-1)!);
+    if (unit.status !== 'ready') throw new Error('Missing native invocation');
+    // The grouped call ends its local log. The flat call has a following route commit.
+    const commitIdx = origin.committedThroughIdx + (reactMode === 'dynamic' ? 2 : 0);
+    const { runtimeStageId } = (unit.result as NativeFixtureUnit).treeContext.history[commitIdx]!;
+    expect(runtimeStageId).not.toBe(call.meta.runtimeStageId);
+    await expect(
+      readInvocationModelInput(saved, {
+        engineRunId: origin.engineRunId,
+        logRunId: origin.logRunId,
+        invocationPath: origin.drillPath,
+        commitIdx,
+        runtimeStageId,
+      }),
+    ).resolves.toEqual({ status: 'unavailable', reason: 'not-model-call' });
+  },
+);
+
+it('refuses the same invocation key from a second run with no receipt to disambiguate it', async () => {
+  const { recording } = await childRecording({ recordReceipt: false });
+  const other = await childRecording({ recordReceipt: false });
+  const saved = await savedWhole(recording);
+  const foreign = await savedWhole(other.recording);
+  expect(foreign.snapshotRunId).not.toBe(saved.snapshotRunId);
+  const address = addressFor(recording, saved, epochLocations(recording.snapshot)[0]!);
+  const foreignUnit = await foreign.readInvocation(address.invocationPath.at(-1)!);
+  if (foreignUnit.status !== 'ready')
+    throw new Error('Expected an equal native key in the second run');
+  const transplant = {
+    ...saved,
+    async readInvocation(key: string) {
+      const unit = await saved.readInvocation(key);
+      return unit.status === 'ready' && key === address.invocationPath.at(-1)
+        ? { ...unit, result: foreignUnit.result }
+        : unit;
+    },
+  };
+  await expect(readInvocationModelInput(transplant, address)).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'address-mismatch',
+  });
+});
+
+it.each(['foreign run', 'missing basis'] as const)('refuses a receipt with %s', async (defect) => {
+  const { recording } = await childRecording();
+  const saved = await savedWhole(recording);
+  const address = addressFor(recording, saved, epochLocations(recording.snapshot)[0]!);
+  const damaged = {
+    ...saved,
+    async readInvocation(key: string) {
+      const unit = await saved.readInvocation(key);
+      if (unit.status !== 'ready' || key !== address.invocationPath.at(-1)) return unit;
+      const result = structuredClone(unit.result) as NativeFixtureUnit;
+      const overwrite = result.treeContext.history[address.commitIdx]!.overwrite;
+      const receipt = overwrite[RECEIPT_KEY] as { basis?: { runId: string } };
+      expect(receipt.basis?.runId).toBe(address.engineRunId);
+      if (defect === 'foreign run') receipt.basis!.runId = 'foreign-receipt-run';
+      else delete receipt.basis;
+      return { ...unit, result };
+    },
+  };
+  await expect(readInvocationModelInput(damaged, address)).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'unreadable-receipt',
+  });
+});
+
+it('refuses an incomplete recording before requesting its payloads', async () => {
+  const { recording } = await childRecording();
+  const saved = await savedWhole(recording);
+  const address = addressFor(recording, saved, epochLocations(recording.snapshot)[0]!);
+  const readRoot = vi.fn(saved.readRoot);
+  const incomplete = { ...saved, readRoot, complete: false };
+  await expect(readInvocationModelInput(incomplete, address)).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'address-mismatch',
+  });
+  expect(readRoot).not.toHaveBeenCalled();
+});
+
+it('refuses undeclared address fields before requesting the recording', async () => {
+  const { recording } = await childRecording();
+  const saved = await savedWhole(recording);
+  const address = {
+    ...addressFor(recording, saved, epochLocations(recording.snapshot)[0]!),
+    debug: true,
+  };
+  const readRoot = vi.fn(saved.readRoot);
+  await expect(readInvocationModelInput({ ...saved, readRoot }, address)).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'address-mismatch',
+  });
+  expect(readRoot).not.toHaveBeenCalled();
 });
