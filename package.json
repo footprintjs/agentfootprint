@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "20.1.0",
+  "version": "20.1.1",
   "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -76,7 +76,8 @@
     "test:watch": "vitest --watch",
     "docs:api": "typedoc",
     "docs:regen": "npm run build && npm run docs:generate",
-    "docs:generate": "node scripts/gen-ai-instructions.mjs && node scripts/generate-answer-warning-readme.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:truth:report",
+    "docs:chart-map": "node scripts/generate-chart-map.mjs",
+    "docs:generate": "node scripts/gen-ai-instructions.mjs && node scripts/generate-answer-warning-readme.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:chart-map && npm run docs:truth:report",
     "docs:check": "npm run docs:regen && node scripts/check-generated.mjs",
     "docs:truth": "node scripts/docs-truth-check.mjs",
     "docs:truth:baseline": "node scripts/docs-truth-check.mjs --update-baseline",
