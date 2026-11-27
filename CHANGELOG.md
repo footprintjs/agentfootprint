@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.2.1] - 2026-11-27
+
+### Fixed
+
+- **Keep listed skill instructions in one place during tool turns.** Skill reads carry their recorded origin through result annotations and history windows. A cursor hop retains previously served system instructions while the role permits them, and a self-read acknowledges the instructions already served. A signed-turn refusal names a tool-result middleware change when it made the body fall back to the system prompt. Resuming a saved listed-mode turn retains a skill body already delivered as an exact tool result. The evidence check treats exact saved skill text as app instructions. If a skill body changed after an AgentFootprint 20.1.0 checkpoint, models that bind thinking to context can still refuse the changed prefix before sending a request.
+
 ## [20.2.0] - 2026-11-27
 
 ### Added
