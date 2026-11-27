@@ -16,7 +16,6 @@ import {
   unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
-import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
 import type { ArtifactMeta } from '../../../../../artifacts/types.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
@@ -32,6 +31,7 @@ import { mcpClientUseFor } from '../../../../../tools/mcpClientUse.js';
 import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest.js';
 import { rewrittenAfterApproval } from '../access/bindings.js';
 import {
+  buildResumedArgumentRefusal,
   buildResumedSkillAdmission,
   recheckResumedCall,
   recordResumedRefusal,
@@ -76,6 +76,7 @@ export function buildResumedInvocation(
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
   const resolveSkillAdmission = buildResumedSkillAdmission(deps);
+  const argumentRefusal = buildResumedArgumentRefusal(deps, links);
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -142,29 +143,11 @@ export function buildResumedInvocation(
         .get(batchAddress(toolCallId, seen?.callOccurrenceKey))?.refused ??
       (unmounted === undefined ? undefined : await unmounted);
     if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
-    const invalidArgs = links.argumentRefusal(scope, tool, approved, {
-      toolName,
-      toolCallId,
-      iteration,
-      ...(role === undefined ? {} : { role }),
-    });
+    const accessFrame = { ...occurrence, gate: heldTo, tool, toolName, toolCallId, iteration, env };
+    const invalidArgs = argumentRefusal(scope, role, { ...accessFrame, args: approved });
     if (invalidArgs !== undefined) {
-      if (role !== undefined && isHiddenSkillRead(tool, approved, role)) {
-        await recheckResumedCall(scope, deps, {
-          ...occurrence,
-          gate: heldTo,
-          tool,
-          toolName,
-          toolCallId,
-          iteration,
-          args: approved,
-          env,
-          parkedNow: links.parkedNow,
-          historyForCheckIn: links.historyForCheckIn,
-          hiddenSelectionRefusal: invalidArgs,
-        });
-      }
-      return { result: invalidArgs, error: true };
+      const result = typeof invalidArgs === 'string' ? invalidArgs : await invalidArgs;
+      return { result, error: true };
     }
     links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
@@ -191,14 +174,8 @@ export function buildResumedInvocation(
     let ended: Error | undefined;
     try {
       const access = await recheckResumedCall(scope, deps, {
-        ...occurrence,
-        gate: heldTo,
-        tool,
-        toolName,
-        toolCallId,
-        iteration,
+        ...accessFrame,
         args: prepared,
-        env,
         parkedNow: links.parkedNow,
         historyForCheckIn: links.historyForCheckIn,
       });

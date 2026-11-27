@@ -9,7 +9,11 @@ import type { SkillRoleView } from '../../../skillContext/toolVisibility.js';
 import type { Resolution } from '../contracts/callFacts.js';
 import type { Tool } from '../../../../../tools/tools.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import type { ResumedCallResult } from '../contracts/operations/resumedInvocation.js';
+import type {
+  ResumedCallResult,
+  ResumedInvocationLinks,
+} from '../contracts/operations/resumedInvocation.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import {
   runToolChain,
@@ -94,6 +98,35 @@ interface ResumeGateFrame {
     scope: TypedScope<AgentState>,
     history: readonly LLMMessage[],
   ) => readonly LLMMessage[];
+}
+
+/** Validate the saved selection and retain the policy receipt for a known hidden skill. */
+export function buildResumedArgumentRefusal(
+  deps: AccessDeps,
+  links: Pick<ResumedInvocationLinks, 'argumentRefusal' | 'parkedNow' | 'historyForCheckIn'>,
+) {
+  return (
+    scope: TypedScope<AgentState>,
+    role: SkillRoleView | undefined,
+    frame: Omit<ResumeGateFrame, 'parkedNow' | 'historyForCheckIn' | 'hiddenSelectionRefusal'>,
+  ): string | Promise<string> | undefined => {
+    const { tool, toolName, toolCallId, iteration, args } = frame;
+    const refusal = links.argumentRefusal(scope, tool, args, {
+      toolName,
+      toolCallId,
+      iteration,
+      ...(role === undefined ? {} : { role }),
+    });
+    if (refusal === undefined || role === undefined || !isHiddenSkillRead(tool, args, role)) {
+      return refusal;
+    }
+    return recheckResumedCall(scope, deps, {
+      ...frame,
+      parkedNow: links.parkedNow,
+      historyForCheckIn: links.historyForCheckIn,
+      hiddenSelectionRefusal: refusal,
+    }).then(() => refusal);
+  };
 }
 
 const secondQuestion = (name: string): string =>

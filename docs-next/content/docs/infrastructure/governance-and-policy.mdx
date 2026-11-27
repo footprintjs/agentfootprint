@@ -182,9 +182,9 @@ const policy = PermissionPolicy.fromRoles(roles, 'support', {
 A refused skill is governed at **both** ends of one rule:
 
 - its row **disappears** from the `read_skill` menu the model reads;
-- activating it anyway is refused with the policy's own message
-  (`Skill 'payroll' is not available to the 'support' role.`), before `execute`
-  runs — so a `surfaceMode: 'tool-only'` skill's body is never even computed.
+- selecting an unavailable skill gets a generic refusal before `execute` can compute its body.
+
+Permission rows are for operators. Filter them out before serving `toSSE` in `full` format to a role-restricted user.
 
 Three design points worth the ink:
 
