@@ -265,12 +265,13 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
           ...tail,
         ];
 
-  const contextCheck = contextCheckFor(deps, provider, model, {
-    systemText: systemPrompt,
-    systemPieces,
-    tools: activeToolSchemas,
-    wire: wireMessages,
-  });
+  const contextCheck = contextCheckFor(
+    deps,
+    provider,
+    model,
+    { systemText: systemPrompt, systemPieces, tools: activeToolSchemas, wire: wireMessages },
+    deps.skillContext?.tools.strategy === 'listed' ? committed : undefined,
+  );
   typedEmit(scope, 'agentfootprint.stream.llm_start', {
     iteration,
     provider: provider.name,

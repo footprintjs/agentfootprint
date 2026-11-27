@@ -1,29 +1,31 @@
-/**
- * Which `read_skill` results in a history ARE a registered skill's body: the
- * app's own text, under the library tool's name, equal to the body the app
- * registered. One reading for the readers that must agree on it: the window's
- * pin (`stages/window.ts`) and the honesty readers' view
- * (`honestyView.ts`).
- */
 import type { LLMMessage } from '../../../provider-contract/types.js';
+import { sha256Hex } from '../../../lib/sha256.js';
+import {
+  skillBodyOrigin,
+  carriesSkillDefinition,
+} from '../../../injection-engine/skillBodyEvidence.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
-/** A `read_skill` result whose text is the body of one of `bodies`, and that skill's id. */
+/** A still-present, library-produced body of a currently registered definition. */
 export function skillBodyOf(
-  message: Pick<LLMMessage, 'role' | 'content' | 'toolName'>,
+  message: LLMMessage,
   bodies: ReadonlyMap<string, string>,
 ): string | undefined {
-  if (message.role !== 'tool' || message.toolName !== 'read_skill') return undefined;
-  for (const [id, body] of bodies) if (body.length > 0 && message.content === body) return id;
-  return undefined;
+  const origin = skillBodyOrigin(message);
+  if (origin === undefined) return undefined;
+  const current = bodies.get(origin.skillId);
+  return current !== undefined && carriesSkillDefinition(message, origin, sha256Hex(current))
+    ? origin.skillId
+    : undefined;
 }
 
 /**
- * The call id of the NEWEST body result of each skill in `active`: one pin per
+ * The recorded occurrence of the NEWEST body result of each skill in `active`: one pin per
  * skill (the `last-tool-result` rule). Older copies of the same body are
  * ordinary history a window may drop; the newest one keeps the body in front
  * of the model.
  */
-export function activeSkillBodyCallIds(
+export function activeSkillBodyOccurrences(
   history: readonly LLMMessage[],
   bodies: ReadonlyMap<string, string>,
   active: readonly string[],
@@ -32,8 +34,9 @@ export function activeSkillBodyCallIds(
   const newest = new Map<string, string>();
   for (const message of history) {
     const id = skillBodyOf(message, bodies);
-    if (id !== undefined && live.has(id) && message.toolCallId !== undefined)
-      newest.set(id, message.toolCallId);
+    if (id === undefined || !live.has(id)) continue;
+    const occurrence = readCallOccurrenceKey(message);
+    if (typeof occurrence === 'string') newest.set(id, occurrence);
   }
   return new Set(newest.values());
 }

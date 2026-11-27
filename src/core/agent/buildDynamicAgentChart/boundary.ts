@@ -12,6 +12,9 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
   return {
     input: (parent: Record<string, unknown>) => ({
       ...dynamicTurnInput(parent, deps),
+      ...(parent.servedSystemSkillBodies !== undefined && {
+        priorSystemSkillBodies: parent.servedSystemSkillBodies,
+      }),
       ...(Object.hasOwn(parent, 'providerIntervention') && {
         priorProviderIntervention: parent.providerIntervention,
       }),
@@ -50,6 +53,12 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
         // record that only exists inside the subflow would answer the
         // question everywhere except where it tells you to look.
         messagesDelivery: s.messagesDelivery,
+        // The accepted request witnesses the prior slot pieces that may be
+        // retained. An empty observation also clears the outer witness.
+        ...((s.servedSystemSkillBodies !== undefined ||
+          parent.servedSystemSkillBodies !== undefined) && {
+          servedSystemSkillBodies: s.servedSystemSkillBodies ?? [],
+        }),
         // The composed system prompt's records (9.35.0) — bubbled ONLY for
         // an agent with the evidence gate mounted. The outer Route decider
         // exempts values the APP supplied (base prompt, skill body, a

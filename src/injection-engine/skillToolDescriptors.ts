@@ -22,6 +22,7 @@
  * `test/injection-engine/skill-graph-fence.test.ts`.
  */
 
+import { skillActivationConfirmation } from './skillBodyEvidence.js';
 import type { SkillToolDescriptor } from './hostContract.js';
 import { classifySkillTarget } from './skillGraph.js';
 import { spoken } from '../lib/spokenIds.js';
@@ -500,6 +501,7 @@ export function resolveReadSkillDescriptor(
   skills: readonly Injection[],
   offer?: ReadSkillOffer,
   treeWithheld?: (ids: readonly string[]) => void,
+  captureBodyReader?: (readBody: (id: string) => string | undefined) => void,
 ): SkillToolDescriptor<{ id: string }, string> | undefined {
   const visible = visibleSkills(skills, offer);
   if (!visible.length) return undefined;
@@ -535,6 +537,13 @@ export function resolveReadSkillDescriptor(
     });
   }
 
+  const bodyFor = (id: string): string | undefined => {
+    const entry = byId.get(id);
+    return entry && (entry.surfaceMode === 'tool-only' || entry.surfaceMode === 'both')
+      ? entry.body || undefined
+      : undefined;
+  };
+  captureBodyReader?.(bodyFor);
   return {
     name: 'read_skill',
     description: describeOffer(skills, line, skillCatalog, offer),
@@ -569,28 +578,9 @@ export function resolveReadSkillDescriptor(
       //     delivery; LLM sees it as the most recent tool result).
       //   - 'system-prompt' / 'auto' / unspecified → return confirmation
       //     only; body lands via system slot on the next iteration.
-      if ((entry.surfaceMode === 'tool-only' || entry.surfaceMode === 'both') && entry.body) {
-        return entry.body;
-      }
-      return skillActivationConfirmation(id);
+      return bodyFor(id) ?? skillActivationConfirmation(id);
     },
   };
 }
 
-// LENS · tool-result · persistent-history
-// reads: only the id it was handed; exported so the gate can tell this sentence from a skill body
-// law: may omit, never deny; every clause anchored to the call it was composed on.
-/**
- * What `read_skill` answers when it activated a skill but did NOT carry its body
- * (surface modes `'system-prompt'` / `'auto'` — the body lands via the system
- * slot next iteration).
- *
- * Exported because the skill-graph gate has to tell this sentence apart from a
- * body: a SELF-CALL keeps the body (the model asked to re-read where it is, and
- * under `'tool-only'` the tool result is the only place that body ever appears)
- * but must not keep a promise of an activation that is not pending. Comparing
- * against the one owner of the string beats guessing at its shape.
- */
-export function skillActivationConfirmation(id: string): string {
-  return `Skill '${id}' activated for the next iteration.`;
-}
+export { skillActivationConfirmation } from './skillBodyEvidence.js';

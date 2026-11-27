@@ -57,6 +57,7 @@ export async function acceptResponse(
     acceptedFindingsRequest,
     acceptedOffer,
     acceptedProjection,
+    acceptedSystemSkillBodies,
     recall,
   } = executed;
   // Preserve the pending carrier if the provider fails, so crash recovery
@@ -73,6 +74,10 @@ export async function acceptResponse(
     iteration,
     recall: recall?.summary(localFallback ? 'local' : 'provider'),
   });
+  // A successful attempt owns this witness. An earlier attempt's slot
+  // projection cannot authorize retaining bytes in this turn.
+  if (acceptedSystemSkillBodies.length > 0 || 'servedSystemSkillBodies' in scope)
+    scope.servedSystemSkillBodies = acceptedSystemSkillBodies;
   // A response owns its replay evidence, never the previous response's.
   // The presence trap does not record a read on never-replay providers.
   if (response.replay !== undefined || 'llmLatestReplay' in scope) {

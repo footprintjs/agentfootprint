@@ -390,8 +390,11 @@ export function buildCallDispatch(
         skillRejected: false,
         skillHop: false,
       };
+      const listedSkillReader = deps.listedScopedTools !== undefined && isLibrarySkillReader(tool);
       applyReadSkillRoute(scope, deps, {
         tc,
+        listedSkillReader,
+        history: batch.newHistory,
         iteration: batch.iteration,
         parkedNow: operations.parkedNow,
         noteSkillRefusal: operations.noteSkillRefusal,
@@ -445,7 +448,7 @@ export function buildCallDispatch(
         if (!presented.ok) outcome.error = true;
       }
 
-      const { capped, modelResult, modelResultCapped, toolResultDisposition } =
+      const { capped, modelResult, modelResultCapped, toolResultDisposition, toolSkillBody } =
         await finalizeCallResult(scope, operations, {
           tool,
           tc,
@@ -455,7 +458,7 @@ export function buildCallDispatch(
           outcome,
           skillRejected: skillRoute.skillRejected,
           sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
-          libraryBody: deps.listedScopedTools !== undefined && isLibrarySkillReader(tool),
+          libraryBody: listedSkillReader,
         });
 
       const durationMs = Date.now() - startMs;
@@ -479,6 +482,7 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
+        ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
       recordServedLimits(
         scope,

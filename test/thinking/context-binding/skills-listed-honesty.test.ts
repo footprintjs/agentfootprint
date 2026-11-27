@@ -16,6 +16,7 @@ import { scriptedClient, type Body, type Step } from './harness.js';
 import { towersFor } from '../../../src/core/agent/stages/toolCalls/evidence/towers.js';
 import { groundedArgumentValues } from '../../../src/core/agent/findings/contingent.js';
 import { resolveEvidenceGate } from '../../../src/core/agent/evidence/gate.js';
+import { recordSkillBody } from '../../../src/injection-engine/skillBodyEvidence.js';
 
 const BODY = 'SMB TRIAGE: check the share report first. The latency threshold is 4711 ms.';
 const lookup = defineTool<Record<string, never>, string>({
@@ -159,13 +160,18 @@ describe('the dispatch moment (findings towers) reads a body as the app’s text
 
   it('listed (the body is the read_skill result) grounds exactly what declared (the body in the system prompt) grounds', () => {
     const gate = resolveEvidenceGate({});
+    const legacyBody = { role: 'tool', toolCallId: 'r1', toolName: 'read_skill', content: BODY };
     const listed = {
       turnNumber: 1,
       userMessage: 'Why is the finance share slow?',
       history: [
         { role: 'user', content: 'Why is the finance share slow?' },
         read,
-        { role: 'tool', toolCallId: 'r1', toolName: 'read_skill', content: BODY },
+        {
+          ...legacyBody,
+          callOccurrenceKey: 'occ:r1',
+          toolSkillBody: recordSkillBody('smb-triage', BODY, BODY),
+        },
         lookupCall,
         lookupResult,
       ],
@@ -202,5 +208,11 @@ describe('the dispatch moment (findings towers) reads a body as the app’s text
     // The body's own number is exempt app text, never a value a tool returned.
     expect(grounded(listed, listedGate).join(' ')).not.toContain('4711');
     expect(grounded(listed, listedGate).join(' ')).toContain('5200');
+
+    const legacy = {
+      ...listed,
+      history: [listed.history[0], read, legacyBody, lookupCall, lookupResult],
+    };
+    expect(grounded(legacy, listedGate)).toEqual(['5200']);
   });
 });

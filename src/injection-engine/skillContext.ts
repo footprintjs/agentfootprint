@@ -14,8 +14,15 @@
  * fact names, and the first layer above the fence that may import the engine
  * (`core/agent/skillContext/decide.ts`) evaluates them with `decideFromFacts`.
  * The rule types below are structural copies of the engine's filter rules, so
- * this file imports nothing.
+ * this file imports no chart or runtime engine code.
  */
+
+import { sha256Hex } from '../lib/sha256.js';
+import {
+  skillBodyOrigin,
+  carriesSkillDefinition,
+  type SkillBodyHistoryMessage,
+} from './skillBodyEvidence.js';
 
 /** The two strategies. */
 export type SkillContextStrategy = 'listed' | 'declared';
@@ -104,28 +111,33 @@ export function stricterBinding(
   return STRICTNESS[b] > STRICTNESS[a] ? b : a;
 }
 
-/** The fields of one history message the body rule reads (`LLMMessage` and the engine's view both have them). */
-export interface SkillBodyHistoryMessage {
-  readonly role: string;
-  readonly content: string;
-  readonly toolName?: string;
+/**
+ * The skill text contributed by the system slot from this active projection.
+ * Its surface mode has already accounted for the turn's tool history.
+ */
+export function systemSkillBody(injection: {
+  readonly flavor: string;
+  readonly surfaceMode?: string;
+  readonly inject: { readonly systemPrompt?: string };
+}): string | undefined {
+  const body = injection.inject.systemPrompt;
+  return injection.flavor === 'skill' && injection.surfaceMode !== 'tool-only' && body
+    ? body
+    : undefined;
 }
 
-/**
- * Is a skill's body already in front of the model: a `read_skill` result in
- * the history this request sends whose text IS the registered body? Content
- * equality with the app's own text, under the library tool's name; a result
- * a window dropped, a summary folded or a checkpoint from before `listed`
- * carried as the old confirmation is not.
- */
+/** Is this definition already carried by a produced and still-present result? */
 export function bodyInHistory(
+  skillId: string,
   body: string | undefined,
   history: readonly SkillBodyHistoryMessage[] | undefined,
 ): boolean {
-  if (body === undefined || body.length === 0 || history === undefined) return false;
-  return history.some(
-    (m) => m.role === 'tool' && m.toolName === 'read_skill' && m.content === body,
-  );
+  if (!body || !history) return false;
+  const digest = sha256Hex(body);
+  return history.some((message) => {
+    const origin = skillBodyOrigin(message);
+    return origin?.skillId === skillId && carriesSkillDefinition(message, origin, digest);
+  });
 }
 
 /**
@@ -137,9 +149,10 @@ export function bodyInHistory(
  */
 export function servedSurfaceMode(
   meta: { readonly surfaceMode?: string; readonly skillContext?: unknown } | undefined,
+  skillId: string,
   body: string | undefined,
   history: readonly SkillBodyHistoryMessage[] | undefined,
 ): string | undefined {
-  if (meta?.skillContext === 'listed' && bodyInHistory(body, history)) return 'tool-only';
+  if (meta?.skillContext === 'listed' && bodyInHistory(skillId, body, history)) return 'tool-only';
   return meta?.surfaceMode;
 }

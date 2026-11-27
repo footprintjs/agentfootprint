@@ -52,6 +52,7 @@ export const fields2 = {
   toolResultDisposition: true,
   toolResultExecution: true,
   toolResultOrigin: true,
+  toolSkillBody: true,
   tools: true,
   toolsCount: true,
   toolset_name: true,

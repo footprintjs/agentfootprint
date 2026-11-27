@@ -24,6 +24,8 @@ export interface ContextChange {
   readonly source?: ContextSource;
   /** `system-prompt`: the piece's own id (a skill id, an injection id), when it has one. */
   readonly id?: string;
+  /** A recorded result rewrite or withholding removed the listed skill body's tool delivery. */
+  readonly cause?: 'read-skill-result-middleware';
   /** `tools`: the tool's name. */
   readonly tool?: string;
   /** `tools`: who put the tool forward, when the run recorded it. */

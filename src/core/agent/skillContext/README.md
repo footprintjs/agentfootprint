@@ -13,8 +13,9 @@ load change nothing instead.
 |---|---|
 | `decide.ts` | `decideSkillContext`: the strictest binding over every provider and model the agent's own calls reach (the agent, each skill brain, the escalation), then the two tables of `injection-engine/skillContext.ts` evaluated with footprintjs `decideFromFacts`; `decisionRecord` / `fixedRecord` make the records. Evaluated ONCE, by `runtime/configuration/configure.ts` · `configureAgent`. |
 | `apply.ts` | Keeps the decision on the configuration. Under `listed` every skill gets `metadata.skillContext: 'listed'`, and the evidence gate gets the registered bodies. |
-| `bodies.ts` | `skillBodyOf`: a `read_skill` result whose text IS a registered body. The one reading the window pin, the messages slot, the honesty view and the gate's no-name rule agree on. |
+| `bodies.ts` | `skillBodyOf`: the current body definition held by a recorded `read_skill` occurrence. The window and the system slot verify the same body record. |
 | `honestyView.ts` | `honestyHistory`: the history the evidence gate's two moments read under `listed`, where a body result reads as the `declared` confirmation and the body is exempt app text. |
+| `systemBodies.ts` | Capture the accepted request’s system skill pieces and keep eligible pieces in slot order for the current turn. |
 | `gate.ts` | `notLoadedFor`: a skill-served call whose declaring skills are all hidden, or a scoped tool none of whose skills is active, is refused with fixed words. |
 
 ## The rule tables
@@ -42,6 +43,11 @@ the body table still runs.
   skill refuses to leave (`'active-skill-body'`); older copies are ordinary history.
 - `stages/toolCalls/execution/finalizeCallResult.ts`: a re-read whose body is already in the history
   this request sends answers the `declared` confirmation, never a second copy.
+- `stages/toolCalls/routing/readSkillRoute.ts`: a listed self-read acknowledges instructions that
+  already rode the system slot or tool history. Declared `'both'` keeps its explicit repeat.
+- `stages/callLLM/executeCall.ts` checks the request given to the provider port. The accepted
+  response records the matching system skill pieces; the next slot may retain those pieces in
+  their original positions after a cursor move. The current role filter still governs retention.
 - `core/slots/buildMessagesSlot.ts`: a body result is credited to its skill (`source: 'skill'`), so
   the answer account (`answer-account/facts/understood.ts`) records the skill as delivered.
 - `stages/route.ts` and `stages/toolCalls/evidence/towers.ts`: the evidence gate's two moments read
@@ -58,21 +64,15 @@ the body table still runs.
 
 ## Known limits
 
-- A skill the graph activates without a `read_skill` call (an entry, a tree leaf, a declared
-  edge) has no result: its body is in the system prompt from the first request it is active on,
-  so a cursor moved by a declared edge inside a signed tool turn is still refused by name.
-  The same holds when a `read_skill` pick moves the cursor OFF such a skill and the graph then
-  stops activating it (a conditional entry): its body leaves the system prompt mid-turn, which
-  is the named refusal (`ContextChangedError`, "was removed from the system prompt"), as on
-  `declared`. Keeping a body already sent this turn until the turn ends is the open follow-up.
-- A body result removed from the history (a summary, a custom window) puts the body back in the
-  system prompt; inside a signed tool turn on a bound model that is slice 1's named refusal.
-- Body equality is by exact text (`bodies.ts` · `skillBodyOf`). A tool-result middleware that
-  rewrites a `read_skill` result makes it an ordinary tool result: neither pinned nor exempt, and
-  the body is then also served in the system prompt. A hand-built templated body (`templated:
-  true`; `defineSkill` never sets it) renders differently from the text `read_skill` returns, so it
-  is served in both channels. Matching by the producing call's id would close both; it needs a
-  recorded state key carried through the engine mount, so it is not done here.
+- A graph can activate a skill before `read_skill` has carried its body. The system slot
+  supplies that body. An already-served piece can survive an in-turn cursor move; a newly
+  introduced piece still changes the signed context.
+- A body result removed by a summary, window or middleware does not suppress the system
+  slot for that definition. A signed call still refuses a change to the protected prefix.
+  The refusal identifies middleware only when the recorded tool result lost the body there.
+- Old histories without a producer record cannot establish that a result carried a skill
+  body. The current definition then follows its declared system-delivery rules.
+  The evidence reader keeps that unverified result out of both tool evidence and app text.
 - The role is asked once per iteration, as before (`hiddenSkillIdsOf`). A role changed between
   turns re-lists on the next turn's first request; a role revoked inside a signed tool turn is
   slice 1's named refusal.

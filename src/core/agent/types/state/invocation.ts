@@ -83,6 +83,8 @@ export interface InvocationState {
   contextTokensRemaining: number;
   // Populated by slot subflow outputMappers:
   systemPromptInjections: readonly InjectionRecord[];
+  /** Listed skill pieces witnessed in the accepted provider request of this turn. */
+  servedSystemSkillBodies?: readonly InjectionRecord[];
   messagesInjections: readonly InjectionRecord[];
   toolsInjections: readonly InjectionRecord[];
   // Latest LLM response state:

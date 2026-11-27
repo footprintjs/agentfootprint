@@ -225,6 +225,7 @@ export const words1 = {
   'rate-limited': true,
   raw: true,
   'raw-reasoning': true,
+  'read-skill-result-middleware': true,
   read_skill_result: true,
   'record-composed': true,
   recorded: true,
@@ -299,5 +300,4 @@ export const words1 = {
   'stage requested pause': true,
   stale: true,
   'stale-tools': true,
-  stay: true,
 } as const;

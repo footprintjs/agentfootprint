@@ -23,6 +23,14 @@ export interface DeclaredToolFailureRecord {
   readonly tryInstead?: string | { readonly omitted: true };
 }
 
+/** A library read_skill body tied to its landed call occurrence. */
+export interface ToolSkillBodyRecord {
+  readonly skillId: string;
+  readonly digest: string;
+  /** A surviving range of the original body in the delivered result. */
+  readonly span?: { readonly start: number; readonly length: number };
+}
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -39,6 +47,7 @@ export interface ToolResultRecord {
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /** A host's after-tool rule withheld or replaced this result. Kept off the provider wire. */
   readonly toolResultDisposition?: 'withheld' | 'rewritten';
+  readonly toolSkillBody?: ToolSkillBodyRecord;
   /**
    * Whether the tool was entered and returned. `returned-unserved` means a
    * framework refusal or cap replaced its return. Host rules are recorded

@@ -10,7 +10,7 @@
  */
 import { skillActivationConfirmation } from '../../../injection-engine/skillToolDescriptors.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
-import { skillBodyOf } from './bodies.js';
+import { skillBodyOrigin, verifiedSkillBody } from '../../../injection-engine/skillBodyEvidence.js';
 
 /**
  * @example
@@ -23,12 +23,19 @@ export function honestyHistory(
   if (bodies === undefined || bodies.size === 0) return history;
   let changed = false;
   const view = history.flatMap((message): LLMMessage[] => {
-    const id = skillBodyOf(message, bodies);
-    if (id === undefined) return [message];
+    const origin = skillBodyOrigin(message);
+    if (origin === undefined) {
+      if (message.role !== 'tool' || message.toolName !== 'read_skill') return [message];
+      // A legacy or incomplete read has no proof of what produced its text.
+      // It cannot contribute tool evidence or become exempt app instructions.
+      changed = true;
+      return [{ ...message, content: '' }];
+    }
+    const body = verifiedSkillBody(message, origin);
     changed = true;
     return [
-      { ...message, content: skillActivationConfirmation(id) },
-      { role: 'system', content: message.content },
+      { ...message, content: skillActivationConfirmation(origin.skillId) },
+      ...(body === undefined ? [] : [{ role: 'system' as const, content: body }]),
     ];
   });
   return changed ? view : history;
