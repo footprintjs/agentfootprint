@@ -90,6 +90,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { isAuthoredDocument } from './docs-truth/authoredDocument.mjs';
 import { execFileSync } from 'node:child_process';
 import { join, resolve, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -355,13 +356,20 @@ function tokensOf(text) {
 }
 
 function buildDocIndex() {
+  const scripts = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts ?? {};
+  const excludedGenerated = [];
+  const authoredPage = (file) => {
+    const authored = isAuthoredDocument(readFileSync(file, 'utf8'), scripts);
+    if (!authored) excludedGenerated.push(relative(ROOT, file));
+    return authored;
+  };
   if (!existsSync(SITE_DOCS)) {
     console.error(`docs-truth: site docs tree not found at ${relative(ROOT, SITE_DOCS)}`);
     process.exit(2);
   }
 
   // (1) hand-written site pages — the truth source.
-  const sitePages = walkFiles(SITE_DOCS, ['.mdx', '.md'], [GENERATED_IN_SITE]).sort();
+  const sitePages = walkFiles(SITE_DOCS, ['.mdx', '.md'], [GENERATED_IN_SITE]).filter(authoredPage).sort();
   // (2) + (3) generated trees — enumerated ONLY to quantify the trap they pose.
   const generatedInSite = walkFiles(GENERATED_IN_SITE, ['.md', '.mdx'], []).sort();
   const generatedLegacy = walkFiles(GENERATED_LEGACY, ['.md'], []).sort();
@@ -395,6 +403,7 @@ function buildDocIndex() {
     walkFiles(r, ['.md'], [GENERATED_LEGACY, DATA_DIR, REPORT_PATH]),
   )
     .filter((f) => trackedFiles === null || trackedFiles.has(f))
+    .filter(authoredPage)
     .sort();
 
   const siteProse = new Map(); // token → Set<page>
@@ -492,6 +501,7 @@ function buildDocIndex() {
   }
 
   return {
+    excludedGenerated: excludedGenerated.sort(),
     sitePageCount: sitePages.length,
     repoPageCount: repoPages.length,
     generatedInSiteCount: generatedInSite.length,
@@ -1307,6 +1317,8 @@ function buildReport(result, surface, events, exercised, docs, baseline) {
 
   const L = [];
   L.push('# Docs-truth report');
+  L.push('');
+  L.push('Generated source documents excluded from authored counts: ' + (docs.excludedGenerated.join(', ') || '(none)') + '.');
   L.push('');
   L.push(
     '<!-- DERIVED by `npm run docs:truth:report` (scripts/docs-truth-check.mjs). Not committed; do not hand-edit. -->',
