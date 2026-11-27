@@ -68,6 +68,21 @@ function projectMessage(message: LLMMessage, hidden: ReadonlySet<string>): LLMMe
       };
 }
 
+/**
+ * An old writer cannot attest which listing produced an unmarked result.
+ * Retain its stored text and hand the existing projection an unknown origin.
+ */
+export function markLegacySkillListings(history: readonly LLMMessage[]): readonly LLMMessage[] {
+  let marked: LLMMessage[] | undefined;
+  for (const [index, message] of history.entries()) {
+    if (message?.role !== 'tool' || message.toolName !== 'list_skills' || 'skillListing' in message)
+      continue;
+    marked ??= [...history];
+    marked[index] = { ...message, skillListing: { kind: 'unknown', ids: [] } };
+  }
+  return marked ?? history;
+}
+
 /** Project saved catalog content without changing operator history or message framing. */
 export async function projectSkillListingHistory(
   history: readonly LLMMessage[],

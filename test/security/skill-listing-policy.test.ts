@@ -1,8 +1,9 @@
 import { expect, it } from 'vitest';
-import { Agent, ask, checkInApproved, defineTool, isAskPause } from '../../src/index.js';
+import { Agent, allow, ask, checkInApproved, defineTool, isAskPause } from '../../src/index.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
 import { SkillRegistry, defineSkill } from '../../src/injection-engine.js';
 import { recordRun } from '../../src/observe.js';
+import { readEnvelope } from '../../src/hosting/envelope.js';
 import { mock } from '../../src/providers.js';
 import { gatedTools, staticTools } from '../../src/tool-providers/index.js';
 import type { LLMMessage, PermissionChecker } from '../../src/provider-contract/types.js';
@@ -172,14 +173,18 @@ it('leaves an app-authored tool with the same name unrelated to the catalog', as
     description: 'List the capabilities of the fixture application.',
     execute: () => text,
   });
+  const seen: LLMMessage[] = [];
   const agent = Agent.create({
     model: 'mock',
     provider: mock({
-      respond: ({ messages }) =>
-        messages.some((message) => message.role === 'tool')
+      respond: ({ messages }) => {
+        seen.push(...messages);
+        return messages.some((message) => message.role === 'tool')
           ? { content: 'Done.' }
-          : { toolCalls: [{ id: 'app', name: 'list_skills', args: {} }] },
+          : { toolCalls: [{ id: 'app', name: 'list_skills', args: {} }] };
+      },
     }),
+    permissionChecker: { governs: ['skill_read'], check: () => ({ result: 'allow' }) },
   })
     .tool(tool)
     .build();
@@ -188,6 +193,69 @@ it('leaves an app-authored tool with the same name unrelated to the catalog', as
     const result = agent.checkpoint()?.history.find((message) => message.role === 'tool');
     expect(result?.content).toBe(text);
     expect(result).not.toHaveProperty('skillListing');
+    const saved = agent.checkpoint();
+    if (saved === undefined) throw new Error('Expected a saved fixture conversation.');
+    expect(saved.version).toBe(2);
+    seen.length = 0;
+    await agent.run({ message: 'Continue.', continueFrom: structuredClone(saved) });
+    expect(seen.find((message) => message.role === 'tool')?.content).toBe(text);
+  } finally {
+    await agent.shutdown();
+  }
+});
+
+const legacyConversation = {
+  version: 1,
+  runId: 'legacy-run',
+  history: [
+    { role: 'user', content: 'List the fixture categories.' },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [{ id: 'stored', name: 'list_skills', args: {} }],
+    },
+    { role: 'tool', toolName: 'list_skills', toolCallId: 'stored', content: 'Fixture category.' },
+  ],
+  lastCompletedIteration: 1,
+  originalInput: { message: 'List the fixture categories.' },
+  checkpointedAt: 1,
+} satisfies import('../../src/core/runCheckpoint.js').AgentRunCheckpoint;
+
+it.each([true, false])('restores a version-1 result (governed: %s)', async (governed) => {
+  const restored = structuredClone(legacyConversation);
+  const messages: LLMMessage[] = [];
+  const checker: PermissionChecker = {
+    governs: ['skill_read'],
+    check: () => ({ result: 'allow' }),
+  };
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({
+      respond: (request) => {
+        messages.push(...request.messages);
+        return { content: 'Continued.' };
+      },
+    }),
+    ...(governed && { permissionChecker: checker }),
+  }).build();
+  try {
+    await agent.run({
+      message: 'Continue.',
+      continueFrom: readEnvelope({ format: 'conversation-v1', data: restored, savedAt: 1 }),
+    });
+    const tool = messages.find((message) => message.role === 'tool');
+    expect(tool?.content).toBe(
+      governed
+        ? 'A saved skill catalog result is unavailable to this recipient.'
+        : 'Fixture category.',
+    );
+    expect(tool).not.toHaveProperty('skillListing');
+    expect(restored).toEqual(legacyConversation);
+    expect(agent.checkpoint()?.history.find((message) => message.role === 'tool')).toMatchObject({
+      content: 'Fixture category.',
+      skillListing: { kind: 'unknown', ids: [] },
+    });
+    expect(agent.checkpoint()?.version).toBe(2);
   } finally {
     await agent.shutdown();
   }
@@ -451,5 +519,67 @@ it('an approved call across a saved pause asks the current role on the fresh exe
   } finally {
     await fresh.shutdown();
     await original.shutdown();
+  }
+});
+
+it.each([false, true])('restores native pause catalog provenance (legacy: %s)', async (legacy) => {
+  const appTool = defineTool({
+    name: 'list_skills',
+    description: 'A fixture app tool.',
+    execute: () => 'Fixture category.',
+  });
+  const confirm = defineTool({
+    name: 'confirm',
+    description: 'Prompt for a confirmation.',
+    execute: () => 'Confirmed.',
+  });
+  const makeAgent = (observed: LLMMessage[]) =>
+    Agent.create({
+      model: 'mock',
+      provider: mock({
+        respond: ({ messages }) => {
+          observed.push(...messages);
+          if (messages.some((entry) => entry.toolCallId === 'confirm')) return { content: 'Done.' };
+          return {
+            toolCalls: messages.some((entry) => entry.toolCallId === 'stored')
+              ? [{ id: 'confirm', name: 'confirm', args: {} }]
+              : [{ id: 'stored', name: 'list_skills', args: {} }],
+          };
+        },
+      }),
+      permissionChecker: { governs: ['skill_read'], check: () => ({ result: 'allow' }) },
+    })
+      .tool(appTool)
+      .tool(confirm)
+      .toolMiddleware({
+        name: 'confirm-fixture',
+        onToolCall: (call) =>
+          call.toolName === 'confirm' ? ask({ question: 'Confirm?' }) : allow(),
+      })
+      .build();
+
+  const requests: LLMMessage[] = [];
+  const original = makeAgent([]);
+  const resumed = makeAgent(requests);
+  try {
+    const pause = await original.run({ message: 'Prepare a fixture and confirm.' });
+    if (!isAskPause(pause)) throw new Error('Expected a native pause fixture.');
+    const checkpoint: typeof pause.checkpoint & { agentCheckpointVersion?: number } = JSON.parse(
+      JSON.stringify(pause.checkpoint),
+    );
+    expect(checkpoint.agentCheckpointVersion).toBe(2);
+    if (legacy) delete checkpoint.agentCheckpointVersion;
+    await resumed.resume(
+      checkpoint,
+      checkInApproved({ request: pausedRequest(pause), by: 'fixture' }),
+    );
+    expect(requests.find((entry) => entry.toolCallId === 'stored')?.content).toBe(
+      legacy
+        ? 'A saved skill catalog result is unavailable to this recipient.'
+        : 'Fixture category.',
+    );
+  } finally {
+    await original.shutdown();
+    await resumed.shutdown();
   }
 });

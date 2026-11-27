@@ -8,7 +8,7 @@ import {
   admitFoldedInnerCallPolicy,
   innerCallPolicyReferences,
 } from '../../../../redaction/innerCallPolicyCarrier.js';
-import { admitPauseTypedAnswers } from '../../../checkpointHistory.js';
+import { admitPauseCatalogHistory, admitPauseTypedAnswers } from '../../../checkpointHistory.js';
 import { preservePendingQuestion } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { finishLeg, type RunnerInvocation } from '../../../runnerExecution.js';
@@ -359,7 +359,13 @@ export async function resumeLeg(
   // The native resumed leg owns its signal and deadline.
   try {
     const result = await invocation.execute(
-      { kind: 'resume', mode: 'fresh', checkpoint: legCheckpoint, input, options: resumeOptions },
+      {
+        kind: 'resume',
+        mode: 'fresh',
+        checkpoint: admitPauseCatalogHistory(legCheckpoint),
+        input,
+        options: resumeOptions,
+      },
       prepared.setup,
       prepared.binding,
     );

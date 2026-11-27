@@ -7,6 +7,7 @@ import { buildEventMeta } from '../../../../bridge/eventMeta.js';
 import { terminalErrorOf } from '../../../terminalVerdict.js';
 import type { AgentOutput } from '../../types.js';
 import type { AgentContext } from '../contracts.js';
+import { stampAgentPause } from '../../../checkpointHistory.js';
 
 export function finalizeResult(
   this: Pick<AgentContext, 'configuration' | 'native' | 'runner'>,
@@ -14,7 +15,7 @@ export function finalizeResult(
   result: unknown,
 ): AgentOutput | RunnerPauseOutcome {
   const paused = this.native.detectPause(invocation, result);
-  if (paused) return paused;
+  if (paused) return { ...paused, checkpoint: stampAgentPause(paused.checkpoint) };
   const snap = invocation.view.snapshot();
   if (snap === undefined) throw new TypeError('The native execution has no ready snapshot');
   const state = snap.sharedState as Record<string, unknown>;
