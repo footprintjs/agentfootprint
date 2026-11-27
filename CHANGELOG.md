@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.4.0] - 2026-11-27
+
+### Added
+
+- **Skip the time question for a proven standalone look-back.** Opt in through
+  `time({ skipProvenConfirmation: true })`. A qualifying prose answer states the
+  frozen window and exclusive end. Written ranges and unproved readings keep the
+  usual confirmation.
+
 ## [20.3.1] - 2026-11-27
 
 ### Security

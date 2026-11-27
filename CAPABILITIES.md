@@ -22,6 +22,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| Skip time confirmation for a proven standalone look-back | `skipProvenConfirmation` | `src/time/clock.ts` | 20.4.0 |
 | seeing a question's time window in the interpretation zone and a separately labelled viewer zone, without changing the tool's exact interval | `AgentInput` + `timeDisplay` | `src/core/agent/types/input.ts` | 20.3.0 |
 | Prompt caching for Bedrock inference profiles with command preparation evidence | `bedrock` | `src/adapters/llm/BedrockProvider.ts` | 20.2.0 |
 | Check whether an answer’s claim to have run code agrees with the turn’s receipts | `assessAnswer` | `src/core/agent/assessment/assess.ts` | 20.1.0 |
