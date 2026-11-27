@@ -55,6 +55,7 @@ import type {
   PricingTable,
 } from '../../../provider-contract/types.js';
 import { projectSkillListingHistory } from '../../../security/skillListingHistory.js';
+import { restoreCatalogWindow } from '../window/catalogView.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
@@ -263,7 +264,19 @@ export function buildWindowStage(
     // iterations that change nothing. That read genuinely happens; the
     // request bytes are untouched.
     const history = ((scope.history as readonly LLMMessage[] | undefined) ?? []).slice();
-    const turns = segmentTurns(history);
+    const hasCatalog = history.some((message) => 'skillListing' in message);
+    const catalogView =
+      hasCatalog && skillListingChecker !== undefined
+        ? await projectSkillListingHistory(
+            history,
+            skillListingChecker,
+            scope.runIdentity,
+            scope.$getEnv?.()?.signal,
+          )
+        : history;
+    // A strategy can retain or edit its input. Keep the comparison view and operator rows private.
+    const strategyHistory = hasCatalog ? structuredClone(catalogView) : history;
+    const turns = segmentTurns(strategyHistory);
     const iteration = (scope.iteration as number | undefined) ?? 1;
     // The reading is asked for BY iteration, so an expired one comes back
     // `undefined` instead of standing in for a count nobody took (8.14.0).
@@ -365,8 +378,9 @@ export function buildWindowStage(
     let observed: WindowObservations | undefined;
     let observedFacts: WindowObservations | undefined;
 
-    const result = await strategy.plan({
-      history,
+    const strategyPlan = strategy.plan;
+    const proposed = await strategyPlan.call(strategy, {
+      history: strategyHistory,
       turns,
       measured:
         metered === undefined ? undefined : { input: metered.input, output: metered.output },
@@ -377,15 +391,6 @@ export function buildWindowStage(
       agentModel: deps.agentModel,
       providerName: deps.providerName,
       signal: scope.$getEnv?.()?.signal,
-      ...(skillListingChecker !== undefined && {
-        projectSkillListings: (span) =>
-          projectSkillListingHistory(
-            span,
-            skillListingChecker,
-            scope.runIdentity,
-            scope.$getEnv?.()?.signal,
-          ),
-      }),
       now,
       // The refusal engine, bound. A strategy cannot skip it: it never
       // receives the guards, only the answer.
@@ -405,10 +410,13 @@ export function buildWindowStage(
     // apply, nothing to record — the ledger tracks what a strategy DID. The
     // receipt's seam is still told "nothing left", so this visit stands on
     // its own rather than on whatever the previous one filed.
-    if (result === undefined) {
+    if (proposed === undefined) {
       deps.evictedTurns?.file(iteration, []);
       return;
     }
+    const result = hasCatalog
+      ? restoreCatalogWindow(strategyPlan, history, catalogView, proposed)
+      : proposed;
 
     // ── Apply. The stage owns every side effect. ─────────────────────
     if (result.window !== undefined && result.rebase !== undefined) {

@@ -247,9 +247,12 @@ it.each([false, true])(
         },
       }),
     });
+    const view = revokeBeforeFold
+      ? await projectSkillListingHistory(history, checker, undefined)
+      : history;
     const fold = await strategy.plan({
-      history,
-      turns: segmentTurns(history),
+      history: view,
+      turns: segmentTurns(view),
       measured: { input: 200, output: 10 },
       iteration: 3,
       runId: 'fixture',
@@ -259,9 +262,6 @@ it.each([false, true])(
       now: () => 0,
       planRemoval: () => ({ from: 0, to: 0, refusals: [] }),
       removalFacts: () => ({ removedStageIds: [], evictions: [] }),
-      ...(revokeBeforeFold && {
-        projectSkillListings: (span) => projectSkillListingHistory(span, checker, undefined),
-      }),
     });
     expect(summarizerRequests).toHaveLength(1);
     expect(summarizerRequests[0].includes(restricted.description)).toBe(!revokeBeforeFold);
@@ -284,6 +284,78 @@ it.each([false, true])(
     expect(history[1].content).toBe(serialize(visible, restricted));
   },
 );
+
+it('gives a custom window strategy the current role view and preserves retained catalog bytes', async () => {
+  const original = Agent.create({
+    model: 'mock',
+    provider: mock({
+      respond: ({ messages }) =>
+        messages.some((message) => message.role === 'tool')
+          ? { content: 'Done.' }
+          : { toolCalls: [{ id: 'saved', name: 'list_skills', args: {} }] },
+    }),
+  })
+    .tool(listing())
+    .build();
+  const strategyReads: string[] = [];
+  const replacement = 'Custom window summary.';
+  const fresh = Agent.create({
+    model: 'mock',
+    provider: mock({ reply: 'Continued.' }),
+    permissionChecker: {
+      governs: ['skill_read'],
+      check: (request) => ({ result: request.target === 'skill:planning' ? 'deny' : 'allow' }),
+    },
+  })
+    .window({
+      name: 'catalog-view-fixture',
+      async plan({ history, turns, iteration, now }) {
+        const result = history.find((message) => message.toolCallId === 'saved');
+        if (result === undefined) return undefined;
+        const turnResult = turns
+          .flatMap((turn) => turn.messages)
+          .find((message) => message.toolCallId === 'saved');
+        strategyReads.push(result.content, turnResult?.content ?? '');
+        const windowCharsBefore = history.reduce(
+          (total, message) => total + message.content.length,
+          0,
+        );
+        return {
+          window: [...history, { role: 'user', content: replacement }],
+          rebase: { headCount: history.length, keptTailCount: 0, insertedAtMs: now() },
+          record: {
+            strategy: 'catalog-view-fixture',
+            iteration,
+            removedStageIds: [],
+            removedMessageCount: 0,
+            windowCharsBefore,
+            windowCharsAfter: windowCharsBefore + replacement.length,
+            refusals: [],
+          },
+          evictions: [],
+        };
+      },
+    })
+    .build();
+  try {
+    await original.run({ message: 'List the catalog.' });
+    const checkpoint = original.checkpoint();
+    if (checkpoint === undefined) throw new Error('Expected a saved history.');
+    await fresh.run({ message: 'Continue.', continueFrom: checkpoint });
+    expect(strategyReads).toEqual([serialize(visible), serialize(visible)]);
+    const retained = fresh.checkpoint()?.history ?? [];
+    expect(retained.find((message) => message.toolCallId === 'saved')?.content).toBe(
+      serialize(visible, restricted),
+    );
+    expect(retained.find((message) => message.content === replacement)?.skillListing).toEqual({
+      kind: 'derived',
+      ids: ['reports'],
+    });
+  } finally {
+    await fresh.shutdown();
+    await original.shutdown();
+  }
+});
 
 it('the composed call reads the governed catalog through the same execution capability', async () => {
   const hidden: PermissionChecker = {

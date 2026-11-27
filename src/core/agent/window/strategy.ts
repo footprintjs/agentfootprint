@@ -64,7 +64,7 @@ export interface RemovalFacts {
 
 /** Everything a strategy is allowed to look at. */
 export interface WindowStrategyInput {
-  /** The window as it stands, detached. */
+  /** The detached window, with governed catalog content projected for the current role. */
   readonly history: readonly LLMMessage[];
   /** The same window, segmented into turns. */
   readonly turns: readonly Turn[];
@@ -97,8 +97,6 @@ export interface WindowStrategyInput {
   readonly providerName: string;
   /** The run's cancellation signal, when there is one. */
   readonly signal: AbortSignal | undefined;
-  /** The current role's view for a strategy that calls a summarizer. */
-  readonly projectSkillListings?: (span: readonly LLMMessage[]) => Promise<readonly LLMMessage[]>;
   /** Wall clock, injectable so a caller can pin `survivalMs`. */
   readonly now: () => number;
   /**

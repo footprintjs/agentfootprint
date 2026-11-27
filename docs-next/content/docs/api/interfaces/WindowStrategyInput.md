@@ -26,7 +26,7 @@ The agent's own model — the sensible default for a strategy that bills.
 
 Defined in: [src/core/agent/window/strategy.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L68)
 
-The window as it stands, detached.
+The detached window, with governed catalog content projected for the current role.
 
 ***
 
@@ -61,7 +61,7 @@ that cost nothing. A token-triggered strategy should throw
 
 > `readonly` **now**: () => `number`
 
-Defined in: [src/core/agent/window/strategy.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L103)
+Defined in: [src/core/agent/window/strategy.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L101)
 
 Wall clock, injectable so a caller can pin `survivalMs`.
 
@@ -75,7 +75,7 @@ Wall clock, injectable so a caller can pin `survivalMs`.
 
 > `readonly` **planRemoval**: (`keepRecentTurns`, `isExistingSummary?`) => [`RemovalPlan`](/docs/api/interfaces/RemovalPlan)
 
-Defined in: [src/core/agent/window/strategy.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L118)
+Defined in: [src/core/agent/window/strategy.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L116)
 
 THE shared refusal engine, bound to this iteration.
 
@@ -107,26 +107,6 @@ optional predicate marking a turn that is a
 
 ***
 
-### projectSkillListings?
-
-> `readonly` `optional` **projectSkillListings?**: (`span`) => `Promise`\<readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]\>
-
-Defined in: [src/core/agent/window/strategy.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L101)
-
-The current role's view for a strategy that calls a summarizer.
-
-#### Parameters
-
-##### span
-
-readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
-
-#### Returns
-
-`Promise`\<readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]\>
-
-***
-
 ### providerName
 
 > `readonly` **providerName**: `string`
@@ -141,7 +121,7 @@ Defined in: [src/core/agent/window/strategy.ts:97](https://github.com/footprintj
 
 > `readonly` **removalFacts**: (`indices`, `atMs`) => [`RemovalFacts`](/docs/api/interfaces/RemovalFacts)
 
-Defined in: [src/core/agent/window/strategy.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L129)
+Defined in: [src/core/agent/window/strategy.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L127)
 
 Turn removed message indices into the facts the ledger needs: which
 stages wrote them, and how long each lived in the window.
@@ -196,7 +176,7 @@ The run's cancellation signal, when there is one.
 
 > `readonly` `optional` **standingOf?**: (`turn`) => [`Standing`](/docs/api/type-aliases/Standing) \| `undefined`
 
-Defined in: [src/core/agent/window/strategy.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L154)
+Defined in: [src/core/agent/window/strategy.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L152)
 
 What the model DECLARED a turn's results to be, on its findings ledger
 (9.102.0) — `fact`, `open`, `noise`, `ruled-out`, or `undefined` when it

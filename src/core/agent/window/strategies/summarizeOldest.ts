@@ -31,6 +31,7 @@ import { windowChars } from '../turns.js';
 import { throwIfAborted } from '../../../../lib/abort.js';
 import { foldedSkillListingOf } from '../../../../security/skillListingHistory.js';
 import type { CompactionOptions, CompactionRecord, FoldedSpan, WindowRefusal } from '../types.js';
+import { frameworkWindowStrategy } from '../catalogView.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
 const SUMMARIZE_OLDEST = 'summarize-oldest';
@@ -85,7 +86,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
   // agents never share a verdict.
   const refusedSpans = new Set<string>();
 
-  return {
+  return frameworkWindowStrategy({
     name: SUMMARIZE_OLDEST,
 
     billing: { provider: config.summarizer, model: config.model },
@@ -152,11 +153,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       // Already asked, already answered. The record is still filed — a call
       // this strategy DECIDED not to make is evidence, and a silent skip
       // would look identical to a boundary that never came round.
-      const projected =
-        input.projectSkillListings === undefined || !span.some((entry) => 'skillListing' in entry)
-          ? span
-          : await input.projectSkillListings(span);
-      const spanKey = spanFingerprint(projected);
+      const spanKey = spanFingerprint(span);
       if (refusedSpans.has(spanKey)) {
         return unchanged(
           [
@@ -171,7 +168,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
       // A broken summarizer must not take down the run.
       let summary: { text: string; usage: { input: number; output: number } };
       try {
-        const result = await runSummarizer(config.summarizer, model, projected, input.signal);
+        const result = await runSummarizer(config.summarizer, model, span, input.signal);
         summary = {
           text: result.text,
           usage: { input: result.usage.input, output: result.usage.output },
@@ -202,7 +199,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         // now — never re-derived later from the summary's text.
         foldedExempt: exemptLineageOf(span),
       });
-      const skillListing = foldedSkillListingOf(projected);
+      const skillListing = foldedSkillListingOf(span);
       const summaryMessage = skillListing === undefined ? frame : { ...frame, skillListing };
       const spend = { model, usage: summary.usage };
 
@@ -278,5 +275,5 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         spend,
       };
     },
-  };
+  });
 }
