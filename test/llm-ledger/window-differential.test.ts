@@ -12,7 +12,8 @@
  * Inputs: seeded (the same strings on every run), built field by field around the edges of each
  * rule, plus free text from the pieces that matter.
  */
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { instantMs, readWindow } from '../../src/llm-ledger/window.js';
@@ -97,11 +98,8 @@ const FREE = seededTexts(
 );
 
 it('ships the time layer’s canonical parser inside the closed ledger', () => {
-  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-  expect(read('../../src/llm-ledger/instantParser.ts')).toBe(
-    '// Generated from src/time/instant.ts by scripts/gen-ledger-instant.mjs.\n' +
-      read('../../src/time/instant.ts'),
-  );
+  const generator = fileURLToPath(new URL('../../scripts/gen-ledger-instant.mjs', import.meta.url));
+  expect(() => execFileSync(process.execPath, [generator, '--check'])).not.toThrow();
 });
 
 describe('the ledger validator against the time layer’s strict profile', () => {

@@ -1,54 +1,20 @@
 // Generated from src/time/instant.ts by scripts/gen-ledger-instant.mjs.
-/**
- * time/instant — the ONE instant parser, with two named profiles.
- *
- * Pattern: one grammar, named profiles (never a second parser). Moved from
- *          `coverage/period.ts` (where it read a result's declared period)
- *          and `tools/declare.ts` (where a regex plus `Date.parse` checked
- *          an `iso-range` argument). Exact: no `Date.parse` guessing, no
- *          sub-millisecond loss.
- * Role:    L0 leaf (the time layer's one owner, `src/time/`). Imports
- *          nothing. Asked by `coverage/period.ts` (lenient) and, through
- *          `range.ts` · `splitRange`, by `tools/declare.ts` (strict).
- * Emits:   N/A.
- *
- * ## The two profiles
- *
- * | Profile   | For | `t`/`z` lower case | second `60` | day past the month's end, hour 24 |
- * |-----------|-----|--------------------|-------------|-----------------------------------|
- * | `lenient` | a period a result DECLARES — RFC 3339 as a foreign minter may write it | accepted | accepted (compares as the next minute's `:00`) | refused |
- * | `strict`  | a value the library SENDS to a tool — the canonical spelling a backend such as Python's `datetime.fromisoformat` takes | refused | refused | refused |
- *
- * Both require a zone (`Z` or `±HH:MM`): an instant with no zone could be any
- * of 24 hours, so it is refused rather than guessed.
- *
- * @example
- * ```ts
- * instantOf('2026-10-09T08:00:00-07:00', 'strict');  // { ms: 1791558000000, nanos: 0, offsetMinutes: -420, precision: 'second' }
- * instantOf('2026-10-09t08:00z', 'strict');           // undefined — lower case is lenient-only
- * instantOf('2026-02-30T08:00Z', 'lenient');          // undefined — 30 February does not exist
- * toUtc('2026-10-09T08:00-07:00', 'strict');          // '2026-10-09T15:00:00Z'
- * ```
- */
-
-/** An ISO 8601 instant WITH an offset (`Z` or `±HH:MM`). */
-export type InstantText = string;
 
 /** Which spelling of an instant is accepted — see the module table. */
-export type InstantProfile = 'lenient' | 'strict';
+type InstantProfile = 'lenient' | 'strict';
 
 /**
  * One instant, comparable exactly: whole milliseconds since the epoch, and the
  * nanoseconds below that millisecond (0–999 999), so a 9-digit fraction is
  * never rounded.
  */
-export interface Instant {
+interface Instant {
   readonly ms: number;
   readonly nanos: number;
 }
 
 /** A parsed instant: the instant, the offset it was written in, and how finely it was written. */
-export interface ParsedInstant extends Instant {
+interface ParsedInstant extends Instant {
   /** The written offset in minutes east of UTC (`Z` is 0). */
   readonly offsetMinutes: number;
   /** The finest part written: minutes only, seconds, or a fraction of a second. */
@@ -61,7 +27,7 @@ const STRICT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:(Z)|([+-])(\d{2}):(\d{2}))$/;
 
 /** Days in `month` (1–12) of the proleptic Gregorian `year`. */
-export const daysInMonth = (year: number, month: number): number =>
+const daysInMonth = (year: number, month: number): number =>
   month === 2
     ? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
       ? 29
@@ -71,7 +37,7 @@ export const daysInMonth = (year: number, month: number): number =>
     : 31;
 
 /** Milliseconds since the epoch of a UTC wall time. `setUTCFullYear`, never `Date.UTC`: the latter reads years 0–99 as 1900–1999. */
-export function utcWallMs(
+function utcWallMs(
   year: number,
   month: number,
   day: number,
@@ -124,55 +90,4 @@ export function instantOf(value: unknown, profile: InstantProfile): ParsedInstan
     offsetMinutes: offsetMinutes === 0 ? 0 : offsetMinutes,
     precision: m[7] !== undefined ? 'fraction' : m[6] !== undefined ? 'second' : 'minute',
   };
-}
-
-/** -1 / 0 / 1 — `a` before, at, or after `b`. */
-export function compareInstants(a: Instant, b: Instant): number {
-  if (a.ms !== b.ms) return a.ms < b.ms ? -1 : 1;
-  if (a.nanos !== b.nanos) return a.nanos < b.nanos ? -1 : 1;
-  return 0;
-}
-
-/** `instant` moved by a whole number of milliseconds (negative moves it earlier). */
-export function shiftInstant(instant: Instant, byMs: number): Instant {
-  if (!Number.isSafeInteger(byMs)) {
-    throw new TypeError(`shiftInstant: ${String(byMs)} is not a whole number of milliseconds.`);
-  }
-  return { ms: instant.ms + byMs, nanos: instant.nanos };
-}
-
-const pad = (n: number, width: number): string => String(n).padStart(width, '0');
-
-/**
- * The strict-profile spelling of `instant` in the offset `offsetMinutes`
- * (`Z` when 0): seconds always written, a fraction only when it is not zero,
- * with no trailing zeros. `undefined` when the offset is not a whole number of
- * minutes within ±23:59, or the year in that offset falls outside 0000–9999.
- */
-export function spellInstant(instant: Instant, offsetMinutes: number): InstantText | undefined {
-  if (!Number.isInteger(offsetMinutes) || Math.abs(offsetMinutes) > 23 * 60 + 59) return undefined;
-  const local = new Date(instant.ms + offsetMinutes * 60_000);
-  const year = local.getUTCFullYear();
-  if (!Number.isFinite(year) || year < 0 || year > 9999) return undefined;
-  const fraction = local.getUTCMilliseconds() * 1_000_000 + instant.nanos;
-  const frac = fraction === 0 ? '' : `.${pad(fraction, 9).replace(/0+$/, '')}`;
-  const abs = Math.abs(offsetMinutes);
-  const zone =
-    offsetMinutes === 0
-      ? 'Z'
-      : `${offsetMinutes < 0 ? '-' : '+'}${pad(Math.floor(abs / 60), 2)}:${pad(abs % 60, 2)}`;
-  return (
-    `${pad(year, 4)}-${pad(local.getUTCMonth() + 1, 2)}-${pad(local.getUTCDate(), 2)}` +
-    `T${pad(local.getUTCHours(), 2)}:${pad(local.getUTCMinutes(), 2)}:${pad(
-      local.getUTCSeconds(),
-      2,
-    )}` +
-    `${frac}${zone}`
-  );
-}
-
-/** The same instant spelled in UTC (`Z`), strict profile — or `undefined` when `value` is not an instant under `profile`. */
-export function toUtc(value: unknown, profile: InstantProfile): InstantText | undefined {
-  const instant = instantOf(value, profile);
-  return instant === undefined ? undefined : spellInstant(instant, 0);
 }

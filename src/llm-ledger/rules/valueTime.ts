@@ -6,7 +6,7 @@ export const DAY_MINUTES = 24 * 60;
 const SECOND_NS = 1_000_000_000;
 const MINUTE_NS = 60_000_000_000;
 
-export interface TimeParts {
+interface TimeParts {
   readonly minute: number;
   /** Position within the minute, at nanosecond precision. */
   readonly part: number;
