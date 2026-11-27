@@ -104,7 +104,7 @@ export function timeLimitFactsOf(
   if (period.length === 0 && retentionRefusals.length === 0 && !clocks) return undefined;
   return {
     zone,
-    ...displayOfTurn(ledger, clock?.turn),
+    ...displayOfTurn(ledger, turn ?? clock?.turn),
     period,
     ...(retentionRefusals.length > 0 && { retentionRefusals }),
     sources,

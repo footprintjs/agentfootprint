@@ -17,7 +17,10 @@ ONE composition both the block (for the person) and the served time line (for
 the model, `../../core/agent/arguments/serve/clock.ts` · `timeLimitsLine`) read. It renders through
 the time layer's renderer, so it loads through `import()` only; what the lines
 SAY is read by `timeLimitFacts.ts` · `timeLimitFactsOf` (unrendered, safe on the
-synchronous graph — the Tools mount's `inputMapper` hands it across). For the
+synchronous graph — the Tools mount's `inputMapper` hands it across). A requested saved turn
+reads its own display declaration; only an omitted turn uses the latest display.
+The historical-turn/default/audience controls live beside this owner in
+`timeLimitFacts.display.test.ts`. For the
 model only, a call whose source holds none or only part of the asked time adds
 `timeLimits.ts` · `heldLine` — what it asked about and what the source holds, in the
 person's zone — so the model never converts a source's UTC instants itself; the

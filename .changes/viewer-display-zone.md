@@ -8,4 +8,6 @@ the viewer display without changing instants, confirmation values or tool
 arguments. The display declaration is recorded with its purpose and restored
 from the same turn's record. Missing interpretation zones still require an
 answer; malformed display input is refused before effects. Omitted display
-input preserves the existing behavior.
+input preserves the existing behavior. Reading a saved turn’s time limits uses
+that turn’s display declaration, including no viewer opt-in, rather than a later
+turn’s viewer.
