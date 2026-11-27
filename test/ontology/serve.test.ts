@@ -1,3 +1,4 @@
+import { ontologyRoleJoin } from '../../src/ontology/roleView.js';
 /**
  * Unit tests — `ontologyPiece` (9.106.0): the map served as one system piece.
  *
@@ -372,10 +373,15 @@ describe('ontologyPiece — the tool → skill join (9.108.0)', () => {
   });
 
   it('a tool one skill declares carries [skill: id]; two skills, [skills: a, b] in declaration order; a static tool stays bare', () => {
-    expect(held({ tools: { lookup_port: ['ports'] } })).toBe(
+    expect(held({ tools: { lookup_port: ['ports'] }, hiddenSkillIds: [] })).toBe(
       'port ← inventory via lookup_port [skill: ports], list_ports · every port',
     );
-    expect(held({ tools: { lookup_port: ['ports', 'audit'], list_ports: ['audit'] } })).toBe(
+    expect(
+      held({
+        tools: { lookup_port: ['ports', 'audit'], list_ports: ['audit'] },
+        hiddenSkillIds: [],
+      }),
+    ).toBe(
       'port ← inventory via lookup_port [skills: ports, audit], list_ports [skill: audit] · every port',
     );
   });
@@ -391,6 +397,23 @@ describe('ontologyPiece — the tool → skill join (9.108.0)', () => {
     // Hidden ids never touch a tool no skill declares.
     expect(held({ tools: { lookup_port: ['ports'] }, hiddenSkillIds: ['ports'] })).toBe(
       'port ← inventory via list_ports · every port',
+    );
+  });
+
+  it('a direct join with no role filter shows the declared skills', () => {
+    const tools = { lookup_port: ['ports'] };
+    expect(held({ tools })).toBe(
+      'port ← inventory via lookup_port [skill: ports], list_ports · every port',
+    );
+  });
+
+  it('shows ordinary registered tools when the required role view is unavailable', () => {
+    const tools = { lookup_port: ['ports'] };
+    expect(held(ontologyRoleJoin({ tools, ontologyRoleViewRequired: true }, undefined))).toBe(
+      'port ← inventory via list_ports · every port',
+    );
+    expect(held(ontologyRoleJoin({ tools }, undefined))).toBe(
+      'port ← inventory via lookup_port [skill: ports], list_ports · every port',
     );
   });
 

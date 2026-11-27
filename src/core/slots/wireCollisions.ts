@@ -1,4 +1,5 @@
 import { isDevMode } from 'footprintjs';
+import { roleVisibleClaim } from '../agent/skillContext/toolVisibility.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
@@ -43,20 +44,16 @@ function visible(
 ): boolean {
   const { party, tool } = identity;
   if (party.channel === 'skill')
-    return (
-      party.id !== undefined &&
-      hidden !== undefined &&
-      !hidden.has(party.id) &&
-      claims.some((c) => c.channel === 'skill' && c.id === party.id && c.tool === tool)
+    return claims.some(
+      (claim) =>
+        claim.channel === 'skill' &&
+        claim.id === party.id &&
+        claim.tool === tool &&
+        roleVisibleClaim(claim, hidden),
     );
   const owners = claims.filter((claim) => claim.tool === tool);
-  return (
-    !owners.length ||
-    owners.some(
-      (c) =>
-        c.channel !== 'skill' || (c.id !== undefined && hidden !== undefined && !hidden.has(c.id)),
-    )
-  );
+  if (owners.length === 0 || owners.some((claim) => claim.channel !== 'skill')) return true;
+  return owners.some((claim) => roleVisibleClaim(claim, hidden));
 }
 
 /** Both the event and the private selection read the same visible losers, in wire order. */

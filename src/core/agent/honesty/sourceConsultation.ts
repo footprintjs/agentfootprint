@@ -13,6 +13,7 @@ import type { Tool } from '../../../tools/tools.js';
 import type { AcceptedToolSelection } from '../../slots/commitServedTools.js';
 import type { ServedToolParties } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { roleVisibleClaim } from '../skillContext/toolVisibility.js';
 import type { ToolResolver } from '../stages/toolResolver.js';
 import type { AgentState } from '../types.js';
 import { MAX_ENTERED_TOOL_CALLS } from './enteredToolCalls.js';
@@ -57,6 +58,7 @@ interface Group {
 
 interface ConsultationDeps {
   readonly ontology?: OntologySpec;
+  readonly roleViewRequired?: true;
   readonly servedTools: ServedToolParties;
   readonly resolve: ToolResolver;
   readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
@@ -119,19 +121,19 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
   let suggestionCount = 0;
   let previous = '';
 
-  function hiddenSkills(scope: Scope): ReadonlySet<string> {
-    return new Set(('hiddenSkillIds' in scope ? scope.hiddenSkillIds : undefined) ?? []);
+  function hiddenSkills(scope: Scope): ReadonlySet<string> | undefined {
+    const hidden = 'hiddenSkillIds' in scope ? scope.hiddenSkillIds : undefined;
+    if (hidden !== undefined) return new Set(hidden);
+    return deps.roleViewRequired ? undefined : new Set();
   }
 
-  function visible(tool: Tool, name: string, hidden: ReadonlySet<string>): boolean {
-    if (hidden.size === 0) return true;
+  function visible(tool: Tool, name: string, hidden: ReadonlySet<string> | undefined): boolean {
+    if (hidden?.size === 0) return true;
     const claims = deps.toolClaimants.get(name)?.filter((claim) => claim.tool === tool);
     return (
       claims === undefined ||
       claims.length === 0 ||
-      claims.some(
-        (claim) => claim.channel !== 'skill' || (claim.id !== undefined && !hidden.has(claim.id)),
-      )
+      claims.some((claim) => roleVisibleClaim(claim, hidden))
     );
   }
 
@@ -184,7 +186,7 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
         : declaredSourceGroups(deps.ontology, question);
   }
 
-  function collectGroups(hidden: ReadonlySet<string>): readonly Group[] {
+  function collectGroups(hidden: ReadonlySet<string> | undefined): readonly Group[] {
     const all = grounds ?? [];
     const named = new Set(all.flatMap((group) => group.tools));
     return [

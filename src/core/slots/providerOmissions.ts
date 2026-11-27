@@ -1,6 +1,10 @@
 import type { LedgerOmission, ObserveSelection } from '../../tools/selectionListing.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
+import {
+  roleVisibleClaim,
+  roleVisibleImplementation,
+} from '../agent/skillContext/toolVisibility.js';
 
 interface SkillOmission {
   readonly kind: 'skill-scope';
@@ -62,7 +66,8 @@ function indexVisibleClaims(
   const bySkill = new Map<string, Map<Tool, string | null>>();
   for (const [name, claims] of claimants) {
     for (const claim of claims) {
-      if (claim.channel !== 'skill' || claim.id === undefined || hidden.has(claim.id)) continue;
+      if (claim.channel !== 'skill' || claim.id === undefined || !roleVisibleClaim(claim, hidden))
+        continue;
       let names = bySkill.get(claim.id);
       if (!names) {
         names = new Map();
@@ -128,11 +133,6 @@ export function visibleToolClaim(
 ): boolean {
   return (
     !claims?.some((claim) => claim.channel === 'skill') ||
-    claims.some(
-      (claim) =>
-        claim.tool === tool &&
-        (claim.channel !== 'skill' ||
-          (claim.id !== undefined && hidden !== undefined && !hidden.has(claim.id))),
-    )
+    roleVisibleImplementation(tool, claims, hidden)
   );
 }

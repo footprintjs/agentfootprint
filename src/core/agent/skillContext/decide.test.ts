@@ -86,26 +86,22 @@ describe('notLoadedFor', () => {
   const skillParty = { channel: 'skill' as const, id: 'billing' };
 
   it('refuses until a declaring skill loads, naming a visible one', () => {
-    expect(notLoadedFor(listed, undefined, 'refund', skillParty, [], ['billing'])).toBe(
+    expect(notLoadedFor(listed, 'refund', skillParty, [], ['billing'])).toBe(
       notLoadedRefusal('refund', 'support'),
     );
   });
 
   it('names no skill when every declaring skill is hidden', () => {
-    expect(notLoadedFor(listed, undefined, 'refund', skillParty, [], ['billing', 'support'])).toBe(
+    expect(notLoadedFor(listed, 'refund', skillParty, [], ['billing', 'support'])).toBe(
       "Tool 'refund' did not run: the skill it belongs to was not loaded on that call.",
     );
   });
 
   it('lets the call run once a declaring skill loads, or when another party serves the name', () => {
-    expect(
-      notLoadedFor(listed, undefined, 'refund', skillParty, active('support'), []),
-    ).toBeUndefined();
-    expect(
-      notLoadedFor(listed, undefined, 'refund', { channel: 'provider' }, [], []),
-    ).toBeUndefined();
-    expect(notLoadedFor(listed, undefined, 'lookup', skillParty, [], [])).toBeUndefined();
-    expect(notLoadedFor(undefined, undefined, 'refund', skillParty, [], [])).toBeUndefined();
+    expect(notLoadedFor(listed, 'refund', skillParty, active('support'), [])).toBeUndefined();
+    expect(notLoadedFor(listed, 'refund', { channel: 'provider' }, [], [])).toBeUndefined();
+    expect(notLoadedFor(listed, 'lookup', skillParty, [], [])).toBeUndefined();
+    expect(notLoadedFor(undefined, 'refund', skillParty, [], [])).toBeUndefined();
   });
 });
 

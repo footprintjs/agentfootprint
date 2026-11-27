@@ -30,7 +30,7 @@ import { replayCacheMarkers } from '../../requestTurn/replayPrefix.js';
 import { projectCallHistory } from './requestProjection.js';
 import { prepareCitationProjection } from './citationProjection.js';
 import type { OntologyPiece } from '../../../../ontology/serve.js';
-import type { OntologyRecord } from '../../../../ontology/types.js';
+import { ontologyRoleJoin, type ScopedOntologyRecord } from '../../../../ontology/roleView.js';
 import type { AgentState } from '../../types.js';
 import { contextCheckFor } from '../../contextBinding/forCall.js';
 
@@ -160,17 +160,14 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   // carries identities and counts only.
   let ontologyPieceRecord: OntologyPiece | undefined;
   if (deps.ontology === true) {
-    const record = scope.ontology as OntologyRecord | undefined;
+    const record = scope.ontology as ScopedOntologyRecord | undefined;
     if (record !== undefined) {
       const { ontologyPiece } = await import('../../../../ontology/serve.js');
       // The join (9.108.0): the record's tool → skills map and this
       // iteration's hidden skill ids — the same filter every model-facing
       // sentence applies, so the piece names no skill the caller may not see.
       const hidden = scope.hiddenSkillIds as readonly string[] | undefined;
-      ontologyPieceRecord = ontologyPiece(record.spec, {
-        ...(record.tools !== undefined && { tools: record.tools }),
-        ...(hidden !== undefined && { hiddenSkillIds: hidden }),
-      });
+      ontologyPieceRecord = ontologyPiece(record.spec, ontologyRoleJoin(record, hidden));
       typedEmit(scope, 'agentfootprint.ontology.served', {
         iteration,
         id: record.id,

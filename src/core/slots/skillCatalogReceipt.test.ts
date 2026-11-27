@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Agent, receiptAt, servedAt } from '../../index.js';
+import { Agent, defineTool, receiptAt, servedAt } from '../../index.js';
 import { mock } from '../../adapters/llm/MockProvider.js';
 import { decideSkill, defineSkill, skillGraph } from '../../injection-engine.js';
 import { type Recording, recordRun } from '../../recorders/observability/recordRun.js';
@@ -86,3 +86,72 @@ for (const commitValues of ['delta', 'full'] as const) {
     },
   );
 }
+
+it.each(['declared', 'listed'] as const)(
+  'records only the role-visible skill tools under %s',
+  async (skillContext) => {
+    const offered: (readonly LLMToolSchema[])[] = [];
+    const marker = (name: string) =>
+      defineTool({
+        name,
+        description: `Return the ${name} marker.`,
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => name,
+      });
+    const shared = marker('shared_marker');
+    const agent = Agent.create({
+      model: 'mock',
+      skillContext,
+      provider: mock({
+        respond: (request) => {
+          offered.push(request.tools ?? []);
+          return 'Done.';
+        },
+      }),
+      permissionChecker: {
+        name: 'shift',
+        governs: ['skill_read'],
+        check: ({ target }) =>
+          target === 'skill:night' ? { result: 'deny' } : { result: 'allow' },
+      },
+    })
+      .tool(marker('baseline_marker'))
+      .skill(
+        defineSkill({
+          id: 'night',
+          description: 'Night shift',
+          body: 'Night-shift marker instructions.',
+          tools: [marker('night_marker'), shared],
+        }),
+      )
+      .skill(
+        defineSkill({
+          id: 'day',
+          description: 'Day shift',
+          body: 'Day-shift marker instructions.',
+          tools: [marker('day_marker'), shared],
+        }),
+      )
+      .build();
+    const injectedTools: string[] = [];
+    agent.on('agentfootprint.context.injected', (event) => {
+      if (event.payload.slot === 'tools') injectedTools.push(JSON.stringify(event.payload));
+    });
+    const recorder = recordRun(agent);
+    try {
+      await agent.run({ message: 'Summarize the schedule.' });
+      expect(offered).toHaveLength(1);
+      expect(
+        offered[0]?.filter(({ name }) => name.endsWith('_marker')).map(({ name }) => name),
+      ).toEqual(['baseline_marker', 'shared_marker', 'day_marker']);
+      expect(injectedTools.join(' ')).toContain('shared_marker');
+      expect(injectedTools.join(' ')).not.toContain('night_marker');
+      expect(injectedTools.join(' ')).not.toContain('Return the night_marker marker.');
+      const { snapshot } = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+      expect(servedAt(snapshot, 1)?.tools.schemas).toEqual(offered[0]);
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  },
+);
