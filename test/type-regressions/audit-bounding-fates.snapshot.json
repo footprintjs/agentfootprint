@@ -98,6 +98,10 @@
     "chosen": "kept",
     "iterIndex": "kept",
     "rationale": "kept",
+    "routeDecisions.override.chosen": "kept",
+    "routeDecisions.override.reasons[]": "kept",
+    "routeDecisions.provisional.chosen": "kept",
+    "routeDecisions.provisional.label": "kept",
     "turnIndex": "kept"
   },
   "agentfootprint.agent.run_configured": {

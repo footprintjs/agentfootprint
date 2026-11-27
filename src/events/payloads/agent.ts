@@ -269,6 +269,18 @@ export interface AgentRouteDecidedPayload {
     | 'negative-recheck'
     | 'wrap-up';
   readonly rationale?: FixedRouteRationale | (string & Record<never, never>);
+  /** The two decisions at this Route occurrence, present when citation validation changed it. */
+  readonly routeDecisions?: {
+    readonly provisional: {
+      readonly chosen: 'final';
+      readonly label: 'route-chose-to-finish';
+    };
+    readonly override: {
+      readonly chosen: 'negative-recheck';
+      /** Distinct validation codes in the order the candidate's checks reported them. */
+      readonly reasons: readonly ('citation-unresolved' | 'stale-turn')[];
+    };
+  };
 }
 
 export interface AgentHandoffPayload {

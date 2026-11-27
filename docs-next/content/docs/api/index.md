@@ -161,6 +161,8 @@ title: agentfootprint
 - [CommitEvent](/docs/api/interfaces/scope-events#interface-commitevent)
 - [CompactionOptions](/docs/api/interfaces/CompactionOptions)
 - [CompactionRecord](/docs/api/interfaces/CompactionRecord)
+- [CompletedAgentTurn](/docs/api/interfaces/CompletedAgentTurn)
+- [CompletedTurnNode](/docs/api/interfaces/CompletedTurnNode)
 - [ComposedCoverage](/docs/api/interfaces/ComposedCoverage)
 - [ConditionalInput](/docs/api/interfaces/ConditionalInput)
 - [ConditionalOptions](/docs/api/interfaces/ConditionalOptions)

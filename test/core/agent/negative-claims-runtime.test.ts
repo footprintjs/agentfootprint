@@ -67,6 +67,10 @@ const IDENTITY = {
 const ASK = { message: 'Check open incidents for payments.', identity: IDENTITY };
 const GAP = 'incidents filed by email';
 const MODES: readonly ReactMode[] = ['classic', 'dynamic', 'dynamic-grouped'];
+const CITATION_ROUTE_DECISIONS = {
+  provisional: { chosen: 'final', label: 'route-chose-to-finish' },
+  override: { chosen: 'negative-recheck', reasons: ['citation-unresolved'] },
+} as const;
 
 // Deliberately projects the model's citation fields. Re-parsing the delivered answer would
 // erase its statement and marker, so runTyped must return the admitted canonical candidate.
@@ -389,19 +393,41 @@ for (const reactMode of MODES) {
       );
     });
 
-    it('route_decided names the citation correction the run took — one announcement per iteration', async () => {
-      const f = fixture([readCall, { content: draft('provider-call-1') }, { content: draft() }], {
-        reactMode,
-      });
-      const agent = f.builder.build();
-      const routes: { chosen: string; iterIndex: number }[] = [];
-      agent.on('agentfootprint.agent.route_decided', (e) =>
-        routes.push({ chosen: e.payload.chosen, iterIndex: e.payload.iterIndex }),
-      );
-      await agent.runTyped<DeliveredReply>(ASK);
-      expect(routes.map((r) => r.chosen)).toEqual(['tool-calls', 'negative-recheck', 'final']);
-      expect(new Set(routes.map((r) => r.iterIndex)).size).toBe(routes.length);
-    });
+    it.each([false, true])(
+      'records the provisional route and override at one native occurrence (redacted: %s)',
+      async (redacted) => {
+        const canary = 'PRIVATE-PROVISIONAL-ROUTE-CITATION';
+        const f = fixture([readCall, { content: draft(canary, canary) }, { content: draft() }], {
+          reactMode,
+        });
+        const agent = f.builder.build();
+        const recorder = recordRun(agent);
+        if (redacted) {
+          await expect(
+            agent.runTyped<DeliveredReply>(ASK, { redact: conversationRedaction() }),
+          ).rejects.toBeInstanceOf(AnswerValidationError);
+        } else {
+          expectStatement(await agent.runTyped<DeliveredReply>(ASK));
+        }
+        const routes = recorder
+          .toRecording()
+          .events.filter((event) => event.type === 'agentfootprint.agent.route_decided');
+        expect(routes.map((event) => event.payload.chosen)).toEqual([
+          'tool-calls',
+          'negative-recheck',
+          'final',
+        ]);
+        expect(new Set(routes.map((event) => event.payload.iterIndex)).size).toBe(routes.length);
+        expect(routes.map((event) => event.payload.routeDecisions)).toEqual([
+          undefined,
+          CITATION_ROUTE_DECISIONS,
+          undefined,
+        ]);
+        expect(routes[1]?.meta.runtimeStageId).toBeTruthy();
+        expect(routes[1]?.meta.sourcePosition).toBeDefined();
+        expect(JSON.stringify(routes[1])).not.toContain(canary);
+      },
+    );
 
     it('…and an answer whose citations resolve is announced final once, as before', async () => {
       const f = fixture([readCall, { content: draft() }], { reactMode });
@@ -1063,42 +1089,77 @@ describe('negative-claim policy and evidence boundaries', () => {
     expect(seen.tokens).toEqual([]);
   });
 
-  it('a read survives a serialized pause within the same turn without executing again', async () => {
-    const pause = vi.fn(() => askHuman({ question: 'Continue the answer?' }));
+  it.each([false, true])(
+    'a read survives a serialized pause without executing again (citation correction: %s)',
+    async (correct) => {
+      const pause = vi.fn(() => askHuman({ question: 'Continue the answer?' }));
+      const f = fixture([
+        readCall,
+        { toolCalls: [{ id: 'pause-call', name: 'pause_answer', args: {} }] },
+        ...(correct ? [{ content: draft('provider-call-1') }] : []),
+        { content: draft() },
+      ]);
+      const agent = f.builder
+        .tool(
+          defineTool({
+            name: 'pause_answer',
+            description: 'Pause without changing the incident store.',
+            inputSchema: { type: 'object', properties: {} },
+            effects: 'read',
+            execute: pause,
+          }),
+        )
+        .build();
+      const seen = observe(agent);
+      const recorder = recordRun(agent);
+      const paused = await agent.run(ASK);
+      expect(isPaused(paused)).toBe(true);
+      if (!isPaused(paused)) throw new Error('Expected a real runtime checkpoint.');
+      expect(seen.tokens).toEqual([]);
+      const earlierRun = agent.getSnapshot()?.runId;
+      expect(earlierRun).toBeDefined();
+      const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
+      const resumed = await agent.resume(checkpoint, 'Continue.');
+      expect(typeof resumed).toBe('string');
+      expectStatement(JSON.parse(resumed as string) as DeliveredReply);
+      expect(f.read.execute).toHaveBeenCalledTimes(1);
+      expect(pause).toHaveBeenCalledTimes(1);
+      expect(f.source.requests).toHaveLength(correct ? 4 : 3);
+      expect(seen.tokens).toEqual([resumed]);
+      const corrections = recorder
+        .toRecording()
+        .events.filter((event) => event.type === 'agentfootprint.agent.route_decided')
+        .filter((event) => event.payload.chosen === 'negative-recheck');
+      expect(corrections).toHaveLength(correct ? 1 : 0);
+      if (correct) {
+        expect(corrections[0]?.payload.routeDecisions).toEqual(CITATION_ROUTE_DECISIONS);
+        const source = corrections[0]?.meta.sourcePosition;
+        expect(source?.engineRunId).toBe(agent.getSnapshot()?.runId);
+        expect(source?.engineRunId).not.toBe(earlierRun);
+      }
+    },
+  );
+
+  it.each([
+    { handles: ['r1'], causes: ['stale-turn'] },
+    { handles: ['r1', 'r404', 'r405'], causes: ['stale-turn', 'citation-unresolved'] },
+  ])('a follow-up records the correction causes $causes', async ({ handles, causes }) => {
+    const followUp = JSON.stringify({
+      summary: 'Here is the follow-up.',
+      negatives: handles.map((handle) => ({
+        kind: 'none',
+        about: 'payments',
+        restsOn: [handle],
+      })),
+    });
     const f = fixture([
       readCall,
-      { toolCalls: [{ id: 'pause-call', name: 'pause_answer', args: {} }] },
       { content: draft() },
+      { content: followUp },
+      { content: followUp },
     ]);
-    const agent = f.builder
-      .tool(
-        defineTool({
-          name: 'pause_answer',
-          description: 'Pause without changing the incident store.',
-          inputSchema: { type: 'object', properties: {} },
-          effects: 'read',
-          execute: pause,
-        }),
-      )
-      .build();
-    const seen = observe(agent);
-    const paused = await agent.run(ASK);
-    expect(isPaused(paused)).toBe(true);
-    if (!isPaused(paused)) throw new Error('Expected a real runtime checkpoint.');
-    expect(seen.tokens).toEqual([]);
-    const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
-    const resumed = await agent.resume(checkpoint, 'Continue.');
-    expect(typeof resumed).toBe('string');
-    expectStatement(JSON.parse(resumed as string) as DeliveredReply);
-    expect(f.read.execute).toHaveBeenCalledTimes(1);
-    expect(pause).toHaveBeenCalledTimes(1);
-    expect(f.source.requests).toHaveLength(3);
-    expect(seen.tokens).toEqual([resumed]);
-  });
-
-  it('a follow-up cannot turn its prior assistant answer into current evidence', async () => {
-    const f = fixture([readCall, { content: draft() }, { content: draft() }, { content: draft() }]);
     const agent = f.builder.build();
+    const recorder = recordRun(agent);
     await agent.run(ASK);
     const checkpoint = agent.checkpoint();
     expect(checkpoint).toBeDefined();
@@ -1111,6 +1172,16 @@ describe('negative-claim policy and evidence boundaries', () => {
       }),
     ).rejects.toBeInstanceOf(AnswerValidationError);
     expect(JSON.stringify(agent.answerValidation())).toContain('stale-turn');
+    const corrections = recorder
+      .toRecording()
+      .events.filter((event) => event.type === 'agentfootprint.agent.route_decided')
+      .filter((event) => event.payload.chosen === 'negative-recheck');
+    expect(corrections.map((event) => event.payload.routeDecisions)).toEqual([
+      {
+        provisional: { chosen: 'final', label: 'route-chose-to-finish' },
+        override: { chosen: 'negative-recheck', reasons: causes },
+      },
+    ]);
     expect(f.read.execute).toHaveBeenCalledTimes(1);
     expect(seen.tokens).toEqual([]);
     expect(seen.ends).toEqual([]);

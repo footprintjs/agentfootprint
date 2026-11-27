@@ -1,3 +1,4 @@
+import { why, whatWasNotRead } from '../turnEvidence/completedTurnQueries.js';
 import type { AgentContext, AgentPublicRunner } from './contracts.js';
 import type { AgentNativeBindings } from './native/bindings.js';
 import { AgentConfigurationValues } from './configuration/values.js';
@@ -101,6 +102,8 @@ export function createAgentContext(
     buildUIGroupMetadata,
     canExplain,
     bindSelfExplain,
+    why,
+    whatWasNotRead,
     parseOutput,
     parseOutputAsync,
     settleTypedFailure,

@@ -5,10 +5,11 @@ import type { TurnEvidenceSource } from './types.js';
 const TURN_END = 'agentfootprint.agent.turn_end';
 type TurnEnd = AgentfootprintEventMap[typeof TURN_END];
 
-interface RecordedTurn {
+export interface RecordedTurn {
   readonly snapshot: Readonly<Record<string, unknown>> | undefined;
   readonly events: readonly AgentfootprintEvent[];
   readonly terminal: TurnEnd;
+  readonly resumed?: true;
 }
 
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

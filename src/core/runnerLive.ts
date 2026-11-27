@@ -33,6 +33,7 @@ import type { AgentInput } from './agent/types.js';
 import type { AgentRunOptions } from './Agent.js';
 import type { AgentRunCheckpoint } from './runCheckpoint.js';
 import type { TurnMethod } from './agent/aroundTurn/guards.js';
+import type { TurnEvidenceSource } from './agent/turnEvidence/types.js';
 import type { ArtifactMeta, ArtifactScope } from '../artifacts/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { LLMMessage, PermissionRequest } from '../provider-contract/types.js';
@@ -58,6 +59,7 @@ export interface HostedTurn {
   readonly conversation: AgentRunCheckpoint | undefined;
   readonly ownership: PauseOwnership | undefined;
   readonly recording?: HostedRecording;
+  readonly evidence?: TurnEvidenceSource;
 }
 
 /** The invocation a host admitted, independent of the runner's selected view. */
@@ -94,12 +96,14 @@ export interface RunnerLive {
       input: AgentInput | string,
       options?: AgentRunOptions,
       bind?: BindHostedInvocation,
+      captureEvidence?: boolean,
     ): Promise<HostedTurn>;
     resume(
       checkpoint: FlowchartCheckpoint,
       input?: unknown,
       options?: AgentRunOptions,
       bind?: BindHostedInvocation,
+      captureEvidence?: boolean,
     ): Promise<HostedTurn>;
     /** The public doors no longer the class's own: this port does not call those. */
     replaced(): readonly TurnMethod[];

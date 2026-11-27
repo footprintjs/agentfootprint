@@ -8,6 +8,11 @@ import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import { capturePauseOwnership, preservePendingQuestion } from './pauseOwnership.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import type { TurnMethod } from './aroundTurn/guards.js';
+import type { AgentfootprintEvent } from '../../events/registry.js';
+import type { Unsubscribe } from '../../events/dispatcher.js';
+import { createRunnerSnapshotReader } from '../runnerSnapshot.js';
+import { MAX_COMPLETED_TURN_EVENTS } from './turnEvidence/admitCompletedTurn.js';
+import type { TurnEvidenceSource } from './turnEvidence/types.js';
 
 interface HostTurnPorts {
   run(
@@ -24,15 +29,32 @@ interface HostTurnPorts {
   prepareResume(checkpoint: FlowchartCheckpoint): void;
   checkpoint(run: RunnerSelection<AgentRunValues>): AgentRunCheckpoint | undefined;
   replaced(): readonly TurnMethod[];
+  observe(listener: (event: AgentfootprintEvent) => void): Unsubscribe;
 }
 /** Host delivery uses this invocation's result and view, captured before its native lease ends. */
 export function hostedTurns(
   execution: RunnerExecution<AgentRunValues>,
   ports: HostTurnPorts,
 ): NonNullable<RunnerLive['turn']> {
+  let readSnapshot: ReturnType<typeof createRunnerSnapshotReader> | undefined;
+  const retain = (
+    selected: RunnerSelection<AgentRunValues>,
+    events: AgentfootprintEvent[],
+  ): TurnEvidenceSource | undefined => {
+    try {
+      const snapshot = (readSnapshot ??= createRunnerSnapshotReader())(selected, {
+        contextShapes: false,
+      });
+      return snapshot === undefined ? undefined : { snapshot, events: Object.freeze(events) };
+    } catch {
+      // An optional evidence reader must not change the hosted answer.
+      return undefined;
+    }
+  };
   const capture = (
     body: (run: RunnerInvocation<AgentRunValues>) => Promise<AgentOutput | RunnerPauseOutcome>,
     bind?: BindHostedInvocation,
+    captureEvidence?: boolean,
   ): Promise<HostedTurn> =>
     execution
       .withRun(async (run) => {
@@ -60,18 +82,42 @@ export function hostedTurns(
                     binding,
                   ),
               } satisfies RunnerInvocation<AgentRunValues>);
-        const output = await body(owned);
-        return {
-          values: run.value,
-          completed: {
-            output,
-            conversation:
-              run.run.origin === undefined
-                ? undefined
-                : ports.checkpoint({ value: run.value, context: run.context(), view: run.view }),
-            ownership: isPaused(output) ? capturePauseOwnership(run.value, output) : undefined,
-          },
-        };
+        const events: AgentfootprintEvent[] | undefined = captureEvidence ? [] : undefined;
+        const off =
+          events === undefined
+            ? undefined
+            : ports.observe((event) => {
+                const origin = run.run.origin;
+                if (
+                  origin !== undefined &&
+                  event.meta?.runId === origin.runId &&
+                  events.length <= MAX_COMPLETED_TURN_EVENTS
+                )
+                  events.push(event);
+              });
+        try {
+          const output = await body(owned);
+          const selected =
+            run.run.origin === undefined
+              ? undefined
+              : { value: run.value, context: run.context(), view: run.view };
+          const paused = isPaused(output);
+          const evidence =
+            events !== undefined && selected !== undefined && !paused
+              ? retain(selected, events)
+              : undefined;
+          return {
+            values: run.value,
+            completed: {
+              output,
+              conversation: selected === undefined ? undefined : ports.checkpoint(selected),
+              ownership: paused ? capturePauseOwnership(run.value, output) : undefined,
+              ...(evidence !== undefined && { evidence }),
+            },
+          };
+        } finally {
+          off?.();
+        }
       })
       .then(({ values, completed }) => {
         // Automatic filing runs in the lease's finalizers. Read its receipt
@@ -81,8 +127,9 @@ export function hostedTurns(
       });
   return {
     replaced: ports.replaced,
-    run: (input, options, bind) => capture((run) => ports.run(run, input, options), bind),
-    resume: (checkpoint, input, options, bind) => {
+    run: (input, options, bind, captureEvidence) =>
+      capture((run) => ports.run(run, input, options), bind, captureEvidence),
+    resume: (checkpoint, input, options, bind, captureEvidence) => {
       ports.prepareResume(checkpoint);
       return capture(
         (run) =>
@@ -92,6 +139,7 @@ export function hostedTurns(
             () => ports.resume(run, checkpoint, input, options),
           ),
         bind,
+        captureEvidence,
       );
     },
   };

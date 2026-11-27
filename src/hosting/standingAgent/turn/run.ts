@@ -38,14 +38,18 @@ import { isPaused, pauseDemandsDecision } from '../../../core/pause.js';
 import { toEnvelope, toPausedEnvelope } from '../../envelope.js';
 import { planHostedProtocol, protocolSuspension } from '../../protocolRoute.js';
 import { withHostedConversation } from '../../../core/agent/servingConversation.js';
+import type { completedTurnOffer } from '../completedTurn.js';
 
 type TurnOptions = Pick<Configuration, 'turnArtifactsTimeoutMs' | 'sealRequest'> &
-  Pick<SessionHistory, 'mayOpenSession'>;
+  Pick<SessionHistory, 'mayOpenSession'> & {
+    readonly offerCompleted?: ReturnType<typeof completedTurnOffer>;
+  };
 
 export function createTurnRunner({
   turnArtifactsTimeoutMs,
   sealRequest,
   mayOpenSession,
+  offerCompleted,
 }: TurnOptions) {
   async function answerOne(
     lane: Lane,
@@ -59,6 +63,11 @@ export function createTurnRunner({
   ): Promise<void> {
     let request = inbound;
     const runner = lane.agent;
+    const captureEvidence =
+      offerCompleted !== undefined && sessionId !== undefined && verified !== undefined;
+    const offerEvidence = (completed: HostedTurn, resumed?: true) => {
+      if (captureEvidence) offerCompleted(runner, completed, sessionId, verified.userId, resumed);
+    };
     let stopProtocolEvents: (() => void) | undefined;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
@@ -303,13 +312,20 @@ export function createTurnRunner({
           const turn = hostedTurnOf(runner);
           await deliver(
             lane,
-            await turn.resume(paused.checkpoint, request.decision, resumeOptions, bind),
+            await turn.resume(
+              paused.checkpoint,
+              request.decision,
+              resumeOptions,
+              bind,
+              captureEvidence,
+            ),
             store,
             reply,
             sessionId,
             offer,
             paused,
             request,
+            (completed) => offerEvidence(completed, true),
           );
         } catch (err) {
           // Settle the stored question before reporting a resume or write failure.
@@ -357,8 +373,19 @@ export function createTurnRunner({
         { message: request.input, ...(prior !== undefined && { continueFrom: prior }) },
         turnOptions,
         bind,
+        captureEvidence,
       );
-      await deliver(lane, completed, store, reply, sessionId, offer, undefined, request);
+      await deliver(
+        lane,
+        completed,
+        store,
+        reply,
+        sessionId,
+        offer,
+        undefined,
+        request,
+        offerEvidence,
+      );
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
@@ -385,6 +412,7 @@ export function createTurnRunner({
     offer: TurnOffer,
     priorPause?: PausedRun,
     request?: HostRequest,
+    offerEvidence?: (completed: HostedTurn) => void,
   ): Promise<void> {
     const runner = lane.agent;
     const { output, ownership } = completed;
@@ -459,6 +487,7 @@ export function createTurnRunner({
     // filing costs no second snapshot.
     await offerTurnArtifacts(runner, reply, offer, () => conversation?.runId, completed.recording);
     reply.complete(typeof output === 'string' ? output : String(output));
+    offerEvidence?.(completed);
   }
   return answerOne;
 }
