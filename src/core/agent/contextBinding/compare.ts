@@ -6,6 +6,9 @@
 import type { ContextChange } from '../../../events/payloads/contextChange.js';
 import type { ContextBaseline, MessageEntry, PieceEntry, ToolEntry } from './composition.js';
 import { boundName } from '../../../thinking/contextChange.js';
+import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { skillBodyOrigin } from '../../../injection-engine/skillBodyEvidence.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
 
 /** Names on the record are bounded too: ids from the app, tool names from servers. */
 const NAME = 128;
@@ -19,10 +22,37 @@ function pieceChange(piece: PieceEntry, change: ContextChange['change']): Contex
   };
 }
 
+/** The newest produced body in this turn owns the attribution. A later
+ * window rewrite can remove delivered bytes but cannot change that origin. */
+function changedSkillResults(
+  added: readonly PieceEntry[],
+  history: readonly LLMMessage[] | undefined,
+): ReadonlySet<string> {
+  const changed = new Set<string>();
+  if (history === undefined) return changed;
+  const open = new Set(
+    added.flatMap((piece) => (piece.source === 'skill' && piece.id ? [piece.id] : [])),
+  );
+  for (let index = history.length - 1; index >= 0 && open.size > 0; index -= 1) {
+    const message = history[index];
+    if (isSaidByPerson(message)) break;
+    const origin = skillBodyOrigin(message);
+    if (origin === undefined || !open.delete(origin.skillId)) continue;
+    if (
+      origin.span === undefined &&
+      (message.toolResultDisposition === 'rewritten' ||
+        message.toolResultDisposition === 'withheld')
+    )
+      changed.add(origin.skillId);
+  }
+  return changed;
+}
+
 function systemChanges(
   base: ContextBaseline,
   pieces: readonly PieceEntry[],
   text: string,
+  skillHistory?: readonly LLMMessage[],
 ): ContextChange[] {
   const now = new Map(pieces.map((p) => [p.key, p]));
   const before = new Map(base.system.map((p) => [p.key, p]));
@@ -32,7 +62,16 @@ function systemChanges(
     if (current === undefined) changes.push(pieceChange(piece, 'removed'));
     else if (current.hash !== piece.hash) changes.push(pieceChange(current, 'changed'));
   }
-  for (const piece of pieces) if (!before.has(piece.key)) changes.push(pieceChange(piece, 'added'));
+  const added = pieces.filter((piece) => !before.has(piece.key));
+  const changedResults = changedSkillResults(added, skillHistory);
+  for (const piece of added) {
+    const change = pieceChange(piece, 'added');
+    changes.push(
+      piece.source === 'skill' && piece.id !== undefined && changedResults.has(piece.id)
+        ? { ...change, cause: 'read-skill-result-middleware' }
+        : change,
+    );
+  }
   // Same pieces, different prompt: the join or the order moved.
   if (changes.length === 0 && text !== base.systemText)
     changes.push({ slot: 'system-prompt', change: 'changed' });
@@ -85,12 +124,13 @@ export function contextChanges(
   current: {
     readonly systemText: string;
     readonly system: readonly PieceEntry[];
+    readonly skillHistory?: readonly LLMMessage[];
     readonly tools: readonly ToolEntry[];
     readonly messages: readonly MessageEntry[];
   },
 ): ContextChange[] {
   return [
-    ...systemChanges(base, current.system, current.systemText),
+    ...systemChanges(base, current.system, current.systemText, current.skillHistory),
     ...toolChanges(base, current.tools),
     ...messageChanges(base, current.messages),
   ];

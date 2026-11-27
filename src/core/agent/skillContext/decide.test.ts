@@ -10,8 +10,12 @@ import { defineSkill } from '../../../injection-engine/factories/defineSkill.js'
 import type { Injection } from '../../../injection-engine/types.js';
 import { decideSkillContext } from './decide.js';
 import { listedInjections } from './apply.js';
-import { activeSkillBodyCallIds } from './bodies.js';
+import { activeSkillBodyOccurrences } from './bodies.js';
 import { servedSurfaceMode } from '../../../injection-engine/skillContext.js';
+import { recordSkillBody } from '../../../injection-engine/skillBodyEvidence.js';
+import { honestyHistory } from './honestyView.js';
+import type { LLMMessage } from '../../../provider-contract/types.js';
+import { stripFrameworkFields } from '../composeRequest.js';
 import { notLoadedFor, notLoadedRefusal } from './gate.js';
 import { readSkillOfferFor } from '../runtime/skills/owner.js';
 
@@ -67,16 +71,35 @@ describe('listedInjections and the served surface mode', () => {
 
   it('is tool-only exactly while the read_skill result is the body; otherwise the declaration', () => {
     const listed = { surfaceMode: 'auto', skillContext: 'listed' };
-    const result = { role: 'tool', content: 'Confirm identity.', toolName: 'read_skill' };
-    expect(servedSurfaceMode(listed, 'Confirm identity.', [result])).toBe('tool-only');
-    expect(servedSurfaceMode(listed, 'Confirm identity.', [])).toBe('auto');
-    expect(
-      servedSurfaceMode(listed, 'Confirm identity.', [{ ...result, toolName: 'lookup' }]),
-    ).toBe('auto');
-    expect(servedSurfaceMode(listed, 'Confirm identity.', [{ ...result, content: 'other' }])).toBe(
+    const body = 'Confirm identity.';
+    const result = {
+      role: 'tool',
+      content: body + ' An annotation.',
+      toolName: 'read_skill',
+      callOccurrenceKey: [1, 2, 3, 4, 0],
+      toolSkillBody: recordSkillBody('billing', body, body),
+    } as const;
+    expect(servedSurfaceMode(listed, 'billing', body, [result])).toBe('tool-only');
+    expect(servedSurfaceMode(listed, 'billing', body, [])).toBe('auto');
+    expect(servedSurfaceMode(listed, 'another-skill', body, [result])).toBe('auto');
+    expect(servedSurfaceMode(listed, 'billing', body + ' updated', [result])).toBe('auto');
+    expect(servedSurfaceMode(listed, 'billing', body, [{ ...result, toolName: 'lookup' }])).toBe(
       'auto',
     );
-    expect(servedSurfaceMode({ surfaceMode: 'auto' }, 'Confirm identity.', [result])).toBe('auto');
+    expect(servedSurfaceMode(listed, 'billing', body, [{ ...result, content: 'other' }])).toBe(
+      'auto',
+    );
+    expect(
+      servedSurfaceMode(listed, 'billing', body, [
+        { role: 'tool', toolName: 'read_skill', content: body },
+      ]),
+    ).toBe('tool-only');
+    expect(
+      servedSurfaceMode(listed, 'billing', body, [
+        { ...result, content: body, toolSkillBody: recordSkillBody('billing', body, undefined) },
+      ]),
+    ).toBe('auto');
+    expect(servedSurfaceMode({ surfaceMode: 'auto' }, 'billing', body, [result])).toBe('auto');
   });
 });
 
@@ -135,7 +158,44 @@ describe('the read_skill description under listed', () => {
   });
 });
 
-describe('activeSkillBodyCallIds (the window pin)', () => {
+describe('activeSkillBodyOccurrences (the window pin)', () => {
+  it('pins a matching old result for delivery without granting it origin or evidence', () => {
+    const body = 'Confirm identity.';
+    const bodies = new Map([['billing', body]]);
+    const legacy: LLMMessage = {
+      role: 'tool',
+      toolName: 'read_skill',
+      content: body,
+      callOccurrenceKey: [1, 2, 3, 4, 1],
+    };
+    expect(activeSkillBodyOccurrences([legacy], bodies, ['billing'])).toEqual(
+      new Set(['1.2.3.4.1']),
+    );
+    expect(honestyHistory([legacy], bodies).map(({ role, content }) => [role, content])).toEqual([
+      ['tool', "Skill 'billing' activated for the next iteration."],
+      ['system', body],
+    ]);
+    expect(
+      honestyHistory([legacy], new Map([...bodies, ['support', body]])).map(({ role, content }) => [
+        role,
+        content,
+      ]),
+    ).toEqual([
+      ['tool', ''],
+      ['system', body],
+    ]);
+
+    const otherCases = [
+      { ...legacy, content: 'Skill loaded.' },
+      { ...legacy, toolName: 'lookup' },
+      { ...legacy, toolSkillBody: recordSkillBody('billing', body, undefined) },
+    ];
+    for (const result of otherCases) {
+      expect(activeSkillBodyOccurrences([result], bodies, ['billing']).size).toBe(0);
+    }
+    expect(honestyHistory([otherCases[0]!], bodies)).toEqual([{ ...legacy, content: '' }]);
+  });
+
   it('a restored 40-turn history with a body result per turn pins only the newest', () => {
     const body = 'Confirm identity.';
     const history = Array.from({ length: 40 }, (_, i) => [
@@ -145,12 +205,46 @@ describe('activeSkillBodyCallIds (the window pin)', () => {
         content: '',
         toolCalls: [{ id: `c${i}`, name: 'read_skill', args: { id: 'billing' } }],
       },
-      { role: 'tool', content: body, toolCallId: `c${i}`, toolName: 'read_skill' },
+      {
+        role: 'tool',
+        content: body,
+        toolCallId: 'provider-id-reused',
+        toolName: 'read_skill',
+        callOccurrenceKey: [1, 2, 3, 4, i],
+        toolSkillBody: recordSkillBody('billing', body, body),
+      },
       { role: 'assistant', content: `answer ${i}` },
     ]).flat();
     const bodies = new Map([['billing', body]]);
-    expect([...activeSkillBodyCallIds(history as never, bodies, ['billing'])]).toEqual(['c39']);
+    expect([...activeSkillBodyOccurrences(history as never, bodies, ['billing'])]).toEqual([
+      '1.2.3.4.39',
+    ]);
     // An inactive skill's results are ordinary history: nothing is pinned.
-    expect(activeSkillBodyCallIds(history as never, bodies, []).size).toBe(0);
+    expect(activeSkillBodyOccurrences(history as never, bodies, []).size).toBe(0);
+  });
+});
+
+describe('a library-owned read_skill result', () => {
+  it('does not turn an old body or a policy replacement into tool evidence', () => {
+    const older = 'Use the reporting view.';
+    const current = new Map([['billing', 'Use the dashboard.']]);
+    const result: LLMMessage = {
+      role: 'tool',
+      toolName: 'read_skill',
+      callOccurrenceKey: [1, 2, 3, 4, 1],
+      content: older + ' Middleware annotation.',
+      toolSkillBody: recordSkillBody('billing', older, older),
+    };
+    expect(honestyHistory([result], current).map(({ role, content }) => [role, content])).toEqual([
+      ['tool', "Skill 'billing' activated for the next iteration."],
+      ['system', older],
+    ]);
+    const replaced = {
+      ...result,
+      content: 'Withheld',
+      toolSkillBody: recordSkillBody('billing', older, undefined),
+    };
+    expect(honestyHistory([replaced], current)).toHaveLength(1);
+    expect(stripFrameworkFields([result])[0]).not.toHaveProperty('toolSkillBody');
   });
 });

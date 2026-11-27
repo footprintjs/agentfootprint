@@ -59,6 +59,7 @@ import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
+import { systemPromptInput } from './runtime/slots/systemPromptInput.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
 import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
@@ -448,21 +449,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // no cursor for `.tag()`); it lands on the mount's FIRST bundle.
     .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
       tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
-      inputMapper: (parent) => ({
-        userMessage: parent.userMessage as string | undefined,
-        iteration: parent.iteration as number | undefined,
-        // `.configure()`'s per-run system prompt, as seed committed it. The
-        // key is spread in ONLY when a resolver actually produced one, so an
-        // unconfigured agent seeds this subflow with the same keys as ever.
-        ...(parent.resolvedInstructions !== undefined && {
-          instructions: parent.resolvedInstructions as string,
-        }),
-        activeInjections: withMemoryRecall(
-          parent.activeInjections as readonly ActiveInjection[] | undefined,
-          parent,
-          memoryIds,
-        ),
-      }),
+      inputMapper: (parent) => systemPromptInput(parent, memoryIds, parent.servedSystemSkillBodies),
       outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
       arrayMerge: ArrayMergeMode.Replace,
     })

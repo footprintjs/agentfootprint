@@ -681,10 +681,11 @@ const CANARY_PAYLOAD: {
       appStatement: 'failed',
       changes: [
         {
-          slot: 'tools',
+          slot: 'system-prompt',
           change: 'added',
           source: 'skill',
           id: 'refunds',
+          cause: 'read-skill-result-middleware',
           tool: 'orders_search',
           party: { channel: 'skill', id: 'refunds' },
           position: 2,

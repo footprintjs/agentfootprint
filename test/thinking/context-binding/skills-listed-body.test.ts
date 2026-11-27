@@ -16,7 +16,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   Agent,
+  allow,
   defineTool,
+  deny,
   inMemoryArtifacts,
   isPaused,
   pauseHere,
@@ -24,7 +26,7 @@ import {
   type WindowStrategy,
 } from '../../../src/index.js';
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
-import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
+import { defineInstruction, defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { ContextChangedError } from '../../../src/providers.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import {
@@ -143,6 +145,66 @@ describe('P1-1: a loaded body is never lost', () => {
       expect(executed).toContain('smb_report');
     }
   });
+
+  it('keeps an annotated read_skill body in the tool result without repeating it in the system prompt', async () => {
+    const bodies: Body[] = [];
+    const annotation = 'Reviewer annotation.';
+    const agent = agentOn(ALIAS, bodies, unsigned([READ, { tool: 't1', input: {} }, DONE]), (a) =>
+      a.skill(smb()).toolMiddleware({
+        name: 'annotate-skill-body',
+        onToolResult: (call) =>
+          call.toolName === 'read_skill' && typeof call.result === 'string'
+            ? allow(`${call.result}\n${annotation}`, 'Added a local annotation')
+            : allow(),
+      }),
+    );
+
+    await agent.run({ message: 'go' });
+
+    expect(resultOf(bodies[1], 'toolu_1')).toBe(`${BODY}\n${annotation}`);
+    expect(bodies.map(copies)).toEqual([0, 1, 1]);
+  });
+
+  it.each(['replace', 'withhold'] as const)(
+    'names tool-result middleware when it can %s a read_skill body',
+    async (action) => {
+      const bodies: Body[] = [];
+      const agent = agentOn(BOUND, bodies, [READ, DONE], (a) =>
+        a
+          .skill(smb())
+          .thinking({ budget: 1500 })
+          .toolMiddleware({
+            name: 'skill-result-fixture',
+            onToolResult: (call) => {
+              if (call.toolName !== 'read_skill') return allow();
+              return action === 'replace'
+                ? allow('Local result annotation without the original body.', 'Fixture replacement')
+                : deny('Fixture result was withheld.');
+            },
+          }),
+      );
+      try {
+        const { error } = await settle(agent.run({ message: 'go' }));
+        expect(error).toBeInstanceOf(ContextChangedError);
+        expect((error as Error).message).toMatch(
+          /tool-result middleware changed a read_skill result/,
+        );
+        expect((error as ContextChangedError).changes).toContainEqual(
+          expect.objectContaining({
+            slot: 'system-prompt',
+            source: 'skill',
+            cause: 'read-skill-result-middleware',
+          }),
+        );
+        expect((error as Error).message).not.toMatch(
+          /Fixture replacement|Fixture result was withheld/,
+        );
+        expect(bodies).toHaveLength(1);
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
 
   it('on a bound model the same window drops OTHER turns inside the signed turn: slice 1 refuses by messages, never by the skill', async () => {
     executed = [];
@@ -276,6 +338,156 @@ describe('P2-3: a read_skill pick of a graph target keeps the context', () => {
       body: `${id}_BODY`,
       tools: [tool(`${id}_tool`)],
     });
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    '%s retains the conditional entry body through a signed cursor hop and clears it for the next turn',
+    async (reactMode) => {
+      const entry = s('entry');
+      const target = s('target');
+      const graph = skillGraph()
+        .entry(entry, { when: (context) => context.userMessage === 'go' })
+        .route(entry, target, { onToolReturn: 'entry_tool' })
+        .build({ check: 'off' });
+      const bodies: Body[] = [];
+      const agent = agentOn(
+        BOUND,
+        bodies,
+        [{ tool: 't1', input: {} }, { tool: 'read_skill', input: { id: 'target' } }, DONE],
+        (a) =>
+          a
+            .instruction(defineInstruction({ id: 'opening', prompt: 'Opening instructions.' }))
+            .skillGraph(graph)
+            .instruction(defineInstruction({ id: 'closing', prompt: 'Closing instructions.' }))
+            .thinking({ budget: 1500 }),
+        { reactMode },
+      );
+
+      await agent.run({ message: 'go' });
+
+      expect(bodies).toHaveLength(3);
+      expect(bodies[0]!.system).toBeDefined();
+      expect(JSON.stringify(bodies[0]!.system)).toMatch(
+        /Opening instructions.*entry_BODY.*Closing instructions/,
+      );
+      expect(bodies.map((body) => body.system)).toEqual(Array(3).fill(bodies[0]!.system));
+      expect(resultOf(bodies[2], 'toolu_2')).toBe('target_BODY');
+      expect(prefixHeld(bodies)).toBe(true);
+
+      await agent.run({ message: 'new turn' });
+
+      expect(bodies).toHaveLength(4);
+      expect(JSON.stringify(bodies[3]!.system)).not.toContain('entry_BODY');
+    },
+  );
+
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    '%s does not retain the entry body after its role is withdrawn',
+    async (reactMode) => {
+      const entry = s('entry');
+      const target = s('target');
+      const graph = skillGraph()
+        .entry(entry, { when: () => true })
+        .route(entry, target, { onToolReturn: 'entry_tool' })
+        .build({ check: 'off' });
+      const bodies: Body[] = [];
+      let hideEntry = false;
+      const agent = agentOn(
+        BOUND,
+        bodies,
+        [{ tool: 't1', input: {} }, { tool: 'read_skill', input: { id: 'target' } }, DONE],
+        (a) =>
+          a
+            .skillGraph(graph)
+            .thinking({ budget: 1500 })
+            .toolMiddleware({
+              name: 'withdraw-entry-role-after-pick',
+              onToolResult: (call) => {
+                if (call.toolName === 'read_skill') hideEntry = true;
+                return allow();
+              },
+            }),
+        {
+          reactMode,
+          permissionChecker: {
+            name: 'entry-role',
+            governs: ['skill_read'],
+            check: (request: { capability: string; target?: string }) => ({
+              result:
+                hideEntry && request.capability === 'skill_read' && request.target === 'skill:entry'
+                  ? 'deny'
+                  : 'allow',
+            }),
+          },
+        },
+      );
+
+      const { error } = await settle(agent.run({ message: 'go' }));
+
+      expect(error).toBeInstanceOf(ContextChangedError);
+      expect((error as Error).message).toContain(
+        "skill 'entry' was removed from the system prompt",
+      );
+      expect(bodies).toHaveLength(2);
+    },
+  );
+
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    '%s acknowledges a listed cursor self-read without resending instructions already in the system prompt',
+    async (reactMode) => {
+      const entry = s('entry');
+      const graph = skillGraph()
+        .entry(entry, { when: () => true })
+        .build({ check: 'off' });
+      const bodies: Body[] = [];
+      const agent = agentOn(
+        BOUND,
+        bodies,
+        [{ tool: 'read_skill', input: { id: 'entry' } }, DONE],
+        (a) => a.skillGraph(graph).thinking({ budget: 1500 }),
+        { reactMode },
+      );
+
+      await agent.run({ message: 'go' });
+
+      expect(bodies).toHaveLength(2);
+      expect(JSON.stringify(bodies[0]!.system)).toContain('entry_BODY');
+      expect(resultOf(bodies[1], 'toolu_1')).toContain(
+        "Its instructions were in that call's system prompt.",
+      );
+      expect(JSON.stringify(bodies[1]).split('entry_BODY')).toHaveLength(2);
+      expect(prefixHeld(bodies)).toBe(true);
+    },
+  );
+
+  it('does not resend the current skill when the prior read already carried its body', async () => {
+    const entry = s('entry');
+    const target = s('target');
+    const graph = skillGraph()
+      .entry(entry)
+      .route(entry, target, { onToolReturn: 'entry_tool' })
+      .build({ check: 'off' });
+    const bodies: Body[] = [];
+    const agent = agentOn(
+      BOUND,
+      bodies,
+      [
+        { tool: 'read_skill', input: { id: 'target' } },
+        { tool: 'read_skill', input: { id: 'target' } },
+        DONE,
+      ],
+      (a) => a.skillGraph(graph).thinking({ budget: 1500 }),
+    );
+
+    await agent.run({ message: 'go' });
+
+    expect(bodies).toHaveLength(3);
+    expect(resultOf(bodies[1], 'toolu_1')).toBe('target_BODY');
+    expect(resultOf(bodies[2], 'toolu_2')).toContain(
+      'named the skill you were already standing in',
+    );
+    expect(JSON.stringify(bodies[2]).split('target_BODY')).toHaveLength(2);
+    expect(prefixHeld(bodies)).toBe(true);
+  });
+
   for (const form of ['route', 'steps'] as const) {
     it(`${form}: the target's body is the result; the system prompt does not change`, async () => {
       executed = [];

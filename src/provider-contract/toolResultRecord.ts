@@ -1,3 +1,5 @@
+import type { ToolSkillBodyRecord } from '../lib/toolSkillBodyRecord.js';
+
 /** Measured printed output retained when a native code runner clips either stream. */
 export interface ToolOutputCounts {
   readonly kept: number;
@@ -23,6 +25,12 @@ export interface DeclaredToolFailureRecord {
   readonly tryInstead?: string | { readonly omitted: true };
 }
 
+/**
+ * The skill graph reads the same detached body record as message history.
+ * Its shape belongs to the neutral leaf, and request assembly strips it.
+ * A surviving span is independent of the recorded source identity.
+ */
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -39,6 +47,7 @@ export interface ToolResultRecord {
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /** A host's after-tool rule withheld or replaced this result. Kept off the provider wire. */
   readonly toolResultDisposition?: 'withheld' | 'rewritten';
+  readonly toolSkillBody?: ToolSkillBodyRecord;
   /**
    * Whether the tool was entered and returned. `returned-unserved` means a
    * framework refusal or cap replaced its return. Host rules are recorded

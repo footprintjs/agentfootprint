@@ -4,7 +4,7 @@
  * reliability chain may hand it to) is `bound` or `unknown`. An `unbound`
  * answer asks nothing, so those requests are untouched.
  */
-import type { LLMProvider } from '../../../provider-contract/types.js';
+import type { LLMMessage, LLMProvider } from '../../../provider-contract/types.js';
 import { thinkingBindingOf } from '../../../provider-contract/thinkingBinding.js';
 import type { CallLLMStageDeps } from '../stages/callLLM/types.js';
 import {
@@ -31,6 +31,7 @@ export function contextCheckFor(
   provider: LLMProvider,
   model: string,
   request: Omit<RequestComposition, 'parties'>,
+  committed?: readonly LLMMessage[],
 ): ContextCheckForCall | undefined {
   const holder = deps.contextBinding;
   if (holder === undefined) return undefined;
@@ -42,13 +43,17 @@ export function contextCheckFor(
   };
   return {
     request: full,
-    outcome: checkContextBinding(holder, {
-      ...full,
-      provider: provider.name,
-      model,
-      binding: binding as CheckedBinding,
-      bindingOf: (writer) => thinkingBindingOf(provider, writer),
-    }),
+    outcome: checkContextBinding(
+      holder,
+      {
+        ...full,
+        provider: provider.name,
+        model,
+        binding: binding as CheckedBinding,
+        bindingOf: (writer) => thinkingBindingOf(provider, writer),
+      },
+      committed,
+    ),
   };
 }
 

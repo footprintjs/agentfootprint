@@ -10,6 +10,8 @@ import { sourceLanding } from '../../../sourceEvidence/landing.js';
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import { keepNegativeResultOut } from '../../../negativeClaims/capture.js';
 import { bodyInHistory } from '../../../../../injection-engine/skillContext.js';
+import { librarySkillBodyOf } from '../../../../../injection-engine/skillTools.js';
+import { recordSkillBody } from '../../../../../injection-engine/skillBodyEvidence.js';
 import { skillActivationConfirmation } from '../../../../../injection-engine/skillToolDescriptors.js';
 
 interface FinalizeCallFrame {
@@ -38,19 +40,26 @@ export async function finalizeCallResult(
 ) {
   const { tool, tc, batch, callArguments, execution, outcome } = frame;
   const occurrence = callOccurrenceField(tc.callOccurrenceKey);
-  // `listed`: a re-read of a skill whose body is already in the history this
-  // request sends answers the `declared` confirmation, never a second copy
-  // (`injection-engine/skillContext.ts` · `bodyInHistory`).
-  if (
-    frame.libraryBody === true &&
-    execution.executed &&
+  const skillId = frame.libraryBody === true ? callArguments.callArgs.id : undefined;
+  const originalBody =
+    typeof skillId === 'string' &&
+    tc.callOccurrenceKey !== undefined &&
+    execution.toolResultExecution === 'returned' &&
+    !execution.denied &&
+    !execution.ceilingRefused &&
     !outcome.error &&
-    !frame.skillRejected &&
-    typeof outcome.result === 'string' &&
-    bodyInHistory(outcome.result, batch.newHistory)
+    !frame.skillRejected
+      ? librarySkillBodyOf(tool, skillId)
+      : undefined;
+  let landedSkillBody = originalBody !== undefined && outcome.result === originalBody;
+  if (
+    landedSkillBody &&
+    typeof skillId === 'string' &&
+    (scope.servedSystemSkillBodies?.some((record) => record.sourceId === skillId) === true ||
+      bodyInHistory(skillId, originalBody, batch.newHistory))
   ) {
-    const id = (callArguments.callArgs as { id?: unknown }).id;
-    if (typeof id === 'string') outcome.result = skillActivationConfirmation(id);
+    outcome.result = skillActivationConfirmation(skillId);
+    landedSkillBody = false;
   }
   // ── The after-tool moment ────────────────────────────────────────
   // Last thing before the result becomes history, and only for a call
@@ -153,5 +162,17 @@ export async function finalizeCallResult(
     modelResult,
     modelResultCapped,
     toolResultDisposition: delivery?.toolResultDisposition,
+    toolSkillBody:
+      landedSkillBody &&
+      originalBody !== undefined &&
+      typeof skillId === 'string' &&
+      !execution.denied &&
+      !execution.ceilingRefused
+        ? recordSkillBody(
+            skillId,
+            originalBody,
+            delivery?.toolResultDisposition === 'withheld' ? undefined : modelResult,
+          )
+        : undefined,
   };
 }

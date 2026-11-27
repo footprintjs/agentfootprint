@@ -70,6 +70,13 @@ export function buildSlots(
           reason: 'Agent.system()',
         }),
     ...(budget?.systemPrompt !== undefined && { budgetCap: budget.systemPrompt }),
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      listedSkillIds: new Set(
+        this.configuration.injections
+          .filter((injection) => injection.flavor === 'skill')
+          .map((injection) => injection.id),
+      ),
+    }),
   });
   const messagesSubflow = buildMessagesSlot({
     ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
