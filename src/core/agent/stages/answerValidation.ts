@@ -138,7 +138,7 @@ export function withAnswerValidation(
           };
         }
         if (
-          prepared.correctionReasons.length > 0 &&
+          prepared.correction &&
           prepareNegativeCorrection(scope, record, negatives.config.field)
         ) {
           announceHeld(scope, {

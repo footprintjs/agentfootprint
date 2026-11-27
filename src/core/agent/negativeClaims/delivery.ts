@@ -157,6 +157,7 @@ export function renderNegativeCandidate(
 ): {
   candidate: unknown;
   answer: AnswerNegatives;
+  correction: boolean;
   correctionReasons: CorrectionReasons;
   allowed: boolean;
 } {
@@ -357,6 +358,7 @@ export function renderNegativeCandidate(
   return {
     candidate: { ...source, [config.field]: claims },
     answer,
+    correction: correctionReasons.size > 0,
     correctionReasons: [...correctionReasons],
     allowed,
   };
