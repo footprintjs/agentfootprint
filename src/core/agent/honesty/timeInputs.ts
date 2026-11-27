@@ -1,5 +1,6 @@
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
+import { measuredLookbackOf } from '../../../time/provenForms/measuredLookback.js';
 import { provenLookback } from '../../../time/provenForms/proof.js';
 import {
   answersOf,
@@ -11,8 +12,6 @@ import {
 } from '../../../time/rows.js';
 import type { TimeInputs } from '../arguments/subflow.js';
 
-const qualifiedPhrases: ReadonlySet<string> = new Set(provenLookback.phrases);
-
 interface ReadingScope {
   readonly findingsLedger?: unknown;
   readonly turnNumber?: unknown;
@@ -23,15 +22,16 @@ interface ReadingScope {
 /** Project a qualified row only from the active native scope, never from a portable row alone. */
 export function activeTimeReadings(
   scope: ReadingScope,
+  allowProven: boolean,
   clock?: ClockRow,
 ): readonly TimeReadingRow[] {
   const ledger = scope.findingsLedger as readonly unknown[] | undefined;
   const rows = readingsOf(ledger, scope.turnNumber as number);
+  if (!allowProven) return rows;
   const row = rows[0];
   const proof = row?.qualifiedLookback;
   if (
-    rows.length !== 1 ||
-    row === undefined ||
+    row?.choice?.by !== 'proven' ||
     proof === null ||
     typeof proof !== 'object' ||
     proof.receipt !== provenLookback.receipt ||
@@ -43,42 +43,23 @@ export function activeTimeReadings(
   const retained = clock ?? clockOf(ledger);
   const position = retained?.provenInputPosition;
   if (
-    retained?.turn !== row.turn ||
-    position === undefined ||
+    row.turn !== 1 ||
+    retained === undefined ||
+    position !== 0 ||
     proof.inputPosition !== position ||
     proof.clockNow !== retained.now ||
     row.quote !== scope.userMessage ||
-    typeof row.quote !== 'string' ||
-    !qualifiedPhrases.has(row.quote) ||
     !Array.isArray(scope.history)
   ) {
     return rows;
   }
   const input = (scope.history as readonly LLMMessage[])[position];
-  const choice = row.choice;
-  const candidate = row.candidates?.[0];
   if (
     input == null ||
     typeof input !== 'object' ||
     !isSaidByPerson(input) ||
     input.content !== row.quote ||
-    row.mentions !== 1 ||
-    row.mention !== 0 ||
-    row.refused !== undefined ||
-    row.problem !== undefined ||
-    row.reader.id !== provenLookback.reader.id ||
-    row.reader.version !== provenLookback.reader.version ||
-    row.reader.kind !== provenLookback.reader.kind ||
-    row.reader.locale !== provenLookback.reader.locale ||
-    choice?.by !== 'open' ||
-    choice.open.length !== 1 ||
-    choice.open[0] !== 'confirm' ||
-    choice.remaining.length !== 1 ||
-    choice.remaining[0] !== 0 ||
-    row.candidates?.length !== 1 ||
-    candidate?.window.kind !== 'lookback' ||
-    candidate.endpoint?.end !== 'exclusive' ||
-    candidate.endpoint.cutoff !== retained.now
+    measuredLookbackOf(row.quote, retained, rows) === undefined
   ) {
     return rows;
   }
@@ -89,13 +70,16 @@ export function activeTimeReadings(
  * This turn's clock and readings, off the parent's ledger — `undefined` when
  * the turn has no clock (a turn paused by a runtime without the layer).
  */
-export function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
+export function timeInputsOf(
+  parent: Record<string, unknown>,
+  allowProven: boolean,
+): TimeInputs | undefined {
   const ledger = parent.findingsLedger as readonly unknown[] | undefined;
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
   return {
     clock,
-    readings: [...activeTimeReadings(parent, clock)],
+    readings: [...activeTimeReadings(parent, allowProven, clock)],
     answers: [...answersOf(ledger, parent.turnNumber as number)],
   };
 }

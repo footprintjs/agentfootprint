@@ -213,7 +213,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         ...integrityRailInto(parent),
         // The reader's settled windows (step T6b) — the flat chart's line, read INSIDE
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeWindows`.
-        ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger, parent)),
+        ...(deps.timeWindows === true &&
+          timeWindowsArg(parent.findingsLedger, parent, deps.stateProvenWindow === true)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
         // The role-hidden skill ids the Injection Engine resolved THIS iteration
         // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the

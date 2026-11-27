@@ -455,7 +455,8 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // The reader's settled windows (step T6b) and the app's control window,
         // under `.time()` only and value-conditional: a turn with none crosses no
         // key. See `AgentChartDeps.timeWindows`.
-        ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger, parent)),
+        ...(deps.timeWindows === true &&
+          timeWindowsArg(parent.findingsLedger, parent, deps.stateProvenWindow === true)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
         // The role-hidden skill ids the Injection Engine resolved THIS iteration
         // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the

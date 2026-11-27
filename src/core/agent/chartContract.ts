@@ -269,6 +269,9 @@ export interface AgentChartDeps {
    */
   readonly timeWindows?: true;
 
+  /** Current agent can use and state an admitted look-back. */
+  readonly stateProvenWindow?: true;
+
   /**
    * The time layer is armed with the inputs layer (`.time()` over a tool that
    * declares a period, step T8). Gates ONE mount arg on the Tools branch's

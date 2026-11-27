@@ -9,3 +9,8 @@ export function canServeProvenWindow(config: AgentConfiguration): boolean {
     config.answerValidationConfig === undefined
   );
 }
+
+/** Memory reads run after seed, so seed cannot certify an empty recall for these agents. */
+export function canQualifyProvenWindow(config: AgentConfiguration): boolean {
+  return canServeProvenWindow(config) && config.memories.length === 0;
+}

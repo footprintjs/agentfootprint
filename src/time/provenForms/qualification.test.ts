@@ -65,8 +65,43 @@ describe('fresh benchmark qualification', () => {
     expect(provenLookbackOf(reader, written, clock, rows(written))).toBeUndefined();
   });
 
-  it('disables new qualification when the runtime changes', () => {
-    vi.stubGlobal('process', { ...process, versions: { ...process.versions, tz: '2027a' } });
+  it.each(['node', 'icu', 'tz'] as const)('requires matching %s', (key) => {
+    vi.stubGlobal('process', {
+      ...process,
+      versions: { ...process.versions, [key]: 'unmeasured' },
+    });
     expect(provenLookbackOf(reader, phrase, clock, rows(phrase))).toBeUndefined();
   });
+
+  it('rejects an unmeasured process zone even with a measured app zone', () => {
+    vi.restoreAllMocks();
+    const previous = Intl.DateTimeFormat;
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((locales, options) =>
+      previous(locales, { timeZone: 'America/Chicago', ...options }),
+    );
+    expect(provenLookbackOf(reader, phrase, clock, rows(phrase))).toBeUndefined();
+  });
+
+  it('rejects an unmeasured app zone and a control window in a measured process zone', () => {
+    const window = { from: '2026-10-31T00:00:00Z', to: now, source: 'control' as const };
+    expect(
+      provenLookbackOf(reader, phrase, { ...clock, zone: 'America/Chicago' }, rows(phrase)),
+    ).toBeUndefined();
+    expect(provenLookbackOf(reader, phrase, { ...clock, window }, rows(phrase))).toBeUndefined();
+  });
+
+  it('requires the resolved exclusive cutoff to match the turn clock', () => {
+    const exact = rows(phrase)[0]!;
+    expect(
+      provenLookbackOf(reader, phrase, { ...clock, now: '2026-11-01T09:31:00Z' }, [exact]),
+    ).toBeUndefined();
+  });
+
+  it.each(['last 5 minutes', 'Last 2 hours', 'last 2 hours '])(
+    'rejects the unmeasured phrase %j even with a valid candidate shape',
+    (quote) => {
+      const exact = rows(phrase)[0]!;
+      expect(provenLookbackOf(reader, quote, clock, [{ ...exact, quote }])).toBeUndefined();
+    },
+  );
 });

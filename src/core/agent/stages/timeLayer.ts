@@ -54,6 +54,7 @@ import {
   rulesOf,
   type RuledToolLike,
 } from '../../../tools/declare.js';
+import { canDiscloseProvenWindow } from '../honesty/provenWindowVisibility.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentInput, AgentState } from '../types.js';
@@ -94,19 +95,25 @@ export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): 
 }
 
 function currentPersonPosition(scope: TypedScope<AgentState>): number | undefined {
+  const input = scope.$getArgs<AgentInput>();
   if (
-    scope.$getArgs<AgentInput>().messageFrom === 'composed' ||
+    scope.turnNumber !== 1 ||
+    input.messageFrom === 'composed' ||
+    input.message !== scope.userMessage ||
     runKeepsOut(scope, 'history') ||
     runKeepsOut(scope, 'userMessage') ||
-    runKeepsOut(scope, 'findingsLedger')
+    runKeepsOut(scope, 'findingsLedger') ||
+    runKeepsOut(scope, 'finalContent')
   ) {
     return undefined;
   }
   const history = scope.history as readonly LLMMessage[];
-  const index = history.length - 1;
-  const message = history[index];
-  return message !== undefined && isSaidByPerson(message) && message.content === scope.userMessage
-    ? index
+  const message = history[0];
+  return history.length === 1 &&
+    message !== undefined &&
+    isSaidByPerson(message) &&
+    message.content === input.message
+    ? 0
     : undefined;
 }
 
@@ -149,17 +156,22 @@ export function readTimeWords(
       at: { turn, iteration: scope.iteration as number },
     });
     const row = rows[0];
-    if (
-      row !== undefined &&
+    const candidate =
       armed.skipProvenConfirmation === true &&
       clock.turn === turn &&
       clock.provenInputPosition === inputPosition &&
-      text === scope.userMessage &&
-      provenLookbackOf(reader, text, clock, rows) !== undefined
+      text === scope.userMessage
+        ? provenLookbackOf(reader, text, clock, rows)
+        : undefined;
+    if (
+      row !== undefined &&
+      candidate !== undefined &&
+      canDiscloseProvenWindow(scope, candidate.range)
     ) {
       recordFindings(scope, [
         {
           ...row,
+          choice: { by: 'proven', candidate: 0 },
           qualifiedLookback: {
             receipt: provenLookback.receipt,
             inputPosition,

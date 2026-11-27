@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/readingAsk — the choices an OPEN reading offers (time design
  * § 6.1, § 6.3): the one field a `time-reading` row whose choice is `open`
@@ -76,7 +77,7 @@ export function timeAskOf(
   messages: TimeAskMessages,
   id = 'time',
 ): TimeAsk | undefined {
-  const choice = row.choice;
+  const choice = choiceForConfirmation(row.choice);
   if (row.quote === undefined || row.refused !== undefined) return undefined;
   if (choice?.by === 'none') {
     return {

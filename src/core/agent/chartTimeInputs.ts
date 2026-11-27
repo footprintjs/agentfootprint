@@ -7,10 +7,11 @@ import { activeTimeReadings } from './honesty/timeInputs.js';
 export function timeWindowsArg(
   ledger: unknown,
   parent?: Record<string, unknown>,
+  allowProven = false,
 ): {
   timeWindows?: ReturnType<typeof readerWindowsOf>;
 } {
-  const active = parent === undefined ? undefined : activeTimeReadings(parent);
+  const active = parent === undefined ? undefined : activeTimeReadings(parent, allowProven);
   const projected = active?.some(
     (row) => row.choice?.by === 'only' && row.qualifiedLookback !== undefined,
   );

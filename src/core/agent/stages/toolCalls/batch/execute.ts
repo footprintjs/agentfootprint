@@ -230,6 +230,7 @@ export function buildToolBatchExecution(
         ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
         ...(deps.time !== undefined && {
           time: {
+            allowProven: deps.time.allowProven === true,
             ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
             ...(deps.time.reader !== undefined && { reader: deps.time.reader }),
           },

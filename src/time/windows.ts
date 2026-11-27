@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/windows — the turn's windows, read from the record (time design
  * § 5.6): the window the person settled in the time ask (`answered`), a
@@ -158,7 +159,7 @@ export function windowToConvert(window: {
  */
 export function isOpenForPerson(row: TimeReadingRow): boolean {
   if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) return false;
-  const by = row.choice?.by;
+  const by = choiceForConfirmation(row.choice)?.by;
   if (by !== 'open' && by !== 'none') return false;
   return readingCandidate(row) === undefined;
 }
@@ -204,7 +205,7 @@ export function turnWindowsOf(
     }
     const candidate = readingCandidate(row);
     if (candidate === undefined) {
-      const choice = row.choice;
+      const choice = choiceForConfirmation(row.choice);
       const left =
         choice?.by === 'open'
           ? choice.remaining.flatMap((i) => {

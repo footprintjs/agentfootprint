@@ -27,7 +27,7 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — a proposal is `open` with `confirm`, its candidates `said: []`; a measured opt-in look-back may record `proven` with its receipt), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
  * | `time-reply` | by the resumed batch ask, once per correction decision | the time-row coordinates, bounded decision and fixed rule label; no raw reply |
  * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
@@ -358,6 +358,17 @@ const MENTION_FIELDS = [
   'qualifiedLookback',
 ];
 
+function isLookbackReceipt(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const { receipt, inputPosition, clockNow } = value as Record<string, unknown>;
+  return (
+    typeof receipt === 'string' &&
+    /^[a-f0-9]{64}$/.test(receipt) &&
+    isCount(inputPosition) &&
+    isInstant(clockNow)
+  );
+}
+
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
   const mentions = row.mentions as number;
@@ -381,7 +392,9 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
     Array.isArray(candidates) &&
     candidates.every(candidateIsWellFormed) &&
     choiceIsWellFormed(row.choice, candidates.length) &&
-    (row.qualifiedLookback === undefined || (row.choice as { by?: unknown }).by === 'open')
+    ((row.choice as { by: unknown }).by === 'proven'
+      ? isLookbackReceipt(row.qualifiedLookback)
+      : row.qualifiedLookback === undefined || (row.choice as { by: unknown }).by === 'open')
   );
 }
 

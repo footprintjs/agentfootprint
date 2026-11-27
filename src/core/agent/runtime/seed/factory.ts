@@ -1,4 +1,4 @@
-import { canServeProvenWindow } from '../provenWindow.js';
+import { canQualifyProvenWindow } from '../provenWindow.js';
 import { MAX_SELECTION_ROWS } from '../../../slots/providerOmissions.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
@@ -99,7 +99,7 @@ export function seedFactory(environment: SeedEnvironment) {
           timeReader: {
             reader: environment.configuration.timeOptions.reader,
             policy: environment.configuration.timeOptions.policy,
-            ...(canServeProvenWindow(environment.configuration) && {
+            ...(canQualifyProvenWindow(environment.configuration) && {
               skipProvenConfirmation: true as const,
             }),
           },
