@@ -5,6 +5,7 @@ import {
   Agent,
   allow,
   checkInApproved,
+  checkInDeclined,
   defineTool,
   englishTimeReader,
   isCheckInPause,
@@ -297,6 +298,18 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
       expect(calls).toEqual(kind === 'plain' ? [bounds] : []);
     },
   );
+
+  it('asks for the time window after a plain check-in decline', async () => {
+    const { agent, calls } = fixture(true, 'consent');
+    const paused = await agent.run({ message: 'last 2 hours', time: { now } });
+    if (!isCheckInPause(paused)) throw new Error('Expected the structured check-in.');
+
+    const decision = checkInDeclined({ request: paused.checkIn, by: 'ruler-test' });
+    const result = await agent.resume(paused.checkpoint, decision);
+
+    expect(isInputPause(result)).toBe(true);
+    expect(calls).toEqual([]);
+  });
 
   it('withdraws proof for text entered in a native requestInput form', async () => {
     const { agent, calls } = fixture(true, 'input');
