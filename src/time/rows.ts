@@ -40,7 +40,7 @@ import { isTimeReplyEvidence, type TimeReplyEvidence } from './replyRecord.js';
 import { isCorrectedMeaning } from './rows/meaning.js';
 import { instantOf } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
-import { isCallDrift, widenedOk } from './rows/shapes.js';
+import { isCallDrift, isLookbackReceipt, widenedOk } from './rows/shapes.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { isTimeParts, type TimeParts } from './reader.js';
 import { TIME_REFUSALS, type TimeRefusal } from './periodForm.js';
@@ -357,17 +357,6 @@ const MENTION_FIELDS = [
   'choice',
   'qualifiedLookback',
 ];
-
-function isLookbackReceipt(value: unknown): boolean {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const { receipt, inputPosition, clockNow } = value as Record<string, unknown>;
-  return (
-    typeof receipt === 'string' &&
-    /^[a-f0-9]{64}$/.test(receipt) &&
-    isCount(inputPosition) &&
-    isInstant(clockNow)
-  );
-}
 
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
