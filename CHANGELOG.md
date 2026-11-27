@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.2.0] - 2026-11-27
+
+### Added
+
+- **Prompt caching for Bedrock inference profiles.** A supported system profile ARN or a declared application profile can use the same cache points as its backing model. Call receipts record prepared points and can link them to the response that supplied measured usage.
+
 ## [20.1.1] - 2026-11-27
 
 ### Fixed
