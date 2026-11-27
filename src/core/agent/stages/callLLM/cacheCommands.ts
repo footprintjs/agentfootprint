@@ -1,5 +1,6 @@
 /** Retain Bedrock's local SDK preparation facts on the existing call receipt. */
 import type { TypedScope } from 'footprintjs';
+import { ownData } from '../../../../lib/boundedJson.js';
 import { RECEIPT_KEY } from '../../../../lib/conventions.js';
 import {
   observeCacheCommands,
@@ -10,11 +11,39 @@ import type { ReceiptCacheCommand } from '../../receipt/cacheTypes.js';
 import type { AgentState } from '../../types.js';
 
 const MAX_COMMANDS = 16;
+const USAGE_COUNTERS = ['input', 'output', 'cacheRead', 'cacheWrite', 'thinking'] as const;
+
+type UsageSnapshot = Readonly<Record<string, unknown>>;
+type CommandResponse = { readonly ordinal: number; readonly usage: UsageSnapshot };
+
+/** Keep the adapter's normalized counters detached from later provider wrappers. */
+function snapshotUsage(response: LLMResponse): UsageSnapshot | undefined {
+  try {
+    const usage = Object.getOwnPropertyDescriptor(response, 'usage');
+    return usage !== undefined && 'value' in usage
+      ? ownData(usage.value, USAGE_COUNTERS)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function matchesUsage(recorded: UsageSnapshot, response: LLMResponse): boolean {
+  const current = snapshotUsage(response);
+  return (
+    current !== undefined &&
+    USAGE_COUNTERS.every(
+      (key) =>
+        Object.hasOwn(recorded, key) === Object.hasOwn(current, key) &&
+        Object.is(recorded[key], current[key]),
+    )
+  );
+}
 
 export function trackCacheCommands(scope: TypedScope<AgentState>) {
   let rows: ReceiptCacheCommand[] | undefined;
   let ordinals: Map<symbol, number> | undefined;
-  let responses: WeakMap<LLMResponse, number> | undefined;
+  let responses: WeakMap<LLMResponse, CommandResponse> | undefined;
   let overflow = false;
 
   function publish(accepted?: number | null): void {
@@ -59,7 +88,8 @@ export function trackCacheCommands(scope: TypedScope<AgentState>) {
     return {
       id,
       response(response: LLMResponse) {
-        (responses ??= new WeakMap()).set(response, ordinal);
+        const usage = snapshotUsage(response);
+        if (usage !== undefined) (responses ??= new WeakMap()).set(response, { ordinal, usage });
       },
     };
   };
@@ -68,11 +98,14 @@ export function trackCacheCommands(scope: TypedScope<AgentState>) {
     hooks: (hooks: LLMCallHooks) => observeCacheCommands(hooks, observe),
     preserve(before: LLMResponse, after: LLMResponse): void {
       if (before === after) return;
-      const ordinal = responses?.get(before);
-      if (ordinal !== undefined) responses?.set(after, ordinal);
+      const binding = responses?.get(before);
+      if (binding !== undefined) responses?.set(after, binding);
     },
     accept(response: LLMResponse): void {
-      publish(responses?.get(response) ?? null);
+      const binding = responses?.get(response);
+      publish(
+        binding !== undefined && matchesUsage(binding.usage, response) ? binding.ordinal : null,
+      );
     },
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../src/index.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
+import { cacheRecorder, cacheStrategyFor } from '../../../src/cache/index.js';
 import {
   observeCacheCommands,
   requestAttempt,
@@ -100,6 +101,57 @@ describe('Bedrock prepared cache commands in native receipts', () => {
         expect(receiptAt(agent.getLastSnapshot(), 1)?.cache).toMatchObject({
           commandPreparations: [prepared(stream ? 'ConverseStream' : 'Converse')],
           acceptedCommand: 1,
+        });
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it.each([
+    { label: 'unchanged', field: 'cacheWrite', value: 4, cacheWrites: 4, command: 1 },
+    { label: 'adjusted in place', field: 'cacheWrite', value: 9, cacheWrites: 9, command: null },
+    {
+      label: 'measured zero removed',
+      field: 'cacheRead',
+      value: undefined,
+      cacheWrites: 4,
+      command: null,
+    },
+    {
+      label: 'unknown counter replaced by zero',
+      field: 'thinking',
+      value: 0,
+      cacheWrites: 4,
+      command: null,
+    },
+  ])(
+    'links measured usage only when the counters are $label',
+    async ({ field, value, cacheWrites, command }) => {
+      const base = completeOnly(fixture().provider);
+      const wrapped: LLMProvider = {
+        ...base,
+        async complete(request, hooks) {
+          const response = await base.complete(request, hooks);
+          if (value === undefined) Reflect.deleteProperty(response.usage, field);
+          else Reflect.set(response.usage, field, value);
+          return response;
+        },
+      };
+      const meter = cacheRecorder({ strategy: cacheStrategyFor(wrapped, model), model });
+      const agent = Agent.create({ provider: wrapped, model })
+        .system('Hold this prefix', { cache: 'always' })
+        .watch(meter)
+        .build();
+      try {
+        expect(await agent.run({ message: 'go' })).toBe('done');
+        expect(meter.report().cacheWriteTokensTotal).toMatchObject({
+          kind: 'known',
+          value: cacheWrites,
+        });
+        expect(receiptAt(agent.getLastSnapshot(), 1)?.cache).toMatchObject({
+          commandPreparations: [prepared('Converse')],
+          acceptedCommand: command,
         });
       } finally {
         await agent.shutdown();

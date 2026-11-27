@@ -89,7 +89,8 @@ A call receipt can report `cache.commandPreparations` with the operation,
 inserted point count and reason for each prepared request. This describes
 the SDK input. Transport status stays unknown. When the accepted response
 can be matched to a retained preparation, `cache.acceptedCommand` names its
-ordinal. Provider usage still supplies the measured token counts. The
+ordinal. The accepted usage counters must still match the adapter’s response.
+Provider usage supplies the measured token counts. The
 receipt retains up to 16 preparations and flags overflow.
 
 ### Verified model facts
