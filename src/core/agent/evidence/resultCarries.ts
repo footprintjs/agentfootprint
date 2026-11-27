@@ -29,6 +29,7 @@
 
 import { MAX_INDEX_TOKENS, readResult } from './evidenceIndex.js';
 import { canonicalForm, normalizeToken, tokenize } from '../../../lib/normalize.js';
+import { numericCommaItems } from './numericCommaItems.js';
 
 /**
  * What `resultCarries` answers: the value is in the result (`found`), it is
@@ -63,6 +64,7 @@ export function occursIn(needle: readonly string[], hay: readonly string[]): boo
 interface Leaf {
   readonly whole: string;
   readonly tokens: readonly string[];
+  readonly commaTokens?: readonly string[];
 }
 
 /**
@@ -75,9 +77,25 @@ interface ReadLeaves {
   readonly truncated: boolean;
 }
 
-function leafOf(raw: string): Leaf {
-  const whole = normalizeToken(raw);
-  return { whole: whole === '' ? '' : canonicalForm(whole), tokens: canonicalTokens(raw) };
+function readTextLeaf(
+  raw: string,
+  limit: number,
+  commaLimit = limit,
+): { leaf: Leaf; count: number } {
+  const all = tokenize(raw);
+  const within = all.length > limit ? all.slice(0, limit) : all;
+  // Numeric parsing sees the original token, before identity aliases such as
+  // the shortened hexadecimal spelling.
+  const numericInput = within.length > commaLimit ? within.slice(0, commaLimit) : within;
+  const commaTokens = numericInput.filter((token) => token.includes(','));
+  return {
+    leaf: {
+      whole: '',
+      tokens: within.map(canonicalForm),
+      ...(commaTokens.length > 0 && { commaTokens }),
+    },
+    count: all.length,
+  };
 }
 
 function leavesOf(content: string): ReadLeaves {
@@ -85,9 +103,9 @@ function leavesOf(content: string): ReadLeaves {
   let budget = MAX_INDEX_TOKENS;
   const push = (raw: string): void => {
     if (budget <= 0) return;
-    const leaf = leafOf(raw);
-    budget -= leaf.tokens.length;
-    leaves.push(leaf);
+    const { leaf, count } = readTextLeaf(raw, Infinity, budget);
+    budget -= count;
+    leaves.push({ ...leaf, whole: canonicalForm(normalizeToken(raw)) });
   };
   const visit = (node: unknown): void => {
     if (budget <= 0 || node === null || node === undefined) return;
@@ -111,19 +129,15 @@ function leavesOf(content: string): ReadLeaves {
     visit(read.parsed);
     // The text after the JSON (a framework note) is one leaf, read to what is left of the ceiling.
     if (read.tail !== undefined && budget > 0) {
-      const tokens = canonicalTokens(read.tail);
-      leaves.push({ whole: '', tokens: tokens.slice(0, budget) });
-      budget -= tokens.length;
+      const { leaf, count } = readTextLeaf(read.tail, budget);
+      leaves.push(leaf);
+      budget -= count;
     }
     return { leaves, truncated: budget <= 0 };
   }
   // Text is one leaf — a longer value may span its tokens, never a substring.
-  const tokens = canonicalTokens(read.text);
-  const within = tokens.length > MAX_INDEX_TOKENS ? tokens.slice(0, MAX_INDEX_TOKENS) : tokens;
-  return {
-    leaves: [{ whole: '', tokens: within }],
-    truncated: tokens.length > MAX_INDEX_TOKENS,
-  };
+  const { leaf, count } = readTextLeaf(read.text, MAX_INDEX_TOKENS);
+  return { leaves: [leaf], truncated: count > MAX_INDEX_TOKENS };
 }
 
 /** Whether `needle` is carried by one leaf, the way the index files it. */
@@ -133,6 +147,24 @@ function leafCarries(leaf: Leaf, needle: readonly string[]): boolean {
   if (needle.length === 1) return leaf.whole === needle[0] || leaf.tokens.includes(needle[0]);
   // A longer value must sit inside ONE leaf, contiguously — never stitched across two.
   return occursIn(needle, leaf.tokens);
+}
+
+/** On a numeric lookup only, index comma values from already admitted tokens. */
+function readCommaValues(leaves: readonly Leaf[]): { values: Set<string>; truncated: boolean } {
+  const values = new Set<string>();
+  let remaining = MAX_INDEX_TOKENS;
+  for (const { commaTokens } of leaves) {
+    for (const token of commaTokens ?? []) {
+      if (remaining === 0) return { values, truncated: true };
+      remaining -= 1;
+      for (const { spelling } of numericCommaItems(token)) {
+        if (remaining === 0) return { values, truncated: true };
+        remaining -= 1;
+        values.add(normalizeToken(spelling));
+      }
+    }
+  }
+  return { values, truncated: false };
 }
 
 /**
@@ -145,11 +177,18 @@ export function resultReader(
   content: string,
 ): (value: string | number | boolean) => ResultCarriage {
   let read: ReadLeaves | undefined;
+  let numeric: ReturnType<typeof readCommaValues> | undefined;
   return (value) => {
     const needle = canonicalTokens(String(value));
-    if (needle.length === 0) return 'uncheckable';
+    const first = needle[0];
+    if (first === undefined) return 'uncheckable';
     read ??= leavesOf(content);
     if (read.leaves.some((leaf) => leafCarries(leaf, needle))) return 'found';
+    if (typeof value === 'number') {
+      numeric ??= readCommaValues(read.leaves);
+      if (numeric.values.has(first)) return 'found';
+      if (numeric.truncated) return 'uncheckable';
+    }
     return read.truncated ? 'uncheckable' : 'not-found';
   };
 }
