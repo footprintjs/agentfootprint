@@ -1,4 +1,6 @@
-# Trace and Lens — a viewer's display zone
+# Mixed — a viewer's display zone
+**Walker** (`admission.ts`) validates a new declaration; **Lens**
+(`record.ts`) projects recorded metadata for the reader.
 
 The existing time clock owns interpretation. This folder owns only a declared
 viewer zone and its presentation projection. Admission accepts one plain own-data

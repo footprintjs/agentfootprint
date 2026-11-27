@@ -1,4 +1,4 @@
-# Batch time reading
+# Lens — the batch’s unresolved time reading
 
 `reading.ts` selects the current turn's one unresolved time mention for the
 batch ask. It calls the existing time-window rule, excludes settled mentions
