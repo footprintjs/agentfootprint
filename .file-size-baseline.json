@@ -40,7 +40,7 @@
     "src/core/agent/negativeClaims/capture.ts": 630,
     "src/core/agent/receipt/receipt.ts": 992,
     "src/core/agent/stages/prepareFinal.ts": 692,
-    "src/core/agent/stages/route.ts": 1807,
+    "src/core/agent/stages/route.ts": 1793,
     "src/core/agent/stages/routeTurn.ts": 621,
     "src/core/agent/stages/seed.ts": 812,
     "src/core/agent/types.ts": 1193,
