@@ -1,4 +1,4 @@
-import type { ScopedOntologyRecord } from '../../../../ontology/roleView.js';
+import type { OntologyRecord } from '../../../../ontology/types.js';
 
 export interface ConfigurationState {
   // ── The declared ontology (`.ontology()`) ──────────────────────
@@ -14,7 +14,7 @@ export interface ConfigurationState {
    * `findingsServe` shape). Never written again during a run — the map is
    * declared, not learned.
    */
-  ontology?: ScopedOntologyRecord;
+  ontology?: OntologyRecord;
 
   // ── Per-run configuration (`.configure()`) ─────────────────────
   /** The model `.configure()` resolved for THIS run, written by seed and read
