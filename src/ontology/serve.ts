@@ -44,6 +44,7 @@
 
 import { CONTEXT_FIELD_MEANINGS } from '../lib/context-contract/index.js';
 import { skillVisibleToRole } from '../lib/spokenIds.js';
+import { ontologyHiddenSkills } from './roleView.js';
 import type {
   OntologyEdge,
   OntologyJoin,
@@ -171,7 +172,7 @@ function heldByLines(id: string, node: OntologyNode, join: OntologyJoin): string
 function viaToken(name: string, join: OntologyJoin): string | undefined {
   const owners = join.tools?.[name];
   if (owners === undefined || owners.length === 0) return name;
-  const hidden = join.hiddenSkillIds === undefined ? undefined : new Set(join.hiddenSkillIds);
+  const hidden = ontologyHiddenSkills(join);
   const visible = owners.filter((id) => skillVisibleToRole(id, hidden));
   return visible.length === 0
     ? undefined

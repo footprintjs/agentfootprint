@@ -400,11 +400,17 @@ describe('ontologyPiece — the tool → skill join (9.108.0)', () => {
     );
   });
 
-  it('shows ordinary registered tools when the role view is unavailable', () => {
+  it('a direct join with no role filter shows the declared skills', () => {
     const tools = { lookup_port: ['ports'] };
-    expect(held({ tools })).toBe('port ← inventory via list_ports · every port');
+    expect(held({ tools })).toBe(
+      'port ← inventory via lookup_port [skill: ports], list_ports · every port',
+    );
+  });
+
+  it('shows ordinary registered tools when the required role view is unavailable', () => {
+    const tools = { lookup_port: ['ports'] };
     expect(held(ontologyRoleJoin({ tools, ontologyRoleViewRequired: true }, undefined))).toBe(
-      held({ tools }),
+      'port ← inventory via list_ports · every port',
     );
     expect(held(ontologyRoleJoin({ tools }, undefined))).toBe(
       'port ← inventory via lookup_port [skill: ports], list_ports · every port',

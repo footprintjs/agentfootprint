@@ -118,8 +118,8 @@ export interface OntologyRecord {
  * What the served piece needs beyond the spec (9.108.0): the record's
  * tool → skills join and, per request, the skill ids the caller's role may
  * not be told about (`AgentState.hiddenSkillIds`). An absent tool join leaves
- * bare declared tool names. An absent role view withholds skill-owned tools;
- * an empty view admits all declaring skills.
+ * bare declared tool names. With no hidden skill ids, all declaring skills
+ * are shown.
  */
 export interface OntologyJoin {
   readonly tools?: Readonly<Record<string, readonly string[]>>;
