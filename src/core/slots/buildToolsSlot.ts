@@ -18,7 +18,11 @@ import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
-import { composeSkillCatalog, type ReadSkillFor } from './composeSkillCatalog.js';
+import {
+  composeSkillCatalog,
+  staticSkillCandidates,
+  type ReadSkillFor,
+} from './composeSkillCatalog.js';
 import type { TurnRoute } from '../../injection-engine/routingPolicy.js';
 import { composeViolationsOf } from '../../integrity/invariant-violation/check.js';
 import { fileIntegrityFindings } from '../agent/integrityFindings.js';
@@ -36,12 +40,7 @@ import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
-import {
-  wireCollisions,
-  reportShadowedTools,
-  partyOfClaim,
-  type WireCandidate,
-} from './wireCollisions.js';
+import { wireCollisions, reportShadowedTools, type WireCandidate } from './wireCollisions.js';
 import { commitServedTools, type ServedToolParties } from './commitServedTools.js';
 export type { ServedToolParties } from './commitServedTools.js';
 import { discoverTools, type ProviderToolCache } from './discoverTools.js';
@@ -237,8 +236,6 @@ export interface ToolsSlotConfig {
    * Absent — the message-API charts — and every static schema is `registry`.
    */
   readonly toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>;
-  /** The `listed` skill context: hidden skills' tools leave the static list (`composeSkillCatalog`). */
-  readonly listedSkillTools?: true;
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
@@ -401,13 +398,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const stepPlanFor = config.stepPlanFor;
   const toolClaimants = config.toolClaimants;
   const toolChoice = config.toolChoice;
-  /** A STATIC-list schema's party and implementation: its first build-time claimant. */
-  const registryCandidate = (schema: LLMToolSchema): WireCandidate => {
-    const first = toolClaimants?.get(schema.name)?.[0];
-    return first === undefined
-      ? { schema, party: { channel: 'registry' } }
-      : { schema, party: partyOfClaim(first), tool: first.tool };
-  };
   /** The framework's own `skip_step` instance, when any skill declares steps. */
   const frameworkSkipStep = toolClaimants
     ?.get(buildSkipStepTool().schema.name)
@@ -535,7 +525,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       resolvedHidden,
       args.currentSkillId,
       args.turnRoute,
-      config.listedSkillTools === true ? toolClaimants ?? new Map() : undefined,
+      toolClaimants,
     );
     // Step narrowing over the STATIC list (9.18.0): hold out the stepped
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
@@ -737,7 +727,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // come from one loop: dispatch resolves against the winners, and the
     // report below is computed from the losers — never from a re-derivation.
     const candidates: readonly WireCandidate[] = [
-      ...tools.map(registryCandidate),
+      ...staticSkillCandidates(tools, toolClaimants, resolvedHidden),
       ...providerCandidates,
       ...dynamicCandidates,
       ...stepSchemas.map((schema) => ({

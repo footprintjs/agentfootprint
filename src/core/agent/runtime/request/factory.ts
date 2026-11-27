@@ -1,7 +1,7 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildBrainFor } from '../../skillBrains.js';
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMToolSchema } from '../../../../provider-contract/types.js';
 import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
 import { retrievalRequestWriter } from '../../honesty/retrievalRequests.js';
@@ -53,6 +53,9 @@ export function requestFactory(environment: RequestEnvironment) {
         sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
           ...(environment.configuration.ontology !== undefined && {
             ontology: environment.configuration.ontology,
+          }),
+          ...(checkerGoverns(environment.configuration.permissionChecker, 'skill_read') && {
+            roleViewRequired: true,
           }),
           resolve: environment.resolverForValues(run.value),
           servedTools: run.value.servedTools,

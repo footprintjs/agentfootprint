@@ -103,7 +103,10 @@ export type LibraryWord =
   | PlainStringWords;
 
 /** The field names of the library's payloads. */
-export type FieldName = FieldNamesOf<Payloads> | FieldNamesOf<Envelopes>;
+export type FieldName =
+  | FieldNamesOf<Payloads>
+  | FieldNamesOf<Envelopes>
+  | 'ontologyRoleViewRequired';
 
 // The generated maps remain checked exactly against LibraryWord and FieldName.
 // scripts/gen-known-strings.mjs owns their bounded shards behind this facade.

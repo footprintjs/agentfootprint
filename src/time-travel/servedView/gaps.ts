@@ -295,7 +295,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // `unavailable`; receiptAt preserves those states, never zero counts.
     // Neither state means the receipt is missing or changes this gap's cause.
     // The same applies to replayPreparations: downstream preparation was
-    // observed only when the enabled receipt carries its annotation.
+    // observed only when the enabled receipt carries its annotation. The
+    // Bedrock preparation rows and usage link are likewise receipt-only.
     //
     // AND THE SEVENTH ROUND SCOPED THE PRINTED CLAIM TO THE LEVEL IT HOLDS AT.
     // It said the absence of these fields is "a gap in the record, never a call
@@ -316,6 +317,9 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.transform',
       'cache.transformHash',
       'cache.markersApplied',
+      'cache.commandPreparations',
+      'cache.commandOverflow',
+      'cache.acceptedCommand',
       'cache.strategy',
       'omittedForAttention',
       'requestMeasurement',

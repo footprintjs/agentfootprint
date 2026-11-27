@@ -14,6 +14,8 @@ export interface ToolAccessPort {
    *  awaits `check({capability: 'tool_call', ...})` BEFORE executing.
    *  Throwing checkers are treated as deny-by-default. */
   readonly permissionChecker?: PermissionChecker;
+  /** Resolve the role of the resumed run before a skill-owned candidate can enter. */
+  readonly resolveHiddenSkillIds?: (scope: object) => Promise<readonly string[]>;
   /** Optional credential provider (declare-and-push). When present, a tool's
    *  declared `needs` is resolved BEFORE execute and injected as `ctx.credential`;
    *  `ctx.credentials` exposes it for the pull escape hatch. */

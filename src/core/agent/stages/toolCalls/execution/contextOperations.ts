@@ -6,7 +6,9 @@ import {
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
-import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMMessage } from '../../../../../provider-contract/types.js';
+import { hasSkillClaim, type SkillRoleView } from '../../../skillContext/toolVisibility.js';
+import { resolveSkillToolForRole } from '../../toolResolver.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
 import type {
   AgentfootprintEventType,
@@ -66,10 +68,27 @@ export function buildToolContextOperations(
     | 'artifactStore'
     | 'sourceEvidenceConfig'
     | 'permissionChecker'
+    | 'toolClaimants'
     | 'toolMiddleware'
   >,
   links: ToolContextOperationsLinks,
 ): ToolContextOperations {
+  const governsSkillRole = checkerGoverns(deps.permissionChecker, 'skill_read');
+  const lookupInnerTool = (
+    scope: TypedScope<AgentState>,
+    name: string,
+    liveRole?: SkillRoleView,
+  ) => {
+    const tool = links.registryByName.get(name);
+    if (!governsSkillRole || tool === undefined) return tool;
+    const claims = deps.toolClaimants?.get(name) ?? [];
+    if (!hasSkillClaim(tool, claims)) return tool;
+    return resolveSkillToolForRole(
+      { tool, party: { channel: 'skill' } },
+      claims,
+      liveRole === undefined ? scope.hiddenSkillIds : liveRole.hiddenSkillIds,
+    ).tool;
+  };
   const readerAccess = (
     scope: TypedScope<AgentState>,
     artifacts: ToolArtifacts,
@@ -286,10 +305,11 @@ export function buildToolContextOperations(
       readonly binding: OuterCallBinding;
     },
     signal?: AbortSignal,
+    liveRole?: SkillRoleView,
   ): Pick<ToolExecutionContext, 'tools'> => ({
     tools: agentToolDispatch({
       outerToolCallId: call.toolCallId,
-      lookup: (name) => links.registryByName.get(name),
+      lookup: (name) => lookupInnerTool(scope, name, liveRole),
       gates: buildInnerCallGates(scope, deps, links.parkedNow, {
         toolCallId: call.toolCallId,
         iteration: call.iteration,

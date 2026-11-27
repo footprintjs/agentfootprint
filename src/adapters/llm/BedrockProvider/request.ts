@@ -1,9 +1,11 @@
 /** Request and history wire translation, including existing cache placement. */
 import type { LLMMessage, LLMRequest, LLMToolSchema } from '../../../provider-contract/types.js';
 import { UnsupportedThinkingError } from '../../../thinking/errors.js';
+import type { CacheCommandReason } from '../../../provider-contract/requestObserver.js';
 import { UnsupportedToolChoiceError } from '../../../provider-contract/forcedToolChoice.js';
 import { anthropicTakesForcedToolChoice } from '../anthropicModels.js';
 import { applyCacheMarkers, type BedrockMessagePosition } from '../bedrockCacheWire.js';
+import type { BedrockCacheFacts } from '../bedrockModels.js';
 import type {
   BedrockConverseCommand,
   BedrockContentBlock,
@@ -15,7 +17,11 @@ export function buildInput(
   req: LLMRequest,
   model: string,
   defaultMaxTokens: number,
-): BedrockConverseCommand {
+  cacheFacts: BedrockCacheFacts | undefined,
+): {
+  readonly input: BedrockConverseCommand;
+  readonly cache: { reason: CacheCommandReason; points: number };
+} {
   // Converse accepts provider-specific thinking parameters, but enabling one
   // without carrying its signed reasoning through response/tool-result replay
   // would still break the conversation. Refuse this adapter's unsupported
@@ -59,8 +65,17 @@ export function buildInput(
   if (req.temperature !== undefined) inference.temperature = req.temperature;
   if (req.stop && req.stop.length > 0) inference.stopSequences = [...req.stop];
   input.inferenceConfig = inference;
-  if (req.cacheMarkers !== undefined) applyCacheMarkers(input, req.cacheMarkers, model, positions);
-  return input;
+  const markers = req.cacheMarkers ?? [];
+  const points = applyCacheMarkers(input, markers, cacheFacts, positions);
+  const reason =
+    cacheFacts === undefined
+      ? 'route-unresolved'
+      : markers.length === 0
+      ? 'no-markers'
+      : points === 0
+      ? 'boundaries-rejected'
+      : 'prepared';
+  return { input, cache: { reason, points } };
 }
 
 function toBedrockMessages(

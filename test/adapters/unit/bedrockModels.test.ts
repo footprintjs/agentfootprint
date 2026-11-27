@@ -35,12 +35,15 @@ describe('Bedrock explicit Converse model table is fail-closed', () => {
     expect(bedrockCacheFacts('us.anthropic.claude-opus-5-5')).toBeUndefined();
   });
 
-  it('does not guess an ARN, custom alias, suffix, or nested profile target', () => {
+  it('does not guess an unknown or wrong ARN, custom alias, suffix, or nested profile target', () => {
     const id = 'anthropic.claude-sonnet-4-5-20250929-v1:0';
     for (const unknown of [
       `us.us.${id}`,
       `arn:aws:bedrock:us-east-1::foundation-model/${id}`,
-      `arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.${id}`,
+      `arn:aws:bedrock:us-east-1:123456789012:inference-profile/ca.${id}`,
+      `arn:aws:bedrock:us-east-1:123456789012:inference-profile/${id}`,
+      `arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/us.${id}`,
+      `arn:aws:s3:us-east-1:123456789012:inference-profile/us.${id}`,
       `${id}-alias`,
       `${id}\n`,
       id.toUpperCase(),

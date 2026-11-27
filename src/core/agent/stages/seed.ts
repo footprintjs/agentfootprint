@@ -38,6 +38,7 @@ import type { HonestyLayers } from '../honesty/armed.js';
 import { seedToolEvidence } from '../honesty/settledToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
+import { recordOntology } from '../../../ontology/roleView.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ClockDraft } from '../../../time/clock.js';
 import type { TimeReader } from '../../../time/reader.js';
@@ -320,6 +321,7 @@ export interface SeedStageDeps {
    * this stage commits exactly the keys it always did.
    */
   readonly ontology?: Ontology;
+  readonly ontologyRoleViewRequired?: true;
   /**
    * Which skills declare each tool the map names (9.108.0) — read lazily,
    * because `Agent.buildChart` builds this stage BEFORE the tool registry
@@ -710,17 +712,11 @@ function seedFrom(
   // nothing else. The map is declared, not learned — no stage writes it
   // again. An agent without `.ontology()` writes nothing here.
   if (deps.ontology !== undefined) {
-    const { id, version, hash, nodes, sources, edges } = deps.ontology;
-    // The tool → skills join (9.108.0), VALUE-conditional: a map naming only
-    // static tools writes the record it wrote in 9.106.0.
-    const tools = deps.ontologyTools?.();
-    scope.ontology = {
-      id,
-      version,
-      hash,
-      spec: { id, version, nodes, sources, edges },
-      ...(tools !== undefined && { tools }),
-    };
+    scope.ontology = recordOntology(
+      deps.ontology,
+      deps.ontologyTools?.(),
+      deps.ontologyRoleViewRequired,
+    );
   }
   // The staged-refs nudge's record inputs: `wants` and the ticket receipt.
   seedStagedRefs(scope, deps.toolWantsByName, resume?.placedTickets);

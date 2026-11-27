@@ -40,6 +40,7 @@
 
 import type { ThinkingMode } from '../../thinking/types.js';
 import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
+import { bedrockModelArn } from './bedrockModelArn.js';
 
 /** What one Claude model family takes on the wire. */
 export interface AnthropicModelFacts {
@@ -151,9 +152,6 @@ const THINKING_SUFFIX = /^(?:$|-0(?![0-9])|-\d{8}(?![0-9])|-latest(?![a-z0-9])|-
 const API_SUFFIX = /^(?:|-0|-\d{8}|-latest|@\d{8})$/;
 const BEDROCK_SUFFIX = /^(?:|-\d{8})(?:-v\d+(?::\d+)?)?$/;
 const BEDROCK_ID = /^(?:(?:us|eu|apac|global|jp|au)\.)?anthropic\.(claude-[a-z0-9:-]+)$/;
-const FOUNDATION_ARN = /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+::foundation-model\/([^/]+)$/;
-const PROFILE_ARN =
-  /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:\d{12}:inference-profile\/([^/]+)$/;
 const VERTEX_ID =
   /^(?:projects\/[a-z0-9-]+\/locations\/[a-z0-9-]+\/)?publishers\/anthropic\/models\/(claude-[a-z0-9@-]+)$/;
 
@@ -184,8 +182,9 @@ export function anthropicModelFamily(model: string): string | undefined {
   const vertex = VERTEX_ID.exec(model);
   if (vertex) return familyMatching(vertex[1], API_SUFFIX);
 
-  const arn = FOUNDATION_ARN.exec(model) ?? PROFILE_ARN.exec(model);
-  const bedrock = BEDROCK_ID.exec(arn ? arn[1] : model);
+  const arn = bedrockModelArn(model);
+  if (arn?.kind === 'application-inference-profile') return undefined;
+  const bedrock = BEDROCK_ID.exec(arn?.id ?? model);
   return bedrock ? familyMatching(bedrock[1], BEDROCK_SUFFIX) : undefined;
 }
 

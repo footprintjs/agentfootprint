@@ -16,7 +16,7 @@ load change nothing instead.
 | `bodies.ts` | `skillBodyOf`: the current body definition held by a recorded `read_skill` occurrence. The window and the system slot verify the same body record. |
 | `honestyView.ts` | `honestyHistory`: the history the evidence gate's two moments read under `listed`, where a body result reads as the `declared` confirmation and the body is exempt app text. |
 | `systemBodies.ts` | Capture the accepted request’s system skill pieces and keep eligible pieces in slot order for the current turn. |
-| `gate.ts` | `notLoadedFor`: a skill-served call whose declaring skills are all hidden, or a scoped tool none of whose skills is active, is refused with fixed words. |
+| `gate.ts` | `notLoadedFor`: after role admission, a visible scoped tool that isn't loaded is refused with fixed words. |
 
 ## The rule tables
 
@@ -32,8 +32,8 @@ the body table still runs.
 - `buildToolRegistry` · `listedScopedTools`: scoped tools join the static list; no skill-scope
   omission is reported; `listedScopedTools` names them for the gate.
 - `core/slots/composeSkillCatalog.ts`: the static list drops every tool whose declaring skills are
-  ALL hidden from this iteration's role, by the one sole-owner rule (`lib/spokenIds.ts` ·
-  `visibleToRole`, which the dispatch roster and the gate ask too).
+  ALL hidden from this iteration's role. The catalog, roster and dispatch all check the
+  actual registered claim through `toolVisibility.ts` and the shared skill-role predicate.
 - `injection-engine/skillToolDescriptors.ts`: `read_skill` returns the body of ANY skill it loads,
   a graph route or step target included.
 - `injection-engine/skillContext.ts` · `servedSurfaceMode`, asked by `projectActiveInjection`: the

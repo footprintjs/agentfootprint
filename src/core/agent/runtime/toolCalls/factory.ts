@@ -3,7 +3,9 @@ import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { describeServingBrain } from '../../skillBrains.js';
 import { pendingDurableWrite } from '../../../durabilityBarrier.js';
-import { ensureDiscoveredTools } from '../../../slots/discoverTools.js';
+import { discoverTools } from '../../../slots/discoverTools.js';
+import { awaitUnder } from '../../../../lib/abort.js';
+import { checkerGoverns } from '../../../../provider-contract/types.js';
 import type { AgentState } from '../../types.js';
 import { buildToolCallsHandler } from '../../stages/toolCalls/index.js';
 import { memberIdentityIn, memberRequestIn } from '../../../memberRun.js';
@@ -20,6 +22,7 @@ export interface ToolCallsEnvironment {
   readonly runner: object;
   readonly registryByName: ReturnType<typeof buildToolRegistry>['registryByName'];
   readonly toolDeclaringSkills: ReturnType<typeof buildToolRegistry>['toolDeclaringSkills'];
+  readonly resolveHiddenSkillIds?: (scope: object) => Promise<readonly string[]>;
   readonly listedScopedTools: ReturnType<typeof buildToolRegistry>['listedScopedTools'];
   readonly toolClaimants: ReturnType<typeof buildToolRegistry>['toolClaimants'];
   readonly scriptRecordArmed: boolean;
@@ -83,6 +86,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       }),
       ...(environment.toolDeclaringSkills.size > 0 && {
         toolDeclaringSkills: environment.toolDeclaringSkills,
+        ...(environment.resolveHiddenSkillIds !== undefined && {
+          resolveHiddenSkillIds: environment.resolveHiddenSkillIds,
+        }),
       }),
       // The claim ledger accumulates only for an agent that declared a
       // contract to read it (9.61.0) — value-conditional, so every other
@@ -168,15 +174,25 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       }),
       ...(environment.configuration.externalToolProvider && {
         providerToolCache: run.value.providerToolCache,
-        prepareProviderTools: (scope: TypedScope<AgentState>) =>
-          ensureDiscoveredTools(scope, {
-            provider: environment.configuration.externalToolProvider!,
-            cache: run.value.providerToolCache,
-            callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
-            get iteration() {
-              return scope.iteration ?? 1;
-            },
-          }),
+        prepareProviderTools: (scope: TypedScope<AgentState>) => {
+          const cache = run.value.providerToolCache;
+          if (cache.resolved === true) return undefined;
+          const discover = (hiddenSkillIds: readonly string[] | undefined) =>
+            discoverTools(scope, {
+              provider: environment.configuration.externalToolProvider!,
+              cache,
+              callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
+              roleView: { hiddenSkillIds },
+              get iteration() {
+                return scope.iteration ?? 1;
+              },
+            });
+          if (!checkerGoverns(environment.permissionChecker, 'skill_read')) return discover([]);
+          const resolve = environment.resolveHiddenSkillIds;
+          return resolve === undefined
+            ? discover(undefined)
+            : awaitUnder(scope.$getEnv().signal, () => resolve(scope)).then(discover);
+        },
       }),
       servedTools: run.value.servedTools,
       toolClaimants: environment.toolClaimants,

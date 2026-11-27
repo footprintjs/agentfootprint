@@ -113,7 +113,7 @@
  *
  *   no-fold-base                 7 of 11 named fields move
  *   no-conversation-on-record    3 of 3
- *   no-receipt-on-chart          3 of 13
+ *   no-receipt-on-chart          3 of 16
  *   no-run-log                   1 of 4
  *
  * `no-conversation-on-record` is the only row that reaches every field its gap
@@ -263,12 +263,13 @@ interface StaticField {
   readonly dynamicKeys: boolean;
 }
 
-/** Receipt, its omission annotations and ServedView own the local field shapes. */
+/** Receipt, its annotations and ServedView own the local field shapes. */
 function localInterfaces(): ReadonlyMap<string, ts.InterfaceDeclaration> {
   const out = new Map<string, ts.InterfaceDeclaration>();
   for (const file of [
     RECEIPT_FILE,
     resolve(__dirname, '../../src/core/agent/receipt/omissions.ts'),
+    resolve(__dirname, '../../src/core/agent/receipt/cacheTypes.ts'),
     TYPE_FILE,
   ]) {
     const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
@@ -646,6 +647,7 @@ describe('the field list is derived, not written down', () => {
     // (`omittedForAttention`, filed by the window stage since 9.93.0).
     expect(paths).toContain('system.pieces.slot');
     expect(paths).toContain('cache.markersApplied.ttl');
+    expect(paths).toContain('cache.commandPreparations.operation');
     expect(paths).toContain('cache.strategy');
     expect(paths).toContain('params.maxTokens');
     expect(paths).toContain('omittedForAttention.hashes');
@@ -1737,7 +1739,7 @@ describe('each gap names the fields its own damage actually moves', () => {
       expect(measured).toEqual({
         'no-fold-base': '7 of 11',
         'no-conversation-on-record': '3 of 3',
-        'no-receipt-on-chart': '3 of 13',
+        'no-receipt-on-chart': '3 of 16',
         'no-run-log': '1 of 4',
       });
     },

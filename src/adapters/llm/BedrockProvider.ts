@@ -45,6 +45,11 @@ import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
 import { bedrockPromptCaching } from './bedrockCacheWire.js';
 import { resolveClient, sendUnder, wrapError } from './BedrockProvider/client.js';
 import { buildInput } from './BedrockProvider/request.js';
+import {
+  prepareCacheCommand,
+  type CacheCommandTicket,
+} from '../../provider-contract/requestObserver.js';
+import { bedrockCacheFactResolver } from './bedrockModels.js';
 import { guardedCompleteResponse } from './BedrockProvider/guardrailResponse.js';
 import { guardrailConfiguration, guardrailWire } from './BedrockProvider/guardrailConfig.js';
 import { missingGuardedStream, streamGuardedBedrock } from './BedrockProvider/guardedStream.js';
@@ -76,44 +81,71 @@ export type {
  */
 const CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze(['user', 'assistant']);
 
+async function* observeBedrockResponse(
+  stream: AsyncIterable<LLMChunk>,
+  command: CacheCommandTicket | undefined,
+): AsyncIterable<LLMChunk> {
+  for await (const chunk of stream) {
+    if (chunk.done && chunk.response !== undefined) command?.response(chunk.response);
+    yield chunk;
+  }
+}
+
 export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
   const guardrail = guardrailConfiguration(options);
   const { client, Commands } = resolveClient(options);
   const defaultModel = options.defaultModel ?? 'anthropic.claude-sonnet-4-5-20250929-v1:0';
   const defaultMaxTokens = options.defaultMaxTokens ?? 4096;
   const modelOf = (model: string): string => (model === 'bedrock' ? defaultModel : model);
+  const cacheFacts = bedrockCacheFactResolver(options.inferenceProfileModels);
+
+  async function completeCommand(
+    req: LLMRequest,
+    hooks: LLMCallHooks | undefined,
+    fallbackFrom?: symbol,
+  ): Promise<LLMResponse> {
+    throwIfAborted(req.signal);
+    const model = modelOf(req.model);
+    const { input, cache } = buildInput(req, model, defaultMaxTokens, cacheFacts(model));
+    if (guardrail !== undefined) input.guardrailConfig = guardrailWire(guardrail, false);
+    const command = prepareCacheCommand(hooks, {
+      operation: 'Converse',
+      ...cache,
+      ...(fallbackFrom !== undefined && { fallbackFrom }),
+    });
+    try {
+      const cmd = new Commands.Converse(input);
+      // Forward the abort signal to the SDK and refuse a response after cancellation.
+      const response = (await untilAborted(
+        sendUnder(client, cmd, req.signal),
+        req.signal,
+      )) as BedrockConverseResponse;
+      const accepted = guardedCompleteResponse(response, guardrail);
+      command?.response(accepted);
+      return accepted;
+    } catch (err) {
+      throw wrapError(err, req.signal);
+    }
+  }
 
   const provider: LLMProvider = {
     name: 'bedrock',
-    promptCaching: (model) => bedrockPromptCaching(modelOf(model)),
+    promptCaching: (model) => bedrockPromptCaching(cacheFacts(modelOf(model))),
     carriesInMessages: CARRIES_IN_MESSAGES,
     // The existing boolean describes the wire. The optional model predicate
     // narrows it where the shared Claude table knows a model rejects it.
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
     thinkingMode: () => 'none',
-    async complete(req: LLMRequest): Promise<LLMResponse> {
-      // A cancelled call sends nothing (lib/abort.ts, law 1).
-      throwIfAborted(req.signal);
-      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
-      if (guardrail !== undefined) input.guardrailConfig = guardrailWire(guardrail, false);
-      try {
-        const cmd = new Commands.Converse(input);
-        // The signal rides the SDK's HTTP options, so an abort cancels the
-        // request itself; the race refuses an answer that lands after it.
-        const response = (await untilAborted(
-          sendUnder(client, cmd, req.signal),
-          req.signal,
-        )) as BedrockConverseResponse;
-        return guardedCompleteResponse(response, guardrail);
-      } catch (err) {
-        throw wrapError(err, req.signal);
-      }
+    complete(req, hooks) {
+      return completeCommand(req, hooks);
     },
-    async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+    async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
-      const input = buildInput(req, modelOf(req.model), defaultMaxTokens);
+      const model = modelOf(req.model);
+      const { input, cache } = buildInput(req, model, defaultMaxTokens, cacheFacts(model));
       if (guardrail !== undefined) input.guardrailConfig = guardrailWire(guardrail, true);
+      const command = prepareCacheCommand(hooks, { operation: 'ConverseStream', ...cache });
       let response: BedrockStreamResponse;
       try {
         const cmd = new Commands.ConverseStream(input);
@@ -129,15 +161,12 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
         try {
           const stream = ownData(response, 'stream').value as BedrockStreamResponse['stream'];
           if (!stream) {
-            yield {
-              tokenIndex: 0,
-              content: '',
-              done: true,
-              response: missingGuardedStream(guardrail),
-            };
+            const response = missingGuardedStream(guardrail);
+            command?.response(response);
+            yield { tokenIndex: 0, content: '', done: true, response };
             return;
           }
-          yield* streamGuardedBedrock(stream, req, guardrail);
+          yield* observeBedrockResponse(streamGuardedBedrock(stream, req, guardrail), command);
         } catch (error) {
           // A sent guarded request is not replayed after a stream failure,
           // even before content release. Keep its existing error identity,
@@ -150,12 +179,12 @@ export function bedrock(options: BedrockProviderOptions = {}): LLMProvider {
       if (!stream) {
         // Some Bedrock models / regions don't support streaming —
         // fall back to a synthesized terminal chunk via complete().
-        const final = await provider.complete(req);
+        const final = await completeCommand(req, hooks, command?.id);
         yield { tokenIndex: 0, content: '', done: true, response: final };
         return;
       }
 
-      yield* streamBedrock(stream, req);
+      yield* observeBedrockResponse(streamBedrock(stream, req), command);
     },
   };
 

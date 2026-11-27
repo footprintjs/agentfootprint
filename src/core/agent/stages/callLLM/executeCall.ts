@@ -3,6 +3,7 @@ import { captureFindingsRequest, type FindingsRequest } from '../../findings/adm
 import { issuedTicketsOf } from '../../placedTickets.js';
 import { callObserved, observeCallRequests } from './servedRequest.js';
 import { trackRecallRequests } from './recallRequest.js';
+import { trackCacheCommands } from './cacheCommands.js';
 import type { TypedScope } from 'footprintjs';
 import type { LLMRequest, LLMResponse } from '../../../../provider-contract/types.js';
 import { liveChunkEmitter } from './liveChunks.js';
@@ -83,7 +84,9 @@ export async function executeCall(
     deps.recordReceipt !== false,
     deps.onReplayPrepared,
   );
-  const providerHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
+  const citationHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
+  const cacheCommands = deps.recordReceipt !== false ? trackCacheCommands(scope) : undefined;
+  const providerHooks = cacheCommands?.hooks(citationHooks) ?? citationHooks;
   const recall =
     deps.recallRequests === undefined
       ? undefined
@@ -172,7 +175,7 @@ export async function executeCall(
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
-      let resp = await callObserved(
+      const observedResponse = await callObserved(
         selectedProvider,
         attempts.request,
         attemptHooks,
@@ -194,10 +197,12 @@ export async function executeCall(
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
-      resp = captureProviderResponse(resp);
+      let resp = captureProviderResponse(observedResponse);
       if (isTerminalIntervention(resp)) {
         answeredBy = dispatch;
-        return attempts.response(resp);
+        const result = attempts.response(resp);
+        cacheCommands?.preserve(observedResponse, result);
+        return result;
       }
       // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
       // so it is moved into `content` and the call is taken off the list here,
@@ -228,6 +233,7 @@ export async function executeCall(
       acceptedProjection = stableProjection;
       acceptedSystemSkillBodies = systemBodyWitness ? skillRecords : [];
       const result = attempts.response(answered);
+      cacheCommands?.preserve(observedResponse, result);
       selectionAttempt?.finish(result);
       return result;
     } catch (error) {
@@ -335,6 +341,7 @@ export async function executeCall(
     response = await singleProviderCall(llmRequest, {});
   }
 
+  cacheCommands?.accept(response);
   return {
     response,
     answeredBy,
