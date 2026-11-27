@@ -1,4 +1,4 @@
-# Proven time forms
+# Fold — qualification for proven time forms
 
 The offline ruler benchmark is the source of qualification. The compact
 proof identifies its receipt, declared case manifest, measured worker and
