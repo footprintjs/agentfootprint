@@ -22,6 +22,21 @@ export function build() {
   void options; void segment; void callbacks; void Consumer;
 }
 if (true) { const conditionalOwner = () => flowChart('Conditional owner', fn, 'conditional-owner'); }
+declare const items: string[], on: boolean;
+items.forEach(() => {
+  const make = () => flowChart('Closure in callback', fn, 'closure-in-callback');
+  make();
+});
+items.map(() => {
+  function inner() { return flowChart('Function in callback', fn, 'function-in-callback'); }
+  return inner();
+});
+if (on) {
+  items.forEach(() => {
+    const g = () => flowChart('Conditional callback', fn, 'conditional-callback');
+    g();
+  });
+}
 `;
 let inventory: ReturnType<typeof collectChartMap>;
 beforeAll(() => {
@@ -103,4 +118,16 @@ it('retains source conditions outside a named owner without treating its own arr
   const row = inventory.stages.find((entry) => entry.id === 'conditional-owner');
   expect(row.context.join(' ')).toContain('if (true)');
   expect(row.context.join(' ')).not.toContain('Inside function');
+});
+
+it.each([
+  ['closure-in-callback', 'make', 'items.forEach'],
+  ['function-in-callback', 'inner', 'items.map'],
+  ['conditional-callback', 'g', 'items.forEach'],
+])('keeps the callback above the named owner for %s', (id, owner, callback) => {
+  const row = inventory.stages.find((entry) => entry.id === id);
+  expect(row.owner).toBe(owner);
+  expect(row.context.join(' ')).toContain('callback (' + callback + ')');
+  expect(row.context.filter((entry) => entry.includes('Inside function'))).toEqual([]);
+  if (id === 'conditional-callback') expect(row.context[0]).toBe('if (on)');
 });
