@@ -733,14 +733,14 @@ export function checkDecisionAgainst(
   input: unknown,
   rules: readonly string[],
   ledger?: DecisionLedger,
-): void {
+): Partial<CheckInDecision> {
   const state = pausedStateOf(checkpoint);
-  if (state === undefined) {
-    if (decisionCopyOf(input) === undefined) throw new DecisionRequiredError(gate, input);
-    return;
-  }
-  const read = (key: string): unknown => state[key];
-  heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind), rules, ledger);
+  const read = (key: string): unknown => state?.[key];
+  if (state !== undefined)
+    return heldDecision(input, gate, read('pausedRequest'), gatedCallOf(read, gate.kind), rules, ledger);
+  const decision = decisionCopyOf(input);
+  if (decision === undefined) throw new DecisionRequiredError(gate, input);
+  return decision;
 }
 
 /**

@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Agent,
   allow,
+  checkInApproved,
   defineTool,
   englishTimeReader,
+  isCheckInPause,
   isInputPause,
   isPaused,
   pauseHere,
+  requestInput,
 } from '../../src/index.js';
 import { activeTimeReadings } from '../../src/core/agent/honesty/timeInputs.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
@@ -31,7 +34,7 @@ const bounds = { from: '2026-11-01T07:30:00Z', to: now };
 
 function fixture(
   skipProvenConfirmation?: boolean,
-  pause = false,
+  pause: boolean | 'consent' | 'input' | 'twice' = false,
   commitValues: 'full' | 'delta' = 'full',
   protectedInput: boolean | 'finalContent' = false,
   firstReplyOnly = false,
@@ -45,6 +48,8 @@ function fixture(
   const calls: Readonly<Record<string, unknown>>[] = [];
   const callsToRequest = firstReplyOnly
     ? [undefined, 'ruler']
+    : pause === 'twice'
+    ? ['confirm', 'confirm', 'ruler']
     : pause
     ? ['confirm', 'ruler']
     : ['ruler'];
@@ -93,7 +98,17 @@ function fixture(
         name: 'confirm',
         description: 'Pause before the ruler.',
         inputSchema: { type: 'object', properties: {} },
-        execute: async () => pauseHere({ question: 'Go ahead?' }),
+        ...(pause === 'consent' && { checkIn: 'always' as const }),
+        execute: async () =>
+          pause === 'consent'
+            ? 'Approved.'
+            : pause === 'input'
+            ? requestInput({
+                id: 'confirmation-note',
+                question: 'What should we know?',
+                fields: [{ id: 'note', type: 'string', required: true }],
+              })
+            : pauseHere({ question: 'Go ahead?' }),
       }),
     );
   if (rewrite !== undefined)
@@ -260,6 +275,65 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
     const result = await agent.resume(JSON.parse(JSON.stringify(first.checkpoint)), input);
     expect(isInputPause(result)).toBe(true);
     expect(calls).toEqual([]);
+  });
+
+  it.each(['plain', 'own note', 'inherited note', 'text value'] as const)(
+    'keeps proof only for plain decoded approval (%s)',
+    async (kind) => {
+      const { agent, calls } = fixture(true, 'consent');
+      const paused = await agent.run({ message: 'last 2 hours', time: { now } });
+      if (!isCheckInPause(paused)) throw new Error('Expected the structured approval.');
+      const approval = checkInApproved({ request: paused.checkIn, by: 'ruler-test' });
+      const input =
+        kind === 'inherited note'
+          ? Object.assign(Object.create({ note: 'The outage was yesterday.' }), approval)
+          : kind === 'own note'
+          ? { ...approval, note: 'The outage was yesterday.' }
+          : kind === 'text value'
+          ? { ...approval, value: { kind: 'free-text', value: 'The outage was yesterday.' } }
+          : approval;
+      const result = await agent.resume(paused.checkpoint, input);
+      expect(isInputPause(result)).toBe(kind !== 'plain');
+      expect(calls).toEqual(kind === 'plain' ? [bounds] : []);
+    },
+  );
+
+  it('withdraws proof for text entered in a native requestInput form', async () => {
+    const { agent, calls } = fixture(true, 'input');
+    const paused = await agent.run({ message: 'last 2 hours', time: { now } });
+    if (!isInputPause(paused)) throw new Error('Expected the text field.');
+    const result = await agent.resume(paused.checkpoint, {
+      requestId: paused.awaitingInput.requestId,
+      values: { note: 'The outage was yesterday.' },
+    });
+    if (!isInputPause(result)) throw new Error('Expected a window confirmation.');
+    expect(result.awaitingInput.fields.some((f) => f.format === 'time-range')).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('keeps proof withdrawn across a text reply followed by a boolean approval', async () => {
+    const { agent, calls } = fixture(true, 'twice', 'delta');
+    const first = await agent.run({ message: 'last 2 hours', time: { now } });
+    if (!isPaused(first)) throw new Error('Expected the first independent pause.');
+    const second = await agent.resume(first.checkpoint, 'The outage was yesterday.');
+    if (!isPaused(second) || isInputPause(second))
+      throw new Error('Expected the second independent pause.');
+    const result = await agent.resume(JSON.parse(JSON.stringify(second.checkpoint)), true);
+    expect(isInputPause(result)).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('uses one UTC spelling in the Window line when the clock has zero milliseconds', async () => {
+    const { agent, calls } = fixture(true);
+    const result = await agent.run({
+      message: 'last 2 hours',
+      time: { now: '2026-11-01T09:30:00.000Z' },
+    });
+    expect(isPaused(result)).toBe(false);
+    expect(result).toContain(
+      'Window: 2026-11-01T07:30:00Z to 2026-11-01T09:30:00Z (end excluded).',
+    );
+    expect(calls).toHaveLength(1);
   });
 
   it('asks before dispatch when the model supplies a different interval', async () => {

@@ -1,9 +1,10 @@
+import { toUtc } from '../../../time/instant.js';
 import { retainedStateValue, runKeepsOut } from '../../../redaction/runRedaction.js';
 import type { TimeRange } from '../../../time/range.js';
 
 /** Use the exact wording and the native rule that will serve the final text. */
 export function provenWindowLine({ from, to }: TimeRange): string {
-  return `Window: ${from} to ${to} (end excluded).`;
+  return `Window: ${toUtc(from, 'strict') ?? from} to ${toUtc(to, 'strict') ?? to} (end excluded).`;
 }
 
 export function canDiscloseProvenWindow(scope: object, range: TimeRange): boolean {
