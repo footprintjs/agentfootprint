@@ -2,6 +2,7 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { sha256Hex } from '../../../lib/sha256.js';
 import {
   skillBodyOrigin,
+  legacySkillBody,
   carriesSkillDefinition,
 } from '../../../injection-engine/skillBodyEvidence.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
@@ -33,10 +34,17 @@ export function activeSkillBodyOccurrences(
   const live = new Set(active);
   const newest = new Map<string, string>();
   for (const message of history) {
-    const id = skillBodyOf(message, bodies);
-    if (id === undefined || !live.has(id)) continue;
     const occurrence = readCallOccurrenceKey(message);
-    if (typeof occurrence === 'string') newest.set(id, occurrence);
+    if (typeof occurrence !== 'string') continue;
+    const legacy = legacySkillBody(message);
+    if (legacy !== undefined) {
+      for (const id of live) {
+        if (bodies.get(id) === legacy) newest.set(id, occurrence);
+      }
+      continue;
+    }
+    const id = skillBodyOf(message, bodies);
+    if (id !== undefined && live.has(id)) newest.set(id, occurrence);
   }
   return new Set(newest.values());
 }

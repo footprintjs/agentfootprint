@@ -26,7 +26,7 @@ import {
   type WindowStrategy,
 } from '../../../src/index.js';
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
-import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
+import { defineInstruction, defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { ContextChangedError } from '../../../src/providers.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import {
@@ -352,7 +352,12 @@ describe('P2-3: a read_skill pick of a graph target keeps the context', () => {
         BOUND,
         bodies,
         [{ tool: 't1', input: {} }, { tool: 'read_skill', input: { id: 'target' } }, DONE],
-        (a) => a.skillGraph(graph).thinking({ budget: 1500 }),
+        (a) =>
+          a
+            .instruction(defineInstruction({ id: 'opening', prompt: 'Opening instructions.' }))
+            .skillGraph(graph)
+            .instruction(defineInstruction({ id: 'closing', prompt: 'Closing instructions.' }))
+            .thinking({ budget: 1500 }),
         { reactMode },
       );
 
@@ -360,7 +365,9 @@ describe('P2-3: a read_skill pick of a graph target keeps the context', () => {
 
       expect(bodies).toHaveLength(3);
       expect(bodies[0]!.system).toBeDefined();
-      expect(JSON.stringify(bodies[0]!.system)).toContain('entry_BODY');
+      expect(JSON.stringify(bodies[0]!.system)).toMatch(
+        /Opening instructions.*entry_BODY.*Closing instructions/,
+      );
       expect(bodies.map((body) => body.system)).toEqual(Array(3).fill(bodies[0]!.system));
       expect(resultOf(bodies[2], 'toolu_2')).toBe('target_BODY');
       expect(prefixHeld(bodies)).toBe(true);

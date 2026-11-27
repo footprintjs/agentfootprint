@@ -93,6 +93,11 @@ describe('listedInjections and the served surface mode', () => {
       servedSurfaceMode(listed, 'billing', body, [
         { role: 'tool', toolName: 'read_skill', content: body },
       ]),
+    ).toBe('tool-only');
+    expect(
+      servedSurfaceMode(listed, 'billing', body, [
+        { ...result, content: body, toolSkillBody: recordSkillBody('billing', body, undefined) },
+      ]),
     ).toBe('auto');
     expect(servedSurfaceMode({ surfaceMode: 'auto' }, 'billing', body, [result])).toBe('auto');
   });
@@ -158,6 +163,30 @@ describe('the read_skill description under listed', () => {
 });
 
 describe('activeSkillBodyOccurrences (the window pin)', () => {
+  it('pins a matching old result for delivery without granting it origin or evidence', () => {
+    const body = 'Confirm identity.';
+    const bodies = new Map([['billing', body]]);
+    const legacy: LLMMessage = {
+      role: 'tool',
+      toolName: 'read_skill',
+      content: body,
+      callOccurrenceKey: [1, 2, 3, 4, 1],
+    };
+    expect(activeSkillBodyOccurrences([legacy], bodies, ['billing'])).toEqual(
+      new Set(['1.2.3.4.1']),
+    );
+    expect(honestyHistory([legacy], bodies)[0]?.content).toBe('');
+
+    const otherCases = [
+      { ...legacy, content: 'Skill loaded.' },
+      { ...legacy, toolName: 'lookup' },
+      { ...legacy, toolSkillBody: recordSkillBody('billing', body, undefined) },
+    ];
+    for (const result of otherCases) {
+      expect(activeSkillBodyOccurrences([result], bodies, ['billing']).size).toBe(0);
+    }
+  });
+
   it('a restored 40-turn history with a body result per turn pins only the newest', () => {
     const body = 'Confirm identity.';
     const history = Array.from({ length: 40 }, (_, i) => [

@@ -1,0 +1,889 @@
+{
+  "checkpointVersion": 2,
+  "sharedState": {
+    "toolResourceOwner": {
+      "version": 1,
+      "birth": {
+        "runId": "1795741052019-0000000002",
+        "componentOrdinal": 0
+      },
+      "nextDispatch": 3,
+      "pending": {
+        "version": 1,
+        "birth": {
+          "runId": "1795741052019-0000000002",
+          "componentOrdinal": 0
+        },
+        "ordinal": 2
+      }
+    },
+    "userMessage": "go",
+    "history": [
+      {
+        "role": "user",
+        "content": "go"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "toolu_1_0",
+            "name": "t1",
+            "args": {},
+            "callOccurrenceKey": [
+              815349573,
+              3740866330,
+              4010381012,
+              2927124871,
+              0
+            ]
+          }
+        ],
+        "thinkingBlocks": [
+          {
+            "type": "thinking",
+            "content": "reasoning 1",
+            "signature": "sig-1"
+          }
+        ],
+        "replay": {
+          "version": 1,
+          "protocol": "anthropic-messages",
+          "id": "msg_1",
+          "layout": [
+            {
+              "type": "thinking",
+              "index": 0
+            },
+            {
+              "type": "tool",
+              "index": 0
+            }
+          ],
+          "stopReason": "tool_use",
+          "contentDigest": "cfef9f21172666e8a205f22e166b6de21ffb521f04ff50fd47f41107f31fc4dc",
+          "binding": {
+            "model": "my-gateway-alias",
+            "salt": "msg_1",
+            "system": "ff8c884ff8f8b503363015008700ac85ae03660fe305a7dfe489cb0b6f9c2f8c",
+            "tools": "0085767870eb3ac0d89a90fd61765a65af51999b5416c13131d035ed10e395aa",
+            "messages": "2df1af3eb2fb15cead81d04721655ea8b9e8f27f93e110b7a357d207175ffa6b",
+            "priorThinking": []
+          }
+        }
+      },
+      {
+        "role": "tool",
+        "content": "t1 ran ok",
+        "toolCallId": "toolu_1_0",
+        "toolName": "t1",
+        "callOccurrenceKey": [
+          815349573,
+          3740866330,
+          4010381012,
+          2927124871,
+          0
+        ],
+        "toolResultExecution": "returned"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "toolu_2_0",
+            "name": "read_skill",
+            "args": {
+              "id": "aa"
+            },
+            "callOccurrenceKey": [
+              987135251,
+              3747038255,
+              1856208172,
+              1860746341,
+              0
+            ]
+          }
+        ],
+        "thinkingBlocks": [
+          {
+            "type": "thinking",
+            "content": "reasoning 2",
+            "signature": "sig-2"
+          }
+        ],
+        "replay": {
+          "version": 1,
+          "protocol": "anthropic-messages",
+          "id": "msg_2",
+          "layout": [
+            {
+              "type": "thinking",
+              "index": 0
+            },
+            {
+              "type": "tool",
+              "index": 0
+            }
+          ],
+          "stopReason": "tool_use",
+          "contentDigest": "d3db22d8e62634767a62978965b1feb8ca3b62edf153dea283ed343caf253aa3",
+          "binding": {
+            "model": "my-gateway-alias",
+            "salt": "msg_2",
+            "system": "c854cd72369c821bbfc04a1f246d1176e6b91abf194bb5b769fd65eeff9448aa",
+            "tools": "da59a9f40b0e552fa3d8c034b2b477b83115750892fe2a252b834a49bace381e",
+            "messages": "25043218d05b368008171183e73e92b12ad8ca6ee4e9ad4433256a35725bbf57",
+            "priorThinking": [
+              "3a0df009cbe451651fba357af50f6f20dd985a74e7bc8eddd69776ef1600b918"
+            ]
+          }
+        }
+      },
+      {
+        "role": "tool",
+        "content": "AA-BODY-MARK steps for aa; threshold 4711 ms.",
+        "toolCallId": "toolu_2_0",
+        "toolName": "read_skill",
+        "callOccurrenceKey": [
+          987135251,
+          3747038255,
+          1856208172,
+          1860746341,
+          0
+        ],
+        "toolResultExecution": "returned"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "toolu_3_0",
+            "name": "aa_tool",
+            "args": {},
+            "callOccurrenceKey": [
+              132386979,
+              2401329574,
+              3442235098,
+              538773862,
+              0
+            ]
+          }
+        ],
+        "thinkingBlocks": [
+          {
+            "type": "thinking",
+            "content": "reasoning 3",
+            "signature": "sig-3"
+          }
+        ],
+        "replay": {
+          "version": 1,
+          "protocol": "anthropic-messages",
+          "id": "msg_3",
+          "layout": [
+            {
+              "type": "thinking",
+              "index": 0
+            },
+            {
+              "type": "tool",
+              "index": 0
+            }
+          ],
+          "stopReason": "tool_use",
+          "contentDigest": "bce102857c1b29148b7ff9bf81a4e2e666e46256c9b11b37cd402cbc93f53a27",
+          "binding": {
+            "model": "my-gateway-alias",
+            "salt": "msg_3",
+            "system": "fd64e4032831d53f22756c8540002fbbe2a1a81c66a64ace1e47cdd113947934",
+            "tools": "921def3f58dfba0d05ad84249e19bc74066a6defb171563212bff5454d1d32bb",
+            "messages": "d43d05435aefe55258b42008b6d10ceb60a996a47b73fd35150f7efec73e455b",
+            "priorThinking": [
+              "3a0df009cbe451651fba357af50f6f20dd985a74e7bc8eddd69776ef1600b918",
+              "17140ca965009f6ad22d8426646f9d417981ef5cdba53c2973d95a5deec71e63"
+            ]
+          }
+        }
+      }
+    ],
+    "enteredToolCalls": [
+      {
+        "callOccurrenceKey": [
+          815349573,
+          3740866330,
+          4010381012,
+          2927124871,
+          0
+        ],
+        "entered": true
+      },
+      {
+        "callOccurrenceKey": [
+          987135251,
+          3747038255,
+          1856208172,
+          1860746341,
+          0
+        ],
+        "entered": true
+      },
+      {
+        "callOccurrenceKey": [
+          132386979,
+          2401329574,
+          3442235098,
+          538773862,
+          0
+        ],
+        "entered": true
+      }
+    ],
+    "enteredToolCallsComplete": true,
+    "settledToolCalls": [
+      {
+        "callOccurrenceKey": [
+          815349573,
+          3740866330,
+          4010381012,
+          2927124871,
+          0
+        ],
+        "execution": "returned",
+        "delivery": "native"
+      },
+      {
+        "callOccurrenceKey": [
+          987135251,
+          3747038255,
+          1856208172,
+          1860746341,
+          0
+        ],
+        "execution": "returned",
+        "delivery": "native"
+      }
+    ],
+    "settledToolCallsComplete": true,
+    "runIdentity": {
+      "conversationId": "1795741052019-0000000002"
+    },
+    "runIdentitySource": "run",
+    "runSessionId": null,
+    "newMessages": [],
+    "turnNumber": 1,
+    "contextTokensRemaining": 32000,
+    "iteration": 3,
+    "maxIterations": 8,
+    "finalContent": "",
+    "totalInputTokens": 30,
+    "totalOutputTokens": 15,
+    "turnStartMs": 1795741052019,
+    "systemPromptInjections": [
+      {
+        "contentSummary": "S.",
+        "contentHash": "2893b4a1",
+        "slot": "system-prompt",
+        "source": "base",
+        "reason": "Agent.system()",
+        "rawContent": "S."
+      }
+    ],
+    "messagesInjections": [
+      {
+        "contentSummary": "go",
+        "contentHash": "bce8e74",
+        "slot": "messages",
+        "source": "user",
+        "reason": "conversation history [0]",
+        "rawContent": "go",
+        "asRole": "user",
+        "position": 0,
+        "recencyFromOrder": true
+      },
+      {
+        "contentSummary": "",
+        "contentHash": "62db47c8",
+        "slot": "messages",
+        "source": "assistant",
+        "reason": "conversation history [1]",
+        "rawContent": "",
+        "asRole": "assistant",
+        "position": 1,
+        "recencyFromOrder": true
+      },
+      {
+        "contentSummary": "t1 ran ok",
+        "contentHash": "e6aa7a3d",
+        "slot": "messages",
+        "source": "tool-result",
+        "reason": "conversation history [2]",
+        "rawContent": "t1 ran ok",
+        "asRole": "tool",
+        "position": 2,
+        "recencyFromOrder": true,
+        "sourceId": "toolu_1_0",
+        "callOccurrenceKey": [
+          815349573,
+          3740866330,
+          4010381012,
+          2927124871,
+          0
+        ]
+      },
+      {
+        "contentSummary": "",
+        "contentHash": "ead60db2",
+        "slot": "messages",
+        "source": "assistant",
+        "reason": "conversation history [3]",
+        "rawContent": "",
+        "asRole": "assistant",
+        "position": 3,
+        "recencyFromOrder": true
+      },
+      {
+        "contentSummary": "AA-BODY-MARK steps for aa; threshold 4711 ms.",
+        "contentHash": "e9bad641",
+        "slot": "messages",
+        "source": "skill",
+        "reason": "skill 'aa' body, delivered as its read_skill result",
+        "rawContent": "AA-BODY-MARK steps for aa; threshold 4711 ms.",
+        "asRole": "tool",
+        "position": 4,
+        "recencyFromOrder": true,
+        "sourceId": "aa"
+      }
+    ],
+    "toolsInjections": [
+      {
+        "contentSummary": "t1: The t1 tool.",
+        "contentHash": "5cad7b44",
+        "slot": "tools",
+        "source": "registry",
+        "sourceId": "t1",
+        "reason": "tool registry",
+        "rawContent": "t1: The t1 tool.",
+        "position": 0
+      },
+      {
+        "contentSummary": "read_skill: Activate a skill for the next iteration. Available skills:\n  - aa: …",
+        "contentHash": "93245894",
+        "slot": "tools",
+        "source": "registry",
+        "sourceId": "read_skill",
+        "reason": "tool registry",
+        "rawContent": "read_skill: Activate a skill for the next iteration. Available skills:\n  - aa: aa skill\n\nPass the skill's id. A skill's body is returned as this call's result, unless the skill graph routes to it; its tools run after it loads.",
+        "position": 1
+      },
+      {
+        "contentSummary": "aa_tool: x",
+        "contentHash": "78dba12e",
+        "slot": "tools",
+        "source": "registry",
+        "sourceId": "aa_tool",
+        "reason": "tool registry",
+        "rawContent": "aa_tool: x",
+        "position": 2
+      },
+      {
+        "contentSummary": "aa_tool: x",
+        "contentHash": "43ff1cb",
+        "slot": "tools",
+        "source": "skill",
+        "sourceId": "aa",
+        "reason": "skill 'aa' unlocked tool 'aa_tool'",
+        "rawContent": "aa_tool: x",
+        "position": 3
+      }
+    ],
+    "llmLatestContent": "",
+    "llmLatestToolCalls": [
+      {
+        "id": "toolu_3_0",
+        "name": "aa_tool",
+        "args": {},
+        "callOccurrenceKey": [
+          132386979,
+          2401329574,
+          3442235098,
+          538773862,
+          0
+        ]
+      }
+    ],
+    "thinkingBlocks": [
+      {
+        "type": "thinking",
+        "content": "reasoning 3",
+        "signature": "sig-3"
+      }
+    ],
+    "pausedToolCallId": "toolu_3_0",
+    "pausedToolName": "aa_tool",
+    "pausedToolStartMs": 1795741052034,
+    "cumTokensInput": 0,
+    "cumTokensOutput": 0,
+    "cumEstimatedUsd": 0,
+    "costBudgetHit": false,
+    "activeInjections": [
+      {
+        "id": "aa",
+        "flavor": "skill",
+        "description": "aa skill",
+        "surfaceMode": "tool-only",
+        "autoActivate": "currentSkill",
+        "cache": "while-active",
+        "inject": {
+          "systemPrompt": "AA-BODY-MARK steps for aa; threshold 4711 ms.",
+          "tools": [
+            {
+              "schema": {
+                "name": "aa_tool",
+                "description": "x",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              },
+              "injectionId": "aa"
+            }
+          ]
+        }
+      }
+    ],
+    "activatedInjectionIds": [
+      "aa"
+    ],
+    "dynamicToolSchemas": [
+      {
+        "name": "t1",
+        "description": "The t1 tool.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "read_skill",
+        "description": "Activate a skill for the next iteration. Available skills:\n  - aa: aa skill\n\nPass the skill's id. A skill's body is returned as this call's result, unless the skill graph routes to it; its tools run after it loads.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": [
+                "aa"
+              ],
+              "description": "The skill id to activate."
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aa_tool",
+        "description": "x",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
+    "honestyLayers": {
+      "answer": true
+    },
+    "deliveredMessageKeys": [],
+    "cacheMarkers": [
+      {
+        "field": "system",
+        "boundaryIndex": 1,
+        "ttl": "short",
+        "reason": "system stable prefix (2 entries, ending at skill:aa)"
+      },
+      {
+        "field": "tools",
+        "boundaryIndex": 0,
+        "ttl": "short",
+        "reason": "tools stable prefix (1 entries, ending at skill:aa)"
+      },
+      {
+        "field": "messages",
+        "boundaryIndex": 4,
+        "ttl": "short",
+        "reason": "conversation tail through wire index 4 — the moving breakpoint: the next call repeats this prefix and appends after it"
+      }
+    ],
+    "cachingDisabled": false,
+    "skillHistory": [
+      null,
+      null,
+      "aa"
+    ],
+    "activeByslot": {
+      "systemPrompt": [],
+      "messages": [],
+      "tools": [
+        {
+          "id": "aa",
+          "source": "skill",
+          "reason": "aa skill"
+        }
+      ]
+    },
+    "receipt": {
+      "requestMeasurement": {
+        "boundary": "initial-prepared-request",
+        "format": "json-utf8-v1",
+        "status": "measured",
+        "total": {
+          "jsonChars": 2852,
+          "jsonBytes": 2854
+        },
+        "slots": {
+          "systemPrompt": {
+            "jsonChars": 4,
+            "jsonBytes": 4
+          },
+          "messages": {
+            "jsonChars": 1749,
+            "jsonBytes": 1749
+          },
+          "tools": {
+            "jsonChars": 606,
+            "jsonBytes": 606
+          }
+        }
+      },
+      "system": {
+        "hash": "09bdbacc7502c460",
+        "chars": 2,
+        "pieces": [
+          {
+            "hash": "09bdbacc7502c460",
+            "slot": "system-prompt",
+            "source": "base"
+          }
+        ]
+      },
+      "messages": {
+        "count": 5,
+        "entries": [
+          {
+            "role": "user",
+            "hash": "6ae3ee13cd82dd21"
+          },
+          {
+            "role": "assistant",
+            "hash": "265559fb7644bd03"
+          },
+          {
+            "role": "tool",
+            "hash": "3a5788e5f7df16ff",
+            "key": "toolu_1_0"
+          },
+          {
+            "role": "assistant",
+            "hash": "77779aa442ed97cd"
+          },
+          {
+            "role": "tool",
+            "hash": "53ea51484fa0fed0",
+            "key": "toolu_2_0"
+          }
+        ],
+        "requestOnly": []
+      },
+      "tools": {
+        "names": [
+          "t1",
+          "read_skill",
+          "aa_tool"
+        ],
+        "schemaHashes": {
+          "t1": "f561870efe0b0fe1",
+          "read_skill": "7f32ef29ff148269",
+          "aa_tool": "8d91e3c4b3430037"
+        },
+        "forced": null,
+        "withheld": null
+      },
+      "cache": {
+        "transform": "rewritten",
+        "transformHash": "chain-v1:065ce368a7d0d365",
+        "markersApplied": [
+          {
+            "field": "system",
+            "boundaryIndex": 1,
+            "ttl": "short"
+          },
+          {
+            "field": "tools",
+            "boundaryIndex": 0,
+            "ttl": "short"
+          },
+          {
+            "field": "messages",
+            "boundaryIndex": 4,
+            "ttl": "short"
+          }
+        ],
+        "strategy": "breakpoints"
+      },
+      "params": {},
+      "basis": {
+        "epoch": 3,
+        "runId": "1795741052019-0000000002",
+        "model": "my-gateway-alias",
+        "provider": "anthropic"
+      }
+    },
+    "sourceLinkServedRows": [
+      {
+        "kind": "served",
+        "version": 1,
+        "consumer": "call-llm#19",
+        "served": [
+          {
+            "key": "history",
+            "elements": [
+              [
+                0,
+                1
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "served",
+        "version": 1,
+        "consumer": "call-llm#42",
+        "served": [
+          {
+            "key": "history",
+            "elements": [
+              [
+                0,
+                3
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "served",
+        "version": 1,
+        "consumer": "call-llm#65",
+        "served": [
+          {
+            "key": "history",
+            "elements": [
+              [
+                0,
+                5
+              ]
+            ]
+          }
+        ]
+      }
+    ],
+    "sourceLinkConsumer": {
+      "runId": "1795741052019-0000000002",
+      "consumer": "call-llm#65",
+      "historyPositions": [
+        {
+          "occurrence": "815349573.3740866330.4010381012.2927124871.0",
+          "element": 2
+        },
+        {
+          "occurrence": "987135251.3747038255.1856208172.1860746341.0",
+          "element": 4
+        }
+      ]
+    },
+    "llmLatestReplay": [
+      {
+        "version": 1,
+        "protocol": "anthropic-messages",
+        "id": "msg_3",
+        "layout": [
+          {
+            "type": "thinking",
+            "index": 0
+          },
+          {
+            "type": "tool",
+            "index": 0
+          }
+        ],
+        "stopReason": "tool_use",
+        "contentDigest": "bce102857c1b29148b7ff9bf81a4e2e666e46256c9b11b37cd402cbc93f53a27",
+        "binding": {
+          "model": "my-gateway-alias",
+          "salt": "msg_3",
+          "system": "fd64e4032831d53f22756c8540002fbbe2a1a81c66a64ace1e47cdd113947934",
+          "tools": "921def3f58dfba0d05ad84249e19bc74066a6defb171563212bff5454d1d32bb",
+          "messages": "d43d05435aefe55258b42008b6d10ceb60a996a47b73fd35150f7efec73e455b",
+          "priorThinking": [
+            "3a0df009cbe451651fba357af50f6f20dd985a74e7bc8eddd69776ef1600b918",
+            "17140ca965009f6ad22d8426646f9d417981ef5cdba53c2973d95a5deec71e63"
+          ]
+        }
+      }
+    ],
+    "rawThinking": [
+      {
+        "type": "thinking",
+        "thinking": "reasoning 3",
+        "signature": "sig-3"
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_3_0",
+        "name": "aa_tool",
+        "input": {}
+      }
+    ],
+    "lastToolResult": {
+      "toolName": "read_skill",
+      "result": "AA-BODY-MARK steps for aa; threshold 4711 ms."
+    },
+    "toolResults": [],
+    "pausedToolArgs": {},
+    "servedToolParties": {
+      "version": 2,
+      "owner": {
+        "runId": "1795741052019-0000000002",
+        "componentOrdinal": 0
+      },
+      "turn": 1,
+      "iteration": 3,
+      "argumentAsk": false,
+      "truncated": false,
+      "bound": [
+        {
+          "index": 0,
+          "id": {
+            "kind": "plain",
+            "value": "[\"string\",\"toolu_3_0\"]"
+          },
+          "name": {
+            "kind": "plain",
+            "value": "aa_tool"
+          },
+          "party": {
+            "channel": "skill",
+            "id": "aa"
+          }
+        }
+      ],
+      "current": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "t1"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        },
+        {
+          "name": {
+            "kind": "plain",
+            "value": "read_skill"
+          },
+          "party": {
+            "channel": "framework"
+          }
+        },
+        {
+          "name": {
+            "kind": "plain",
+            "value": "aa_tool"
+          },
+          "party": {
+            "channel": "skill",
+            "id": "aa"
+          }
+        }
+      ],
+      "last": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "t1"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        },
+        {
+          "name": {
+            "kind": "plain",
+            "value": "read_skill"
+          },
+          "party": {
+            "channel": "framework"
+          }
+        },
+        {
+          "name": {
+            "kind": "plain",
+            "value": "aa_tool"
+          },
+          "party": {
+            "channel": "skill",
+            "id": "aa"
+          }
+        }
+      ]
+    }
+  },
+  "pausedStageId": "tool-calls",
+  "pausedExecution": {
+    "runId": "1795741052019-0000000002",
+    "runtimeStageId": "tool-calls#69"
+  },
+  "subflowPath": [],
+  "pauseData": {
+    "toolCallId": "toolu_3_0",
+    "toolName": "aa_tool",
+    "question": "Which?"
+  },
+  "subflowStates": {},
+  "executionCount": 70,
+  "visitCounts": {
+    "seed": 1,
+    "sf-injection-engine": 3,
+    "sf-injection-engine/gather": 3,
+    "sf-injection-engine/evaluate": 3,
+    "sf-injection-engine/route": 3,
+    "sf-injection-engine/delta": 3,
+    "context": 3,
+    "sf-system-prompt": 3,
+    "sf-system-prompt/compose": 3,
+    "sf-messages": 3,
+    "sf-messages/compose": 3,
+    "sf-tools": 3,
+    "sf-tools/discover": 3,
+    "sf-tools/compose": 3,
+    "update-skill-history": 3,
+    "sf-cache": 3,
+    "sf-cache/decide-cache-markers": 3,
+    "sf-cache/cache-gate": 3,
+    "sf-cache/apply-markers": 3,
+    "call-llm": 3,
+    "sf-thinking": 3,
+    "sf-thinking/thinking-anthropic": 3,
+    "sf-route": 3,
+    "tool-calls": 3
+  },
+  "invokerStageId": "sf-route",
+  "pausedAt": 1795741052035
+}

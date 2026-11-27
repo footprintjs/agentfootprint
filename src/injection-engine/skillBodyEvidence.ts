@@ -63,6 +63,28 @@ export function carriesSkillDefinition(
   return record.digest === digest && verifiedSkillBody(message, record) !== undefined;
 }
 
+/** Read an unmarked legacy result for delivery comparisons only. */
+export function legacySkillBody(message: SkillBodyHistoryMessage): string | undefined {
+  if (message.role !== 'tool' || message.toolName !== 'read_skill') return undefined;
+  return message.toolSkillBody === undefined ? message.content : undefined;
+}
+
+/**
+ * A 20.x checkpoint can carry a delivered body without its origin record.
+ * Exact legacy bytes are a delivery witness only. Readers that attribute
+ * origin or tool evidence still require a verified record.
+ */
+export function deliveredSkillBody(
+  message: SkillBodyHistoryMessage,
+  skillId: string,
+  body: string,
+  digest: string,
+): boolean {
+  if (message.toolSkillBody === undefined) return legacySkillBody(message) === body;
+  const origin = skillBodyOrigin(message);
+  return origin?.skillId === skillId && carriesSkillDefinition(message, origin, digest);
+}
+
 // LENS · tool-result · persistent-history
 // reads: only the id it was handed; exported so the gate can tell this sentence from a skill body
 // law: may omit, never deny; every clause anchored to the call it was composed on.

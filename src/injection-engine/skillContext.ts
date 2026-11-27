@@ -18,11 +18,7 @@
  */
 
 import { sha256Hex } from '../lib/sha256.js';
-import {
-  skillBodyOrigin,
-  carriesSkillDefinition,
-  type SkillBodyHistoryMessage,
-} from './skillBodyEvidence.js';
+import { deliveredSkillBody, type SkillBodyHistoryMessage } from './skillBodyEvidence.js';
 
 /** The two strategies. */
 export type SkillContextStrategy = 'listed' | 'declared';
@@ -126,7 +122,7 @@ export function systemSkillBody(injection: {
     : undefined;
 }
 
-/** Is this definition already carried by a produced and still-present result? */
+/** Is this definition already carried by a still-present result? */
 export function bodyInHistory(
   skillId: string,
   body: string | undefined,
@@ -134,10 +130,7 @@ export function bodyInHistory(
 ): boolean {
   if (!body || !history) return false;
   const digest = sha256Hex(body);
-  return history.some((message) => {
-    const origin = skillBodyOrigin(message);
-    return origin?.skillId === skillId && carriesSkillDefinition(message, origin, digest);
-  });
+  return history.some((message) => deliveredSkillBody(message, skillId, body, digest));
 }
 
 /**
