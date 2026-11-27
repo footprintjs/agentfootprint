@@ -1089,7 +1089,7 @@ describe('per-role skill visibility', () => {
     expect(foreignIds(notice, 'alpha', ['alpha', 'beta', 'gamma'])).toEqual([]);
   });
 
-  it('a role that may not READ the start skill never stands in it — so a read of it is a policy refusal, not a self-call', async () => {
+  it('a role that may not read the start skill gets the same generic refusal as any unavailable selection', async () => {
     // 9.86.0 pinned a stay on a skill the role may not read: the cursor stood
     // on `alpha` and its body was in the request, for a role whose policy
     // hides every skill. That was the leak itself, not
@@ -1147,13 +1147,10 @@ describe('per-role skill visibility', () => {
     // Not a self-call: the model was never standing in it.
     expect(seen.some((r) => r.includes(NOTICE))).toBe(false);
     expect(rejected.some((row) => row.reason === 'self-call')).toBe(false);
-    // Both reads are refused by the policy, with the policy's own message.
-    expect(
-      seen.some((r) => r.includes("Skill 'alpha' is not available to the 'support' role")),
-    ).toBe(true);
-    expect(
-      seen.some((r) => r.includes("Skill 'gamma' is not available to the 'support' role")),
-    ).toBe(true);
+    const refusals = seen.filter((result) => result.includes('an offered skill id'));
+    expect(refusals.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(refusals).size).toBe(1);
+    expect(refusals.join(' ')).not.toMatch(/alpha|gamma|support/);
   });
 });
 

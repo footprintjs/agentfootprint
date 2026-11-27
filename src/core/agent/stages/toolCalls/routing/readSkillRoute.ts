@@ -7,7 +7,7 @@ import type {
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import { spoken } from '../../../../../lib/spokenIds.js';
+import { skillVisibleToRole, spoken } from '../../../../../lib/spokenIds.js';
 import { classifySkillTarget } from '../../../../../injection-engine/skillGraph.js';
 import { dedupeIds } from '../helpers/dedupeIds.js';
 import type { LLMToolSchema } from '../../../../../provider-contract/types.js';
@@ -69,7 +69,7 @@ export function applyReadSkillRoute(
       // gate above denies it first, on the same checker. The filter is
       // what keeps that true by construction rather than by coincidence.)
       const hiddenIds = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
-      const mayName = (id: string): boolean => !hiddenIds.has(id);
+      const mayName = (id: string): boolean => skillVisibleToRole(id, hiddenIds);
       const hops = deps.allowedSkillIds(currentSkillId);
       const openAll = deps.openSkillIds ?? [];
       // `spoken` keeps BOTH halves — what may be named, and whether the

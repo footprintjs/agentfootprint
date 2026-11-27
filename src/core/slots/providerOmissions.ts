@@ -1,4 +1,5 @@
 import type { LedgerOmission, ObserveSelection } from '../../tools/selectionListing.js';
+import { skillVisibleToRole } from '../../lib/spokenIds.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import {
@@ -35,7 +36,7 @@ export function providerOmissions(
   const rowsByDecision: ObserveSelection = (decision) => {
     if (!set.complete) return;
     if (decision.kind === 'skill-scope') {
-      if (!hidden || hidden.has(decision.skillId) || !decision.tools.length) return;
+      if (!skillVisibleToRole(decision.skillId, hidden) || !decision.tools.length) return;
       // The provider did not inspect its inactive tools. Use only an unambiguous
       // build-time claim for the exact reference and skill. Never call a schema getter here.
       declaredBySkill ??= indexVisibleClaims(claimants, hidden);
@@ -61,7 +62,7 @@ export function providerOmissions(
 /** One registration walk per evaluation, even when many skills are inactive. */
 function indexVisibleClaims(
   claimants: ReadonlyMap<string, readonly ToolClaim[]>,
-  hidden: ReadonlySet<string>,
+  hidden: ReadonlySet<string> | undefined,
 ) {
   const bySkill = new Map<string, Map<Tool, string | null>>();
   for (const [name, claims] of claimants) {

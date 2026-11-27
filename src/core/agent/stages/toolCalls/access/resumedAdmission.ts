@@ -9,7 +9,11 @@ import type { SkillRoleView } from '../../../skillContext/toolVisibility.js';
 import type { Resolution } from '../contracts/callFacts.js';
 import type { Tool } from '../../../../../tools/tools.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import type { ResumedCallResult } from '../contracts/operations/resumedInvocation.js';
+import type {
+  ResumedCallResult,
+  ResumedInvocationLinks,
+} from '../contracts/operations/resumedInvocation.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import {
   runToolChain,
@@ -82,6 +86,7 @@ const refused = (refusal: ResumedCallResult): ResumedAdmission => ({ allowed: fa
 interface ResumeGateFrame {
   readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly gate: PausedGatePolicy['gate'];
+  readonly hiddenSelectionRefusal?: string;
   readonly tool: Tool;
   readonly toolName: string;
   readonly toolCallId: string;
@@ -93,6 +98,35 @@ interface ResumeGateFrame {
     scope: TypedScope<AgentState>,
     history: readonly LLMMessage[],
   ) => readonly LLMMessage[];
+}
+
+/** Validate the saved selection and retain the policy receipt for a known hidden skill. */
+export function buildResumedArgumentRefusal(
+  deps: AccessDeps,
+  links: Pick<ResumedInvocationLinks, 'argumentRefusal' | 'parkedNow' | 'historyForCheckIn'>,
+) {
+  return (
+    scope: TypedScope<AgentState>,
+    role: SkillRoleView | undefined,
+    frame: Omit<ResumeGateFrame, 'parkedNow' | 'historyForCheckIn' | 'hiddenSelectionRefusal'>,
+  ): string | Promise<string> | undefined => {
+    const { tool, toolName, toolCallId, iteration, args } = frame;
+    const refusal = links.argumentRefusal(scope, tool, args, {
+      toolName,
+      toolCallId,
+      iteration,
+      ...(role === undefined ? {} : { role }),
+    });
+    if (refusal === undefined || role === undefined || !isHiddenSkillRead(tool, args, role)) {
+      return refusal;
+    }
+    return recheckResumedCall(scope, deps, {
+      ...frame,
+      parkedNow: links.parkedNow,
+      historyForCheckIn: links.historyForCheckIn,
+      hiddenSelectionRefusal: refusal,
+    }).then(() => refusal);
+  };
 }
 
 const secondQuestion = (name: string): string =>
@@ -236,6 +270,22 @@ export async function recheckResumedCall(
     outcome,
   };
   const askCapability = buildCapabilityQuestion({ ...bindings, permissionChecker, callArguments });
+  const askSelection = (auditOnly?: true) =>
+    askSkillRead(
+      (...call) => awaitUnder(env.signal, () => askCapability(...call)),
+      permissionChecker,
+      {
+        toolName,
+        args,
+        ...(auditOnly === true && { auditOnly }),
+        currentSkillId: () => scope.currentSkillId,
+        parked: () => frame.parkedNow(scope),
+      },
+    );
+  if (frame.hiddenSelectionRefusal !== undefined) {
+    await askSelection(true);
+    return refused({ result: frame.hiddenSelectionRefusal, error: true });
+  }
   const deniedByPolicy = (): ResumedAdmission =>
     refused({
       result: outcome.result,
@@ -328,16 +378,7 @@ export async function recheckResumedCall(
     }
     if (chain.kind === 'ask') return refuse('second-question', secondQuestion(toolName));
   }
-  await askSkillRead(
-    (...call) => awaitUnder(env.signal, () => askCapability(...call)),
-    permissionChecker,
-    {
-      toolName,
-      args,
-      currentSkillId: () => scope.currentSkillId,
-      parked: () => frame.parkedNow(scope),
-    },
-  );
+  await askSelection();
   if (execution.denied) return deniedByPolicy();
   const needsAnotherQuestion =
     gate !== 'checkIn' &&

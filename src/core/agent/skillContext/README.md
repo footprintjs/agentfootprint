@@ -16,6 +16,7 @@ load change nothing instead.
 | `bodies.ts` | `skillBodyOf`: the current body definition held by a recorded `read_skill` occurrence. The window and the system slot verify the same body record. |
 | `honestyView.ts` | `honestyHistory`: the history the evidence gate's two moments read under `listed`, where a body result reads as the `declared` confirmation and the body is exempt app text. |
 | `systemBodies.ts` | Capture the accepted request’s system skill pieces and keep eligible pieces in slot order for the current turn. |
+| `readSkillArguments.ts` | Validates the library's skill selection against the current role. The model dispatch also uses its wire offer. A resumed or inner call uses its current role and the registered skill catalog. |
 | `gate.ts` | `notLoadedFor`: after role admission, a visible scoped tool that isn't loaded is refused with fixed words. |
 
 ## The rule tables

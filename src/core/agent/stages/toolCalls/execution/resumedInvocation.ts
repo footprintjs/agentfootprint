@@ -31,6 +31,7 @@ import { mcpClientUseFor } from '../../../../../tools/mcpClientUse.js';
 import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest.js';
 import { rewrittenAfterApproval } from '../access/bindings.js';
 import {
+  buildResumedArgumentRefusal,
   buildResumedSkillAdmission,
   recheckResumedCall,
   recordResumedRefusal,
@@ -75,6 +76,7 @@ export function buildResumedInvocation(
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
   const resolveSkillAdmission = buildResumedSkillAdmission(deps);
+  const argumentRefusal = buildResumedArgumentRefusal(deps, links);
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -141,12 +143,12 @@ export function buildResumedInvocation(
         .get(batchAddress(toolCallId, seen?.callOccurrenceKey))?.refused ??
       (unmounted === undefined ? undefined : await unmounted);
     if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
-    const invalidArgs = links.argumentRefusal(scope, tool, approved, {
-      toolName,
-      toolCallId,
-      iteration,
-    });
-    if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
+    const accessFrame = { ...occurrence, gate: heldTo, tool, toolName, toolCallId, iteration, env };
+    const invalidArgs = argumentRefusal(scope, role, { ...accessFrame, args: approved });
+    if (invalidArgs !== undefined) {
+      const result = typeof invalidArgs === 'string' ? invalidArgs : await invalidArgs;
+      return { result, error: true };
+    }
     links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
@@ -172,14 +174,8 @@ export function buildResumedInvocation(
     let ended: Error | undefined;
     try {
       const access = await recheckResumedCall(scope, deps, {
-        ...occurrence,
-        gate: heldTo,
-        tool,
-        toolName,
-        toolCallId,
-        iteration,
+        ...accessFrame,
         args: prepared,
-        env,
         parkedNow: links.parkedNow,
         historyForCheckIn: links.historyForCheckIn,
       });

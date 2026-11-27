@@ -86,10 +86,12 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       }),
       ...(environment.toolDeclaringSkills.size > 0 && {
         toolDeclaringSkills: environment.toolDeclaringSkills,
-        ...(environment.resolveHiddenSkillIds !== undefined && {
+      }),
+      // The role view also governs the selection of skills that carry no tools.
+      ...(checkerGoverns(environment.permissionChecker, 'skill_read') &&
+        environment.resolveHiddenSkillIds !== undefined && {
           resolveHiddenSkillIds: environment.resolveHiddenSkillIds,
         }),
-      }),
       // The claim ledger accumulates only for an agent that declared a
       // contract to read it (9.61.0) — value-conditional, so every other
       // agent commits exactly what it always did.

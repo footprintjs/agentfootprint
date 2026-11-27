@@ -8,7 +8,7 @@
  *                     `'skill_read'`, is byte-identical to today
  *   P3 Scenario     — a role sees a filtered catalog; the other role sees the
  *                     rest; activating a hidden skill is refused with the
- *                     POLICY's own message and the skill never activates
+ *                     same safe schema message as an unregistered selection
  *   P4 Property     — a hidden skill is never NAMED anywhere in the menu — not
  *                     as reachable, not as refusable, and (9.84.0) not as the
  *                     CURSOR the model is standing in. Driven on both build
@@ -196,7 +196,7 @@ describe('a role sees its own catalog', () => {
     expect(policyFor('support').governs).toEqual(['skill_read']);
   });
 
-  it('activating a hidden skill is refused with the POLICY’s own message', async () => {
+  it('a role-invalid selection gets a generic notice without catalog details', async () => {
     const results: string[] = [];
     const agent = buildAgent({
       checker: policyFor('support'),
@@ -210,8 +210,8 @@ describe('a role sees its own catalog', () => {
       results.push(typeof r === 'string' ? r : JSON.stringify(r));
     });
     await agent.run({ message: 'go' });
-    expect(results.at(-1)).toContain('permission denied');
-    expect(results.at(-1)).toContain("Skill 'payroll' is not available to the 'support' role.");
+    expect(results.at(-1)).toContain('expected an offered skill id');
+    expect(results.at(-1)).not.toContain('payroll');
   });
 
   it('and the hidden skill never activates — its body stays out of the prompt', async () => {
