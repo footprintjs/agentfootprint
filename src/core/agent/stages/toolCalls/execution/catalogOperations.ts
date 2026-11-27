@@ -16,7 +16,9 @@ import type { Resolution } from '../contracts/callFacts.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { SKIP_STEP_TOOL_NAME } from '../../../../../injection-engine/skillSteps.js';
 import { parkedMemberIds, type MapEngagement } from '../../../../../maps/engagement/types.js';
-import { type SpokenIds, spoken, visibleToRole } from '../../../../../lib/spokenIds.js';
+import { type SpokenIds, spoken } from '../../../../../lib/spokenIds.js';
+import { checkerGoverns } from '../../../../../provider-contract/types.js';
+import { roleVisibleClaim, type SkillRoleView } from '../../../skillContext/toolVisibility.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import { SOURCES_NOTE } from '../helpers/sourceNote.js';
 
@@ -39,7 +41,8 @@ export function buildToolCatalogOperations(
     | 'findings'
     | 'argumentSources'
     | 'engagementPlan'
-    | 'toolDeclaringSkills'
+    | 'toolClaimants'
+    | 'permissionChecker'
   >,
   links: ToolCatalogOperationsLinks,
 ): ToolCatalogOperations {
@@ -185,19 +188,17 @@ export function buildToolCatalogOperations(
    * skill — the leak the `read_skill` refusals had just closed, reappearing one
    * sentence over because the roster read the dispatch map raw.
    *
-   * A tool is unnameable only when EVERY skill declaring it is hidden
-   * (`deps.toolDeclaringSkills`, the build-time owner of that fact). A tool two
-   * skills share is still named when either is visible — the same
+   * A name needs a visible registered claim when a skill owns it.
+   * A tool two skills share is still named when either is visible — the same
    * sole-owner rule the step hold-out uses, for the same reason: a shared name
    * is somebody's escape hatch. Names nobody declares from a skill — static
    * `.tool()` registrations, `read_skill`, `skip_step`, provider-delivered
    * tools — have no owning skill and are never filtered.
    *
-   * DISPATCH IS UNTOUCHED. `lookupTool` still resolves every name in the map:
-   * a narrowing may take a name out of a sentence, never out of the dispatch
-   * map. This filter governs only what the model is TOLD.
+   * Listing does not alter the dispatch map. Admission applies the
+   * same role policy to the resolved implementation before tool entry.
    */
-  const dispatchRoster = (scope: TypedScope<AgentState>): SpokenIds => {
+  const dispatchRoster = (scope: TypedScope<AgentState>, liveRole?: SkillRoleView): SpokenIds => {
     const names = [...links.registryByName.keys()];
     const seen = new Set(names);
     for (const t of links.externalToolProvider ? links.providerToolCache?.current ?? [] : []) {
@@ -205,10 +206,17 @@ export function buildToolCatalogOperations(
       seen.add(t.schema.name);
       names.push(t.schema.name);
     }
-    const hidden = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
-    if (hidden.size === 0) return { named: names, held: names.length > 0 };
-    const declaredBy = deps.toolDeclaringSkills;
-    return spoken(names, (name) => visibleToRole(declaredBy?.get(name), hidden));
+    const role = liveRole === undefined ? scope.hiddenSkillIds : liveRole.hiddenSkillIds;
+    if (
+      role?.length === 0 ||
+      (role === undefined && !checkerGoverns(deps.permissionChecker, 'skill_read'))
+    )
+      return { named: names, held: names.length > 0 };
+    const hidden = role === undefined ? undefined : new Set(role);
+    return spoken(names, (name) => {
+      const claims = deps.toolClaimants?.get(name);
+      return claims === undefined || claims.some((claim) => roleVisibleClaim(claim, hidden));
+    });
   };
 
   return {

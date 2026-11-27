@@ -69,7 +69,8 @@ export function buildResumedInvocation(
     | 'answerLayer'
     | 'currentRun'
     | 'isRunRetired'
-    | 'toolDeclaringSkills'
+    | 'toolClaimants'
+    | 'resolveHiddenSkillIds'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
@@ -99,7 +100,8 @@ export function buildResumedInvocation(
     heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
-    const resolved = resolveSkillAdmission(scope, toolName, candidate);
+    const admission = resolveSkillAdmission(scope, toolName, candidate, env.signal);
+    const { resolved, role } = admission instanceof Promise ? await admission : admission;
     const tool = resolved.tool;
     const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
     if (seen !== undefined)
@@ -119,7 +121,7 @@ export function buildResumedInvocation(
     // and a name whose offered party cannot answer on this resume.
     if (!tool) {
       return {
-        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope)),
+        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope, role)),
         error: true,
       };
     }
@@ -255,6 +257,7 @@ export function buildResumedInvocation(
             binding,
           },
           env.signal,
+          role,
         ),
       };
       // The last moment before the call runs, after every await that prepared

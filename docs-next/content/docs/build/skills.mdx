@@ -608,9 +608,12 @@ it cannot place) the agent's default `skillContext` is `'listed'`:
   sentence that names the skill and the `read_skill` call that loads it, and
   the tool does not run.
 
-In both strategies, tools owned only by skills hidden from the caller's role
-are omitted and denied without naming the hidden skills. A visible skill's
-shared tool remains eligible under the strategy's usual rules.
+In both strategies, the tools slot omits tools owned only by role-hidden
+skills. Direct, resumed and inner calls check the tool's registered skill
+claim. A hidden tool receives the same reply as an unknown tool. A visible
+owner keeps a shared implementation eligible. Resume checks the role again
+before entry. In classic mode the first tool list can stay in context after a
+role change; later dispatch still checks the role.
 
 <CodeFile path="examples/features/skills-listed.ts" region="listed" title="examples/features/skills-listed.ts (region: listed)" />
 

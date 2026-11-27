@@ -133,6 +133,10 @@ it.each(['declared', 'listed'] as const)(
         }),
       )
       .build();
+    const injectedTools: string[] = [];
+    agent.on('agentfootprint.context.injected', (event) => {
+      if (event.payload.slot === 'tools') injectedTools.push(JSON.stringify(event.payload));
+    });
     const recorder = recordRun(agent);
     try {
       await agent.run({ message: 'Summarize the schedule.' });
@@ -140,6 +144,9 @@ it.each(['declared', 'listed'] as const)(
       expect(
         offered[0]?.filter(({ name }) => name.endsWith('_marker')).map(({ name }) => name),
       ).toEqual(['baseline_marker', 'shared_marker', 'day_marker']);
+      expect(injectedTools.join(' ')).toContain('shared_marker');
+      expect(injectedTools.join(' ')).not.toContain('night_marker');
+      expect(injectedTools.join(' ')).not.toContain('Return the night_marker marker.');
       const { snapshot } = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
       expect(servedAt(snapshot, 1)?.tools.schemas).toEqual(offered[0]);
     } finally {

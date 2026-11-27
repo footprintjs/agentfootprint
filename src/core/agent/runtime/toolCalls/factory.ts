@@ -20,6 +20,7 @@ export interface ToolCallsEnvironment {
   readonly runner: object;
   readonly registryByName: ReturnType<typeof buildToolRegistry>['registryByName'];
   readonly toolDeclaringSkills: ReturnType<typeof buildToolRegistry>['toolDeclaringSkills'];
+  readonly resolveHiddenSkillIds?: (scope: object) => Promise<readonly string[]>;
   readonly listedScopedTools: ReturnType<typeof buildToolRegistry>['listedScopedTools'];
   readonly toolClaimants: ReturnType<typeof buildToolRegistry>['toolClaimants'];
   readonly scriptRecordArmed: boolean;
@@ -83,6 +84,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       }),
       ...(environment.toolDeclaringSkills.size > 0 && {
         toolDeclaringSkills: environment.toolDeclaringSkills,
+        ...(environment.resolveHiddenSkillIds !== undefined && {
+          resolveHiddenSkillIds: environment.resolveHiddenSkillIds,
+        }),
       }),
       // The claim ledger accumulates only for an agent that declared a
       // contract to read it (9.61.0) — value-conditional, so every other

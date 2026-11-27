@@ -19,6 +19,7 @@ import type { ToolObservationsOperations } from '../contracts/operations/observa
 import type { ActiveInjection } from '../../../../../injection-engine/types.js';
 import { checkerGoverns } from '../../../../../provider-contract/types.js';
 import { notLoadedFor } from '../../../skillContext/gate.js';
+import { resolveSkillToolForRole } from '../../toolResolver.js';
 
 interface CallStartLinks {
   readonly resolveTool: ReturnType<typeof buildToolResolver>;
@@ -32,11 +33,7 @@ interface CallStartLinks {
 export function buildCallStart(
   deps: Pick<
     ToolCallsHandlerDeps,
-    | 'findings'
-    | 'toolMiddleware'
-    | 'listedScopedTools'
-    | 'toolDeclaringSkills'
-    | 'permissionChecker'
+    'findings' | 'toolMiddleware' | 'listedScopedTools' | 'toolClaimants' | 'permissionChecker'
   >,
   links: CallStartLinks,
 ) {
@@ -60,24 +57,25 @@ export function buildCallStart(
       ...callOccurrenceField(tc.callOccurrenceKey),
     };
     const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
-    const served = resolveTool(tc.name);
-    // Only read role state for a declared skill call governed by a role policy.
-    // Listed calls retain their existing loaded-skill check and recorded reads.
+    const candidate = resolveTool(tc.name);
     const listed = deps.listedScopedTools;
-    const needsSkillGate =
-      listed !== undefined || (rolePolicy && served.party?.channel === 'skill');
-    const notLoaded = needsSkillGate
-      ? notLoadedFor(
-          listed,
-          deps.toolDeclaringSkills,
-          tc.name,
-          served.party,
-          listed === undefined
-            ? undefined
-            : (scope.activeInjections as readonly ActiveInjection[] | undefined),
-          scope.hiddenSkillIds as readonly string[] | undefined,
-        )
-      : undefined;
+    // Only a governed skill or the listed load gate reads the role view.
+    const governed = rolePolicy && candidate.party?.channel === 'skill';
+    const hidden = listed !== undefined || governed ? scope.hiddenSkillIds : undefined;
+    const served = governed
+      ? resolveSkillToolForRole(candidate, deps.toolClaimants?.get(tc.name) ?? [], hidden)
+      : candidate;
+    const notLoaded =
+      listed === undefined
+        ? undefined
+        : notLoadedFor(
+            listed,
+            undefined,
+            tc.name,
+            served.party,
+            scope.activeInjections as readonly ActiveInjection[] | undefined,
+            hidden,
+          );
     const resolved = notLoaded === undefined ? served : { refusal: notLoaded };
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`

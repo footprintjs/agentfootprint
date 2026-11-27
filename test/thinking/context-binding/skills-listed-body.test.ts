@@ -351,9 +351,7 @@ describe('P2-1: a tool every declaring skill of which is hidden never runs under
     const { error } = await settle(agent.run({ message: 'go' }));
     expect(error).toBeUndefined();
     expect(executed).toEqual([]);
-    expect(resultOf(bodies[1], 'toolu_1')).toBe(
-      "Tool 'wipe_all' did not run: the skill it belongs to was not loaded on that call.",
-    );
+    expect(resultOf(bodies[1], 'toolu_1')).toMatch(/^Unknown tool 'wipe_all' on that call\./);
     expect(JSON.stringify(bodies).toLowerCase()).not.toContain('vault');
     expect(JSON.stringify(events).toLowerCase()).not.toContain('vault');
   });

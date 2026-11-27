@@ -1,6 +1,7 @@
 import type { PendingDatasetLimits } from '../../../../honesty/libraryResultLimits.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
+import type { SkillRoleView } from '../../../../skillContext/toolVisibility.js';
 import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 import type { ToolExecutionContext } from '../../../../../../tools/tools.js';
 import type { ArtifactScope } from '../../../../../../artifacts/types.js';
@@ -30,6 +31,7 @@ export interface ToolContextOperations {
       readonly binding: OuterCallBinding;
     },
     signal?: AbortSignal,
+    liveRole?: SkillRoleView,
   ) => Pick<ToolExecutionContext, 'tools'>;
   readonly runScopeOf: (scope: TypedScope<AgentState>) => ArtifactScope;
 }

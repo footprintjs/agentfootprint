@@ -1,6 +1,6 @@
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
-import { visibleToRole } from '../../lib/spokenIds.js';
+import { roleVisibleClaim } from '../agent/skillContext/toolVisibility.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import { partyOfClaim, type WireCandidate } from './wireCollisions.js';
 
@@ -10,19 +10,15 @@ export function staticSkillCandidates(
   claimants: ReadonlyMap<string, readonly ToolClaim[]> | undefined,
   hiddenSkillIds: readonly string[] | undefined,
 ): WireCandidate[] {
-  const hidden = new Set(hiddenSkillIds);
+  const hidden = hiddenSkillIds === undefined ? undefined : new Set(hiddenSkillIds);
   return schemas.flatMap((schema): WireCandidate[] => {
     const claims = claimants?.get(schema.name);
     const first = claims?.[0];
     if (first === undefined) return [{ schema, party: { channel: 'registry' } }];
     const chosen =
-      hidden.size === 0
+      hidden?.size === 0
         ? first
-        : claims?.find(
-            ({ tool, channel, id }) =>
-              tool === first.tool &&
-              (channel !== 'skill' || (id !== undefined && visibleToRole([id], hidden))),
-          );
+        : claims?.find((claim) => claim.tool === first.tool && roleVisibleClaim(claim, hidden));
     return chosen === undefined ? [] : [{ schema, party: partyOfClaim(chosen), tool: chosen.tool }];
   });
 }
@@ -51,18 +47,9 @@ export type ReadSkillFor = (
 ) => LLMToolSchema | undefined;
 
 /**
- * The skills that declare a static-list name, or `undefined` when any other
- * party (a `.tool()`, the framework) claims it too: then it is not a skill's.
- */
-function skillOwners(claims: readonly ToolClaim[] | undefined): readonly string[] | undefined {
-  if (claims === undefined || claims.some((claim) => claim.channel !== 'skill')) return undefined;
-  return claims.flatMap((claim) => (claim.id === undefined ? [] : [claim.id]));
-}
-
-/**
  * The static list drops a tool when every declaring skill is hidden from
- * the caller's role in this iteration. Both skill-context strategies follow
- * the dispatch roster's sole-owner rule (`lib/spokenIds.ts` · `visibleToRole`).
+ * the caller's role in this iteration. Both strategies read the same
+ * registration facts as the dispatch roster.
  */
 export function composeSkillCatalog(
   tools: readonly LLMToolSchema[],
@@ -72,11 +59,12 @@ export function composeSkillCatalog(
   turnRoute: TurnRoute | undefined,
   toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>,
 ) {
-  if (toolClaimants !== undefined && resolvedHidden !== undefined && resolvedHidden.length > 0) {
-    const hidden = new Set(resolvedHidden);
-    tools = tools.filter((tool) =>
-      visibleToRole(skillOwners(toolClaimants.get(tool.name)), hidden),
-    );
+  if (toolClaimants !== undefined && resolvedHidden?.length !== 0) {
+    const hidden = resolvedHidden === undefined ? undefined : new Set(resolvedHidden);
+    tools = tools.filter((tool) => {
+      const claims = toolClaimants.get(tool.name);
+      return claims === undefined || claims.some((claim) => roleVisibleClaim(claim, hidden));
+    });
   }
   // The turn-start MENU (SG-C) — composed from the SAME verdict the record
   // carries (`scope.turnRoute`, threaded by the mount mappers), and only

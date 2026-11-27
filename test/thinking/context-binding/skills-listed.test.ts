@@ -515,9 +515,7 @@ describe('12. role-hidden skills under listed (security)', () => {
       results[mode] = { result: resultOf(bodies[1], 'toolu_1'), ran: [...executed] };
     }
     expect(results.listed!.ran).toEqual([]);
-    expect(results.listed!.result).toBe(
-      "Tool 'vault_wipe' did not run: the skill it belongs to was not loaded on that call.",
-    );
+    expect(results.listed!.result).toMatch(/^Unknown tool 'vault_wipe' on that call\./);
     expect(results.listed!.result!.toLowerCase()).not.toContain("'vault'");
     expect(results.declared).toEqual(results.listed);
   });
