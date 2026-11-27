@@ -70,7 +70,6 @@ export function buildCallStart(
         ? undefined
         : notLoadedFor(
             listed,
-            undefined,
             tc.name,
             served.party,
             scope.activeInjections as readonly ActiveInjection[] | undefined,

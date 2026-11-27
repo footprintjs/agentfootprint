@@ -1,4 +1,5 @@
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { skillVisibleToRole } from '../../../lib/spokenIds.js';
 import type { Tool } from '../../../tools/tools.js';
 
 /** A live role view can explicitly lack an answer. An absent override uses the stage view. */
@@ -11,10 +12,7 @@ export function roleVisibleClaim(
   claim: ToolClaim,
   hidden: ReadonlySet<string> | undefined,
 ): boolean {
-  return (
-    claim.channel !== 'skill' ||
-    (claim.id !== undefined && hidden !== undefined && !hidden.has(claim.id))
-  );
+  return claim.channel !== 'skill' || skillVisibleToRole(claim.id, hidden);
 }
 
 /** One role judgement for the registered implementation's actual claims. */

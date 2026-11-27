@@ -14,7 +14,7 @@
  */
 import type { ActiveInjection } from '../../../injection-engine/types.js';
 import type { ToolParty } from '../../../tools/toolParty.js';
-import { visibleToRole } from '../../../lib/spokenIds.js';
+import { skillVisibleToRole } from '../../../lib/spokenIds.js';
 
 /** What the model reads back for a refused early call. */
 export function notLoadedRefusal(toolName: string, skillId: string | undefined): string {
@@ -24,23 +24,9 @@ export function notLoadedRefusal(toolName: string, skillId: string | undefined):
         `on that call; a read_skill call with id '${skillId}' loads it.`;
 }
 
-/**
- * The refusal for this call, or `undefined` when it may run.
- *
- * Two rules, for a call served under a skill's claim:
- * - every skill that declares the name is HIDDEN from this caller's role
- *   (`declaring`, scoped or not; the one sole-owner rule,
- *   `lib/spokenIds.ts` · `visibleToRole`): refused, naming no skill;
- * - the name is a scoped tool (`listed`) and none of its skills is active:
- *   refused, naming a visible one.
- *
- * @example
- *   notLoadedFor(scoped, declaring, 'share_report', { channel: 'skill', id: 'smb-triage' }, [], []);
- *   // "Tool 'share_report' did not run: it belongs to skill 'smb-triage', …"
- */
+/** The listed-strategy load check, after the resolved implementation passed role admission. */
 export function notLoadedFor(
   listed: ReadonlyMap<string, readonly string[]> | undefined,
-  declaring: ReadonlyMap<string, readonly string[]> | undefined,
   toolName: string,
   party: ToolParty | undefined,
   active: readonly ActiveInjection[] | undefined,
@@ -48,14 +34,12 @@ export function notLoadedFor(
 ): string | undefined {
   if (party?.channel !== 'skill') return undefined;
   const hiddenIds = new Set(hidden ?? []);
-  if (hiddenIds.size > 0 && !visibleToRole(declaring?.get(toolName), hiddenIds))
-    return notLoadedRefusal(toolName, undefined);
   const owners = listed?.get(toolName);
   if (owners === undefined) return undefined;
   const loaded = new Set((active ?? []).filter((i) => i.flavor === 'skill').map((i) => i.id));
   if (owners.some((id) => loaded.has(id))) return undefined;
   return notLoadedRefusal(
     toolName,
-    owners.find((id) => !hiddenIds.has(id)),
+    owners.find((id) => skillVisibleToRole(id, hiddenIds)),
   );
 }
