@@ -9,6 +9,7 @@ export interface RecordedTurn {
   readonly snapshot: Readonly<Record<string, unknown>> | undefined;
   readonly events: readonly AgentfootprintEvent[];
   readonly terminal: TurnEnd;
+  readonly resumed?: true;
 }
 
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

@@ -17,6 +17,24 @@ const limits = causeLimits({
   impact: { maxNodes: 1, maxDepth: 0, maxEdges: 1, maxCalls: 1 },
 });
 
+/** Name a bounded set of mounts in the served tree without opening their data. */
+function unopenedSubflowGaps(nodes: Iterable<unknown>): string[] {
+  const names = new Set<string>();
+  let truncated = false;
+  for (const node of nodes) {
+    const name = captureOwn(node, 'subflowId');
+    if (typeof name !== 'string' || name.length === 0 || names.has(name)) continue;
+    if (name.length > 128 || names.size === 16) truncated = true;
+    else names.add(name);
+  }
+  if (names.size === 0 && !truncated) return [];
+  return [
+    'scope-boundary',
+    ...[...names].sort().map((name) => `unopened-subflow:${name}`),
+    ...(truncated ? ['unopened-subflows-truncated'] : []),
+  ];
+}
+
 /** Read backward evidence only from the Agent turn held by a host-issued handle. */
 export async function explainCompletedTurn(
   owner: object,
@@ -35,6 +53,7 @@ export async function explainCompletedTurn(
   const deadline = performance.now() + limits.timeoutMs;
   try {
     const { nodes } = indexCauseStages(captureOwn(snapshot, 'executionTree'));
+    missingChannels.push(...unopenedSubflowGaps(nodes.values()));
     const basis = projectCauseBasis(snapshot, nodes);
     if (basis === undefined) return unavailable('cause-not-collected');
     if (basis === 'truncated') return unavailable('cause-truncated');

@@ -39,7 +39,13 @@ interface OfferOptions {
 }
 
 export function completedTurnOffer({ observe, identity, access, active }: OfferOptions) {
-  return (agent: Agent, completed: HostedTurn, sessionId: string, principal: string): void => {
+  return (
+    agent: Agent,
+    completed: HostedTurn,
+    sessionId: string,
+    principal: string,
+    resumed?: true,
+  ): void => {
     const { evidence, conversation, recording } = completed;
     const runId = conversation?.runId;
     const scope = conversation?.identity;
@@ -93,7 +99,7 @@ export function completedTurnOffer({ observe, identity, access, active }: OfferO
           const common = {
             owner: agent,
             scope: { tenant, principal, conversation: conversationId },
-            origin: { runId, engineRunId, logAddress },
+            origin: { runId, engineRunId, logAddress, ...(resumed && { resumed }) },
             allowed: () => authorized(request()),
           };
           if (source === 'live')
@@ -116,11 +122,13 @@ export function completedTurnOffer({ observe, identity, access, active }: OfferO
                 const bound = await access.artifactsForRequest(input);
                 if (!bound.bound) return undefined;
                 const saved = await openSavedRecording(bound.artifacts, ref);
-                if (saved.status !== 'ready' || saved.runId === undefined) return undefined;
+                if (saved.status !== 'ready')
+                  return saved.reason === 'too-large' ? { ref, status: 'too-large' } : undefined;
+                if (saved.runId !== runId) return undefined;
                 const root = await saved.readRoot();
-                return root.status === 'ready'
-                  ? { ref, originRunId: saved.runId, recording: root.recording }
-                  : undefined;
+                if (root.status !== 'ready')
+                  return root.reason === 'too-large' ? { ref, status: 'too-large' } : undefined;
+                return { ref, originRunId: saved.runId, recording: root.recording };
               },
             },
           });

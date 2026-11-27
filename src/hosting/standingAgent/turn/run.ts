@@ -65,8 +65,8 @@ export function createTurnRunner({
     const runner = lane.agent;
     const captureEvidence =
       offerCompleted !== undefined && sessionId !== undefined && verified !== undefined;
-    const offerEvidence = (completed: HostedTurn) => {
-      if (captureEvidence) offerCompleted(runner, completed, sessionId, verified.userId);
+    const offerEvidence = (completed: HostedTurn, resumed?: true) => {
+      if (captureEvidence) offerCompleted(runner, completed, sessionId, verified.userId, resumed);
     };
     let stopProtocolEvents: (() => void) | undefined;
     // The writer only ever writes for the run it is inside; an anonymous
@@ -325,7 +325,7 @@ export function createTurnRunner({
             offer,
             paused,
             request,
-            offerEvidence,
+            (completed) => offerEvidence(completed, true),
           );
         } catch (err) {
           // Settle the stored question before reporting a resume or write failure.

@@ -30,14 +30,25 @@ export async function readCompletedTurnCoverage(
   const facts = [];
   const gaps = new Set<string>();
   const coverage = coverageOfRecordedTurn(turn);
-  if (coverage === undefined) gaps.add('coverage-not-collected');
-  else facts.push({ kind: 'declared-coverage', calls: coverage });
+  if (coverage === undefined) {
+    gaps.add('coverage-not-collected');
+    if (turn.resumed) gaps.add('resumed-turn-coverage-incomplete');
+  } else {
+    facts.push({ kind: 'declared-coverage', calls: coverage.calls });
+  }
   const verdict = verdictOfRecordedTurn(turn);
   if (verdict.status === 'not-checked') gaps.add('evidence-verdict-not-collected');
   else facts.push({ kind: 'evidence-verdict', status: verdict.status });
 
   const assessment = assessmentDataFrom(terminal.payload?.answerAssessment);
   if (assessment !== undefined) {
+    if (
+      assessment.reasons.includes('coverage-gap') &&
+      !coverage?.calls.some(({ notChecked, cannotCover }) => notChecked > 0 || cannotCover > 0)
+    )
+      gaps.add('coverage-gap');
+    if (assessment.reasons.includes('declared-absent') && !coverage?.declaredAbsence)
+      gaps.add('declared-absent');
     const view = recordingView({ snapshot, events }, { runId });
     const reasons = assessment.reasons.filter((reason) => omissionReasons.has(reason));
     // Other withheld channels must not suppress a positively witnessed reason.

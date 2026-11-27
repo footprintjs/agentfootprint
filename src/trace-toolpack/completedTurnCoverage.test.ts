@@ -104,3 +104,47 @@ it('turns a compact reason without a committed witness into a gap and keeps an i
     gaps: ['evidence-verdict-not-collected', 'placed-unread', 'omission-coverage-incomplete'],
   });
 });
+
+it('reports a resumed turn with unreadable coverage as gaps without a coverage fact', async () => {
+  const handle = issueCompletedTurn({
+    owner,
+    scope: { tenant: 'tenant', principal: 'operator', conversation: 'session' },
+    origin: { runId, engineRunId: runId, logAddress, resumed: true },
+    allowed: () => true,
+    source: {
+      kind: 'live',
+      recording: {
+        events: [
+          {
+            ...terminal,
+            payload: {
+              ...terminal.payload,
+              answerAssessment: {
+                assessment: 'unknown',
+                standing: 'not-sure',
+                reasons: ['coverage-gap', 'declared-absent'],
+                checked: [],
+              },
+            },
+          },
+        ],
+        snapshot: {
+          runId,
+          logAddress,
+          initialState: { turnNumber: 7, coverageDeclared: [{ checked: ['source'] }] },
+          sharedState: { turnNumber: 7, coverageDeclared: [] },
+        },
+      },
+    },
+  });
+  const result = await readCompletedTurnCoverage(owner, handle);
+  expect(result).toMatchObject({
+    facts: [],
+    gaps: expect.arrayContaining([
+      'coverage-not-collected',
+      'resumed-turn-coverage-incomplete',
+      'coverage-gap',
+      'declared-absent',
+    ]),
+  });
+});

@@ -11,10 +11,12 @@ type CompletedTurnAdmission =
 export function admitCompletedTurn(
   source: TurnEvidenceSource,
   runId: string,
+  resumed?: true,
 ): CompletedTurnAdmission {
   const { events } = source;
   if (!Array.isArray(events)) return { status: 'turn-unavailable' };
   if (events.length > MAX_COMPLETED_TURN_EVENTS) return { status: 'coverage-work-limit' };
   const turn = recordedTurn({ events, snapshot: source.snapshot }, runId);
-  return turn?.snapshot === undefined ? { status: 'turn-unavailable' } : { status: 'ready', turn };
+  if (turn?.snapshot === undefined) return { status: 'turn-unavailable' };
+  return { status: 'ready', turn: resumed ? { ...turn, resumed } : turn };
 }

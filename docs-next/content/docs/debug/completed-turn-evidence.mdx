@@ -12,3 +12,7 @@ Use `agent.whatWasNotRead(turn)` for recorded coverage and omissions. For an exi
 `forRequest` uses the live capture by default. Pass `'saved'` to redeem the exact recording filed for the turn. The host checks the caller again when the handle is used. A paused turn, a lost recording, or access that the host no longer grants cannot supply evidence.
 
 An empty declared-coverage list says the admitted turn recorded no coverage declarations. A gap says the reader could not establish coverage. Missing same-value or skipped-writer evidence produces its own gap.
+
+For an authorized saved turn that exceeds the reader's recording limit, both readers return a `recording-too-large` gap. For resumed turns, coverage includes verified declarations from before the pause. If the reader cannot establish that coverage, it reports `resumed-turn-coverage-incomplete`.
+
+`why` reads the root scope. When child scopes are present, it reports `scope-boundary` and names unopened subflows so callers can see where the evidence stops.

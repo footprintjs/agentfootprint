@@ -40,7 +40,7 @@ describe('bounded completed-turn admission', () => {
     if (result.status !== 'ready') throw new Error(result.status);
     expect(result.turn.terminal).toBe(answer);
     expect(result.turn.events).toEqual([answer]);
-    expect(coverageOfRecordedTurn(result.turn)).toEqual([]);
+    expect(coverageOfRecordedTurn(result.turn)).toEqual({ calls: [], declaredAbsence: false });
     expect(verdictOfRecordedTurn(result.turn)).toEqual({ status: 'not-checked' });
   });
 

@@ -26,6 +26,7 @@ interface TurnScope {
 interface CompletedTurnOrigin {
   readonly runId: string;
   readonly engineRunId: string;
+  readonly resumed?: true;
   readonly logAddress: LogAddress;
 }
 
@@ -40,6 +41,7 @@ type Source =
             readonly originRunId: string;
             readonly recording: TurnEvidenceSource;
           }
+        | { readonly ref: string; readonly status: 'too-large' }
         | undefined
       >;
     };
@@ -85,16 +87,19 @@ function sameLog(candidate: unknown, expected: LogAddress): boolean {
 
 type TurnRead =
   | { readonly status: 'ready'; readonly turn: RecordedTurn }
-  | { readonly status: 'turn-unavailable' | 'coverage-work-limit' };
+  | { readonly status: 'turn-unavailable' | 'coverage-work-limit' | 'recording-too-large' };
 
 const unavailable = Object.freeze({ status: 'turn-unavailable' } as const);
 
-async function redeemExact(source: Source, runId: string): Promise<TurnEvidenceSource | undefined> {
+async function redeemExact(
+  source: Source,
+  runId: string,
+): Promise<TurnEvidenceSource | 'too-large' | undefined> {
   if (source.kind === 'live') return source.recording;
   const redeemed = await source.redeem(source.receiptRef);
-  return redeemed?.ref === source.receiptRef && redeemed.originRunId === runId
-    ? redeemed.recording
-    : undefined;
+  if (redeemed?.ref !== source.receiptRef) return undefined;
+  if ('status' in redeemed) return redeemed.status;
+  return redeemed.originRunId === runId ? redeemed.recording : undefined;
 }
 
 /** @internal The only reader of a held turn. Refusals carry no facts about the turn. */
@@ -115,6 +120,7 @@ export async function readCompletedTurn(
     if (!(await allowed(scope))) return unavailable;
     const recording = await redeemExact(source, origin.runId);
     if (recording === undefined || !(await allowed(scope))) return unavailable;
+    if (recording === 'too-large') return { status: 'recording-too-large' };
     const { snapshot } = recording;
     if (
       !isRecord(snapshot) ||
@@ -122,7 +128,7 @@ export async function readCompletedTurn(
       !sameLog(snapshot.logAddress, origin.logAddress)
     )
       return unavailable;
-    return admitCompletedTurn({ events: recording.events, snapshot }, origin.runId);
+    return admitCompletedTurn({ events: recording.events, snapshot }, origin.runId, origin.resumed);
   } catch {
     return unavailable;
   }
