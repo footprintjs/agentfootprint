@@ -63,8 +63,10 @@ const PURE_CORE = [
   `${IE}/evaluator.ts`,
   `${IE}/hostContract.ts`,
   `${IE}/intentScorer.ts`,
+  `${IE}/projectActiveInjection.ts`,
   `${IE}/promptTemplate.ts`,
   `${IE}/routingPolicy.ts`,
+  `${IE}/skillBodyEvidence.ts`,
   `${IE}/skillContext.ts`,
   `${IE}/skillContract.ts`,
   `${IE}/skillEntryEvidence.ts`,
@@ -107,6 +109,18 @@ const PURE_CORE = [
  * loop would hand the loop to the graph through the back door.
  */
 const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
+  [
+    'src/lib/callOccurrence.ts',
+    'The detached call address reader verifies that a skill body belongs to a recorded occurrence. No imports.',
+  ],
+  [
+    'src/lib/sha256.ts',
+    'A provider-neutral body digest over a string. No platform or runtime imports.',
+  ],
+  [
+    'src/lib/toolSkillBodyRecord.ts',
+    'The detached skill-body origin shared with the message record. One no-import type.',
+  ],
   [
     'src/semantics/toolOutcome.ts',
     '`ToolResultStatus` / `TOOL_RESULT_STATUSES` — the outcome words a route edge keys on ' +
@@ -229,7 +243,7 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   ],
   [
     'src/provider-contract/toolResultRecord.ts',
-    'The tool result fields of the provider port. One interface with no imports or runtime code.',
+    'The tool result fields of the provider port. Its only import is the pure skill-body record type.',
   ],
   [
     'src/provider-contract/wireRole.ts',

@@ -18,7 +18,7 @@
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
-import type { ToolSkillBodyRecord } from '../provider-contract/toolResultRecord.js';
+import type { ToolSkillBodyRecord } from '../lib/toolSkillBodyRecord.js';
 import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
 import type { ToolResultStatus } from '../semantics/toolOutcome.js';
 import { isSaidByPerson } from '../lib/saidByPerson.js';

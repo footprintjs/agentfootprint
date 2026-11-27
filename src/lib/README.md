@@ -29,6 +29,9 @@ naming `events/types.ts` · `ContextSlot`, is erased and is not an edge;
 `npm run check:layering` refuses a run-time import that would leave the set.
 Every subfolder here has its own role and its own README.
 
+`toolSkillBodyRecord.ts` is the detached result-body origin and surviving span
+shared by the provider message and the framework-neutral skill graph.
+
 `cosine.ts` is the zero-import vector similarity metric shared by memory stores, influence scoring, context bisection and injection scoring. Its own test lives beside it.
 
 `servedJson.ts` owns the boundary between a result's leading JSON and the

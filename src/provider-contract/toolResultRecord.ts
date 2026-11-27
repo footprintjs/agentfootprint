@@ -1,3 +1,5 @@
+import type { ToolSkillBodyRecord } from '../lib/toolSkillBodyRecord.js';
+
 /** Measured printed output retained when a native code runner clips either stream. */
 export interface ToolOutputCounts {
   readonly kept: number;
@@ -23,13 +25,11 @@ export interface DeclaredToolFailureRecord {
   readonly tryInstead?: string | { readonly omitted: true };
 }
 
-/** A library read_skill body tied to its landed call occurrence. */
-export interface ToolSkillBodyRecord {
-  readonly skillId: string;
-  readonly digest: string;
-  /** A surviving range of the original body in the delivered result. */
-  readonly span?: { readonly start: number; readonly length: number };
-}
+/**
+ * The skill graph reads the same detached body record as message history.
+ * Its shape belongs to the neutral leaf, and request assembly strips it.
+ * A surviving span is independent of the recorded source identity.
+ */
 
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {

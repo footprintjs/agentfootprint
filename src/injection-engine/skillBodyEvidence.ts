@@ -1,6 +1,6 @@
 import { readCallOccurrenceKey } from '../lib/callOccurrence.js';
 import { sha256Hex } from '../lib/sha256.js';
-import type { ToolSkillBodyRecord } from '../provider-contract/toolResultRecord.js';
+import type { ToolSkillBodyRecord } from '../lib/toolSkillBodyRecord.js';
 
 /** The private record shape shared by the engine and the agent's history readers. */
 export interface SkillBodyHistoryMessage {
