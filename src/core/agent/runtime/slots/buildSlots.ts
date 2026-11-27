@@ -1,5 +1,6 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { readDisplayName } from '../../../../lib/displayName.js';
+import { skillBodiesOf } from '../../skillContext/bodies.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import {
   buildSystemPromptSlot,
@@ -44,6 +45,7 @@ export function buildSlots(
     | 'integrityDanglingPresent'
     | 'native'
     | 'readSkillOfferFor'
+    | 'governsSkillVisibility'
   >,
   environment: SlotsEnvironment,
 ) {
@@ -68,9 +70,20 @@ export function buildSlots(
           reason: 'Agent.system()',
         }),
     ...(budget?.systemPrompt !== undefined && { budgetCap: budget.systemPrompt }),
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      listedSkillIds: new Set(
+        this.configuration.injections
+          .filter((injection) => injection.flavor === 'skill')
+          .map((injection) => injection.id),
+      ),
+    }),
   });
   const messagesSubflow = buildMessagesSlot({
     ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
+    // The `listed` skill context: a body result is credited to its skill.
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      skillBodies: skillBodiesOf(this.configuration.injections),
+    }),
   });
   // Every reader binds the same native component's private catalog.
   const resolverForValues = (values: AgentRunValues) =>
@@ -192,6 +205,7 @@ export function buildSlots(
   }
   const toolsSubflow = buildToolsSlot({
     tools: environment.toolSchemas,
+    unrestrictedSkills: !this.governsSkillVisibility(),
     ...(toolOwners.size > 0 && { toolOwners }),
     // The kernel's map cards, for the compose-seam integrity backstop.
     ...(this.configuration.mapsPlan !== undefined && {

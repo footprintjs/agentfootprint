@@ -116,12 +116,14 @@ export class PendingQuestionError extends Error {
 export class ResumeIdentityConflictError extends Error {
   readonly code = 'ERR_SESSION_OWNERSHIP_CONFLICT' as const;
 
-  constructor(operation: 'resume' | 'followUp' | 'session' = 'resume') {
+  constructor(operation: 'resume' | 'resumeOnError' | 'followUp' | 'session' = 'resume') {
     super(
       operation === 'session'
         ? 'Agent.resume: the supplied sessionId must match the paused transport session. No state moved.'
         : operation === 'followUp'
         ? 'Agent.followUp: the supplied identity differs from the selected conversation. Use a separate instance or start an explicit new conversation. No state moved.'
+        : operation === 'resumeOnError'
+        ? 'Agent.resumeOnError: the supplied identity differs from the stored citation request. Retry with its original identity or start a new conversation.'
         : 'Agent.resume: the supplied identity differs from the paused conversation. Resume with its original identity or start a new conversation. Neither identity is included in this message.',
     );
     this.name = 'ResumeIdentityConflictError';

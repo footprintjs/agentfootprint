@@ -24,17 +24,18 @@
  * ```
  *
  * The time is written as finely as either end needs it (minutes, seconds, or
- * milliseconds), never finer. When the two ends sit on different offsets (the
- * span crosses a DST change) each end names its own; otherwise the offset is
- * named once.
+ * milliseconds). Confirmed cutoffs can request exact submillisecond digits. A span
+ * crossing a DST change names the offset at each end; otherwise the offset
+ * is named once.
  *
  * ## With a locale (the reader's, § 11)
  *
  * A {@link Presentation} with a `locale` — the armed reader's, the language
  * the person wrote in — is rendered through `Intl.DateTimeFormat` in that
  * locale, at the same precision, the zone named by its short name
- * (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT` in `en-US`). The words are the
- * runtime's ICU data; the instants behind the label are the record.
+ * (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT` in `en-US`). When an exact span needs
+ * submillisecond digits, the locale-neutral spelling preserves them in the
+ * same zone. The instants behind the label are the record.
  *
  * ## The said end (§ 3.3)
  *
@@ -69,13 +70,17 @@ export interface Presentation {
   readonly zone: ZoneName;
   /** A BCP 47 language tag (`'en-US'`). Rendered through `Intl`; the zone is always named. */
   readonly locale?: string;
+  readonly viewerZone?: ZoneName;
+  /** Metadata was present but could not be read; no zone is guessed. */
+  readonly viewerDisplayUnavailable?: true;
 }
 
 /** How finely a person said a time (time design § 3.2). */
 export type Grain = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
 
 /** How finely a label is written. */
-type Precision = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'millisecond';
+type LocalePrecision = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'millisecond';
+type Precision = LocalePrecision | 'nanosecond';
 
 const ORDER: readonly Precision[] = [
   'year',
@@ -88,7 +93,7 @@ const ORDER: readonly Precision[] = [
 ];
 
 /** A week is shown as its days: a calendar week has no one ISO-like spelling people share. */
-const PRECISION_OF: Readonly<Record<Grain, Precision>> = {
+const PRECISION_OF: Readonly<Record<Grain, LocalePrecision>> = {
   second: 'second',
   minute: 'minute',
   hour: 'hour',
@@ -100,12 +105,12 @@ const PRECISION_OF: Readonly<Record<Grain, Precision>> = {
 
 const pad = (n: number, width = 2): string => String(n).padStart(width, '0');
 
-function finer(a: Precision, b: Precision): Precision {
+function finer(a: LocalePrecision, b: LocalePrecision): LocalePrecision {
   return ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b;
 }
 
 /** The coarsest precision that writes this wall time exactly (never coarser than minutes). */
-function naturalPrecision(wall: WallTime): Precision {
+function naturalPrecision(wall: WallTime): LocalePrecision {
   if ((wall.millisecond ?? 0) !== 0) return 'millisecond';
   if ((wall.second ?? 0) !== 0) return 'second';
   return 'minute';
@@ -119,7 +124,8 @@ function spellDate(wall: WallTime, precision: Precision): string {
 }
 
 /** The time of day at `precision`, or `''` for a date-only precision. */
-function spellClock(wall: WallTime, precision: Precision): string {
+function spellClock(point: Point, precision: Precision): string {
+  const { wall } = point;
   switch (precision) {
     case 'year':
     case 'month':
@@ -136,6 +142,10 @@ function spellClock(wall: WallTime, precision: Precision): string {
         wall.millisecond ?? 0,
         3,
       )}`;
+    case 'nanosecond': {
+      const fraction = (wall.millisecond ?? 0) * 1_000_000 + point.nanos;
+      return `${pad(wall.hour)}:${pad(wall.minute)}:${pad(wall.second ?? 0)}.${pad(fraction, 9)}`;
+    }
   }
 }
 
@@ -156,10 +166,15 @@ const isUtcName = (zone: ZoneName): boolean => zone === 'UTC' || zone === 'Etc/U
 interface Point {
   readonly wall: WallTime;
   readonly offset: string;
+  readonly nanos: number;
 }
 
 function pointOf(instant: ParsedInstant, zone: ZoneName): Point {
-  return { wall: wallAt(zone, instant.ms), offset: spellOffset(offsetAt(zone, instant.ms)) };
+  return {
+    wall: wallAt(zone, instant.ms),
+    offset: spellOffset(offsetAt(zone, instant.ms)),
+    nanos: instant.nanos,
+  };
 }
 
 function assertZone(presentation: Presentation, caller: string): ZoneName {
@@ -172,7 +187,7 @@ function assertZone(presentation: Presentation, caller: string): ZoneName {
 }
 
 /** The fields `Intl` writes at each precision — the date always, the zone always named. */
-const LOCALE_FIELDS: Readonly<Record<Precision, Intl.DateTimeFormatOptions>> = {
+const LOCALE_FIELDS: Readonly<Record<LocalePrecision, Intl.DateTimeFormatOptions>> = {
   year: { year: 'numeric' },
   month: { year: 'numeric', month: 'short' },
   day: { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' },
@@ -217,7 +232,7 @@ const LOCALE_FIELDS: Readonly<Record<Precision, Intl.DateTimeFormatOptions>> = {
 function localeFormatter(
   locale: string,
   zone: ZoneName,
-  precision: Precision,
+  precision: LocalePrecision,
   caller: string,
 ): Intl.DateTimeFormat {
   try {
@@ -237,7 +252,7 @@ function renderLocale(
   bMs: number,
   presentation: Presentation,
   zone: ZoneName,
-  precision: Precision,
+  precision: LocalePrecision,
   caller: string,
 ): string {
   const formatter = localeFormatter(presentation.locale as string, zone, precision, caller);
@@ -257,7 +272,7 @@ function readInstant(value: unknown, caller: string): ParsedInstant {
 }
 
 function spellPoint(point: Point, precision: Precision): string {
-  const clock = spellClock(point.wall, precision);
+  const clock = spellClock(point, precision);
   const date = spellDate(point.wall, precision);
   return clock === '' ? date : `${date} ${clock}`;
 }
@@ -275,8 +290,8 @@ function render(a: Point, b: Point, zone: ZoneName, precision: Precision): strin
   const tag = zoneTag(zone, a.offset);
   if (left === right) return `${left} ${tag}`;
   const sameDate = spellDate(a.wall, precision) === spellDate(b.wall, precision);
-  const clockA = spellClock(a.wall, precision);
-  const clockB = spellClock(b.wall, precision);
+  const clockA = spellClock(a, precision);
+  const clockB = spellClock(b, precision);
   if (sameDate && clockA !== '' && clockB !== '') {
     return `${spellDate(a.wall, precision)} ${clockA}–${clockB} ${tag}`;
   }
@@ -287,7 +302,7 @@ function render(a: Point, b: Point, zone: ZoneName, precision: Precision): strin
  * One instant for a person: its wall time in the presentation zone, written
  * as finely as it needs (never coarser than minutes), and the zone named.
  */
-export function presentInstant(value: InstantText, presentation: Presentation): string {
+function presentInstantOne(value: InstantText, presentation: Presentation): string {
   const zone = assertZone(presentation, 'presentInstant');
   const instant = readInstant(value, 'presentInstant');
   const point = pointOf(instant, zone);
@@ -303,16 +318,21 @@ export function presentInstant(value: InstantText, presentation: Presentation): 
  * person, each shown as declared (no end moved), in the presentation zone.
  * Accepts the lenient profile: a period a result declares.
  */
-export function presentSpan(
+function presentSpanOne(
   from: InstantText,
   to: InstantText,
   presentation: Presentation,
+  mode: 'display' | 'exact' = 'display',
 ): string {
   const zone = assertZone(presentation, 'presentSpan');
   const fromInstant = readInstant(from, 'presentSpan');
   const toInstant = readInstant(to, 'presentSpan');
   const a = pointOf(fromInstant, zone);
   const b = pointOf(toInstant, zone);
+  // Intl only represents milliseconds. Use the exact zoned spelling for a finer cutoff.
+  if (mode === 'exact' && (a.nanos !== 0 || b.nanos !== 0)) {
+    return render(a, b, zone, 'nanosecond');
+  }
   const precision = finer(naturalPrecision(a.wall), naturalPrecision(b.wall));
   if (presentation.locale !== undefined && fromInstant.ms <= toInstant.ms) {
     return renderLocale(fromInstant.ms, toInstant.ms, presentation, zone, precision, 'presentSpan');
@@ -325,7 +345,7 @@ export function presentSpan(
  * (`semantics/coverage/period.ts` · `periodLine` for a `Period:` line, and
  * `periodCheckLine` for a result check's ranges). The coverage module is on every
  * agent's graph and this one loads only under `.time()`, so it is HANDED the
- * renderers (`agent/stages/prepareFinal.ts` loads this module through
+ * renderers (`agent/stages/prepareFinal/presentation.ts` loads this module through
  * `import()`) and never imports them — the optional-family law of docs-next's
  * site budget.
  */
@@ -351,7 +371,7 @@ export function bindPresentation(presentation: Presentation): BoundPresentation 
  * `'day'` range `[9 Oct, 10 Oct)` shows `2026-10-09`. Without a grain (an
  * exact range) both ends are shown as they are.
  */
-export function presentRange(range: TimeRange, presentation: Presentation, grain?: Grain): string {
+function presentRangeOne(range: TimeRange, presentation: Presentation, grain?: Grain): string {
   const zone = assertZone(presentation, 'presentRange');
   const from = readInstant(range?.from, 'presentRange');
   const to = readInstant(range?.to, 'presentRange');
@@ -377,6 +397,51 @@ export function presentRange(range: TimeRange, presentation: Presentation, grain
   if (presentation.locale !== undefined) {
     return renderLocale(from.ms, lastMs, presentation, zone, precision, 'presentRange');
   }
-  const b = { wall: wallAt(zone, lastMs), offset: spellOffset(offsetAt(zone, lastMs)) };
+  const b = pointOf({ ...to, ms: lastMs, nanos: 0 }, zone);
   return render(a, b, zone, precision);
+}
+
+function withViewer(
+  primary: string,
+  presentation: Presentation,
+  renderViewer: (viewer: Presentation) => string,
+): string {
+  if (presentation.viewerDisplayUnavailable) return `${primary} (viewer display unavailable)`;
+  if (presentation.viewerZone === undefined) return primary;
+  const viewer = {
+    zone: presentation.viewerZone,
+    ...(presentation.locale !== undefined && { locale: presentation.locale }),
+  };
+  return `${primary} (viewer display: ${renderViewer(viewer)})`;
+}
+
+/** Render the same instant in its interpretation zone and optional viewer display. */
+export function presentInstant(value: InstantText, presentation: Presentation): string {
+  return withViewer(presentInstantOne(value, presentation), presentation, (viewer) =>
+    presentInstantOne(value, viewer),
+  );
+}
+
+/** Two unchanged declared endpoints, with optional viewer presentation. */
+export function presentSpan(
+  from: InstantText,
+  to: InstantText,
+  presentation: Presentation,
+  mode: 'display' | 'exact' = 'display',
+): string {
+  return withViewer(presentSpanOne(from, to, presentation, mode), presentation, (viewer) =>
+    presentSpanOne(from, to, viewer, mode),
+  );
+}
+
+/** A legacy grain is never reinterpreted in the viewer's calendar. */
+export function presentRange(range: TimeRange, presentation: Presentation, grain?: Grain): string {
+  return withViewer(
+    presentRangeOne(range, presentation, grain),
+    presentation,
+    (viewer) =>
+      `${presentSpanOne(range.from, range.to, viewer, 'exact')}${
+        grain === undefined ? '' : ' (end excluded)'
+      }`,
+  );
 }

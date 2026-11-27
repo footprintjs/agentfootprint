@@ -9,6 +9,7 @@
 
 import type { RuntimeSnapshot } from 'footprintjs';
 import type { ControlDepLookup } from 'foottrace';
+import type { SourceLinkPolicy } from 'foottrace/cause';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { InnerRunLookup } from '../core/innerRunRecords.js';
@@ -45,6 +46,8 @@ export interface TraceToolpackArtifacts {
   readonly snapshot: RuntimeSnapshot;
   /** Optional host-authorized graph for this bag; no storage locations or caller scopes come from model arguments. */
   readonly cause?: TraceCauseArtifacts;
+  /** Host grant for exact source-link locators in this scope. Defaults to closed. */
+  readonly sourceLinkPolicy?: SourceLinkPolicy;
   readonly controlDeps?: ControlDepLookup;
   readonly narrative?: readonly string[];
   readonly events?: readonly AgentfootprintEvent[];

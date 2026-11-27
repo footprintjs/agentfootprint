@@ -1080,6 +1080,7 @@ describe('SECURITY — library text is never evidence, and no value passes a too
   });
 
   it('a quote is free text: when the view hides ANOTHER argument, every quote on the call reads REDACTED and the ask shows none', async () => {
+    const HIDDEN_ID = /(?<!\d)7731(?!\d)/;
     // The view hides `service` only; the quote names `window` — and holds the hidden service.
     const hiding = askingSearch([], {
       [SHOWN_ARGS]: (args: Record<string, unknown>) =>
@@ -1103,7 +1104,10 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       .build();
     const paused = await agent.run({ message: 'errors on checkout-7731?' });
     if (!isInputPause(paused)) throw new Error('expected the reading to be asked about');
-    expect(JSON.stringify(paused.awaitingInput.context)).not.toContain('7731');
+    // The hidden id as a number of its own, not as four digits inside a longer one: the record
+    // also holds numeric hash keys (`callOccurrenceKey`), and one of them contained `7731` by
+    // chance on a hosted run (2662527731), which is not a leak.
+    expect(JSON.stringify(paused.awaitingInput.context)).not.toMatch(HIDDEN_ID);
     const row = argumentRows(agent)[0]!;
     // The verdict is still filed: a reading, asked. Only the free text is withheld.
     expect(row).toMatchObject({
@@ -1113,7 +1117,7 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       quote: 'REDACTED',
       reading: true,
     });
-    expect(JSON.stringify(agent.findings())).not.toContain('7731');
+    expect(JSON.stringify(agent.findings())).not.toMatch(HIDDEN_ID);
     // The same quote beside a call whose view hid nothing is kept (the neighbouring test's tool).
     const plain = scripted([
       batch({

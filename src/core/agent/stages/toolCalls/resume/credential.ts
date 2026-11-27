@@ -1,3 +1,5 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
@@ -17,6 +19,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -173,7 +176,8 @@ export function buildResumeCredential(
         scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let consentResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
-      const consentToolChars = consentResultStr.length;
+      const servedToolText = consentResultStr;
+      const consentToolChars = servedToolText.length;
       if (deps.negativeClaimsArmed === true)
         consentResultStr = serveNegativeHandle(
           scope,
@@ -214,32 +218,47 @@ export function buildResumeCredential(
         links.emitTransitionConflict(scope, iteration, consentTransition);
       }
       // The batch settlement (9.113.0) — the ask path's twin.
+      const resultReplaced =
+        dispatched.halt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, consentPlaced.modelResult);
       const consentSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: consentResultStr,
-            ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
-            toolCallId,
-            toolName,
-            ...occurrence,
-            ...(deps.findings === true &&
-              dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
-            ...toolResultExecutionField(
-              deps.answerLayer,
-              scriptSeen.toolResultExecution,
-              !consentSettled.clean ||
-                dispatched.halt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, consentPlaced.modelResult),
-            ),
-            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
-            ...innerCallsFieldOf(scope, toolCallId, iteration),
-            // A blocked credential ran nothing → 'refused'; read by the check-in trail.
-            ...outcomeField(consentSettled),
-            ...reportedStatusField(consentSettled),
-          },
+          admitDeclaredToolFailure(
+            scope,
+            {
+              role: 'tool',
+              content: consentResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
+              toolCallId,
+              toolName,
+              ...occurrence,
+              ...(deps.findings === true &&
+                dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+              ...toolResultExecutionField(
+                deps.answerLayer,
+                scriptSeen.toolResultExecution,
+                !consentSettled.clean || resultReplaced,
+                {
+                  scope,
+                  counts: consentEnvelope?.outputCounts,
+                  disposition: toolResultDisposition,
+                },
+              ),
+              ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+              ...toolFailureCategoryField(
+                scriptSeen,
+                consentSettled,
+                resultReplaced || toolResultDisposition !== undefined,
+              ),
+              ...innerCallsFieldOf(scope, toolCallId, iteration),
+              // A blocked credential ran nothing → 'refused'; read by the check-in trail.
+              ...outcomeField(consentSettled),
+              ...reportedStatusField(consentSettled),
+            },
+            consentEnvelope?.declaredFailure,
+          ),
         ],
         { toolName, toolCallId, ...occurrence },
       );
@@ -275,6 +294,19 @@ export function buildResumeCredential(
         entered: dispatched.executed === true,
         seen: scriptSeen,
       });
+      recordServedLimits(
+        scope,
+        { toolName, toolCallId, ...occurrence },
+        scriptSeen.toolResultExecution === 'returned' &&
+          consentSettled.ran &&
+          consentSettled.clean &&
+          !dispatched.halt &&
+          !sourceHalt,
+        toolResultDisposition,
+        consentCapped.cut,
+        scriptSeen,
+        servedToolText,
+      );
       links.emitToolEnd(
         scope,
         toolName,

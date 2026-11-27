@@ -76,6 +76,7 @@ import {
   memberAddresses,
   restoreAskAddresses,
 } from '../arguments/askAddresses.js';
+import { timeAskForProof } from './provenWindowAsk.js';
 import { withFills } from '../arguments/dispatch.js';
 import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
 import { privateFieldsInForce, markPrivateFields } from '../../../redaction/runRedaction.js';
@@ -95,36 +96,22 @@ import {
   type PartialOrigin,
 } from '../arguments/partialWindow.js';
 import { declaredSourcesOf } from '../honesty/sourceCorpus.js';
+import { activeTimeReadings } from '../honesty/timeInputs.js';
 import { periodFactsOf, rulesOf, isRefused } from '../../../tools/declare.js';
 import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeRefusal, unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
-import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
+import { answersOf, clockOf } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
+import { displayOfTurn, displayPresentationOf } from '../../../time/display.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
 import type { AskTime } from '../arguments/ask.js';
-
-/**
- * Under `.time({ reader })`: this turn's ONE open mention — the row the lazy
- * ask is about: a reading to confirm, a zone to name, or words the library
- * could not read (`time/windows.ts` · `isOpenForPerson`, the one owner). A mention
- * the person already settled in the time ask (its `time-answer` row) is not
- * open: it is asked once per turn.
- */
-function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefined {
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const turn = scope.turnNumber as number;
-  const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
-  const open = readingsOf(ledger, turn).filter(
-    (row) => isOpenForPerson(row) && !answered.has(row.mention ?? 0),
-  );
-  return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;
-}
+import { openReadingOf } from './argumentAsk/reading.js';
 
 /** The whole catalog: the app's overrides (`.time({ messages })`) over the defaults. */
 const catalogOf = (reader: NonNullable<ArgumentAskDeps['time']>['reader']) => ({
@@ -138,9 +125,11 @@ function askTimeOf(scope: TypedScope<AgentState>, deps: ArgumentAskDeps): AskTim
   const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
   if (clock === undefined) return undefined;
   const reader = deps.time.reader;
-  const row = reader !== undefined ? openReadingOf(scope) : undefined;
+  const row =
+    reader !== undefined ? openReadingOf(scope, deps.time?.allowProven === true) : undefined;
   return {
     now: clock.now,
+    ...displayOfTurn(scope.findingsLedger as FindingsLedger | undefined, clock.turn),
     zone: clock.zone,
     ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
     ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
@@ -166,9 +155,16 @@ function windowPlanOf(
   const reader = deps.time?.reader;
   if (reader === undefined || (!partial && !asks.some((a) => a.window === true))) return undefined;
   const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
-  const row = openReadingOf(scope);
+  const row = openReadingOf(scope, deps.time?.allowProven === true);
   if (row === undefined || clock === undefined) return undefined;
-  const ask = timeAskOf(row, catalogOf(reader));
+  const ask = timeAskOf(
+    row,
+    catalogOf(reader),
+    'time',
+    displayPresentationOf(
+      displayOfTurn(scope.findingsLedger as FindingsLedger | undefined, clock.turn),
+    ),
+  );
   if (ask === undefined) return undefined;
   const format = ask.field.format;
   if (format !== 'time-range' && format !== 'zone') return undefined;
@@ -281,14 +277,17 @@ function stampRound(
 export function askBeforeDispatch(
   scope: TypedScope<AgentState>,
   resolutions: ReadonlyMap<BatchAddress, ArgumentResolution>,
-  deps: ArgumentAskDeps,
+  configured: ArgumentAskDeps,
 ): AskedBatch {
   const iteration = scope.iteration as number;
   const turn = scope.turnNumber as number;
   const calls = batchOf(scope).filter(
-    (call) => !deps.excludedCallAddresses?.includes(addressOf(call)),
+    (call) => !configured.excludedCallAddresses?.includes(addressOf(call)),
   );
   const entries = new Map(resolutions);
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const answers = answersOf(ledger, turn);
+  const deps = timeAskForProof(scope, configured, calls, entries, ledger, answers, iteration);
   const notifyRefusals = (current: ReadonlyMap<BatchAddress, ArgumentResolution>) => {
     if (deps.refusedCalls !== undefined)
       deps.refusedCalls(
@@ -296,9 +295,7 @@ export function askBeforeDispatch(
       );
   };
   const time = askTimeOf(scope, deps);
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const readings = readingsOf(ledger, turn);
-  const answers = answersOf(ledger, turn);
+  const readings = activeTimeReadings(scope, deps.time?.allowProven === true);
   const open = readings.filter(
     (row) => isOpenForPerson(row) && !answers.some((a) => a.mention === (row.mention ?? 0)),
   );
@@ -506,7 +503,7 @@ export function askBeforeDispatch(
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;
     const currentAnswers = answersOf(currentLedger, turn);
-    const currentReadings = readingsOf(currentLedger, turn);
+    const currentReadings = activeTimeReadings(scope, deps.time?.allowProven === true);
     const clock = clockOf(currentLedger);
     const materialized = calls
       .filter((c) => settled.get(addressOf(c))?.refused === undefined)

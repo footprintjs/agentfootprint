@@ -32,7 +32,7 @@ import type { Tool } from '../tools/tools.js';
 import { skipStepDescriptor } from './skillSteps.js';
 import {
   listSkillsDescriptor,
-  readSkillDescriptor,
+  resolveReadSkillDescriptor,
   type ReadSkillOffer,
 } from './skillToolDescriptors.js';
 import type { Injection } from './types.js';
@@ -86,21 +86,44 @@ export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefi
  * guard or filter undefined out of their tool list.
  *
  * Pass `offer` to scope the DESCRIPTION to what the graph's gate will actually
- * grant from the current cursor (8.5.0); the enum stays the full catalog either
+ * grant from the current cursor (8.5.0); the enum retains every role-visible id either
  * way. Omit it and the tool is byte-identical to what it has always been.
  */
 export function buildReadSkillTool(
   skills: readonly Injection[],
   offer?: ReadSkillOffer,
 ): Tool | undefined {
-  const d = readSkillDescriptor(skills, offer);
+  let bodyFor: (id: string) => string | undefined = () => undefined;
+  const d = resolveReadSkillDescriptor(skills, offer, undefined, (lookup) => {
+    bodyFor = lookup;
+  });
   if (!d) return undefined;
-  return defineTool<{ id: string }, string>({
+  const tool = defineTool<{ id: string }, string>({
     name: d.name,
     description: d.description,
     inputSchema: d.inputSchema,
     execute: (args) => d.execute(args),
   });
+  SKILL_READERS.set(tool, bodyFor);
+  return tool;
+}
+
+/** Every `read_skill` this library built — the provenance of a skill body, never the name. */
+const SKILL_READERS = new WeakMap<object, (id: string) => string | undefined>();
+
+/**
+ * Is this the library's own `read_skill`, built from registered skills? Its
+ * answer is a registered skill's body, the app's own text, or the library's
+ * own confirmation — never a third party's: a tool another party registers
+ * under the same name is not one, whatever it is called.
+ */
+export function isLibrarySkillReader(tool: object | undefined): boolean {
+  return tool !== undefined && SKILL_READERS.has(tool);
+}
+
+/** Read the body from the exact descriptor which owns this call's return. */
+export function librarySkillBodyOf(tool: object | undefined, id: string): string | undefined {
+  return tool === undefined ? undefined : SKILL_READERS.get(tool)?.(id);
 }
 
 /**

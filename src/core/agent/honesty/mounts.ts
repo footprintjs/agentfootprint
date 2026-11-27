@@ -263,7 +263,9 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
             : proposed;
         // The time layer: this turn's clock and readings — only under the arm, for a batch with calls.
         const timeInputs =
-          deps.time !== undefined && calls.length > 0 ? timeInputsOf(parent) : undefined;
+          deps.time !== undefined && calls.length > 0
+            ? timeInputsOf(parent, deps.time.allowProven === true)
+            : undefined;
         return {
           calls,
           iteration: parent.iteration as number,
@@ -466,6 +468,12 @@ export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
 
 /** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
 export interface AnswerMountDeps {
+  readonly retainedCitationsFor?: (
+    scope: object,
+  ) => import('../citations/accepted.js').RetainedCitationReport | undefined;
+  readonly omissionCheckFor?: (
+    scope: object,
+  ) => import('./sourceOmission.js').OmissionCheck | undefined;
   /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
   readonly reads: readonly AnswerFoldKey[];
   /**
@@ -519,12 +527,16 @@ export function startFinalBranch(
     });
   }
   const assess = async (scope: TypedScope<AgentState>): Promise<void> => {
-    const { displayNameOfFor, ...declarations } = answer;
+    const { displayNameOfFor, omissionCheckFor, retainedCitationsFor, ...declarations } = answer;
+    const retainedCitations = retainedCitationsFor?.(scope);
+    const checkOmission = omissionCheckFor?.(scope);
     const displayNameOf = displayNameOfFor?.(scope);
     await (
       await loadAnswerStage()
     ).assessAnswerStage(scope, {
       ...declarations,
+      ...(checkOmission && { checkOmission }),
+      ...(retainedCitations !== undefined && { retainedCitations }),
       ...(displayNameOf !== undefined && { displayNameOf }),
     });
   };

@@ -4,7 +4,7 @@ title: LLMToolSchema
 
 # Interface: LLMToolSchema
 
-Defined in: [src/provider-contract/types.ts:244](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L244)
+Defined in: [src/provider-contract/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L49)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:244](https://github.com/footprintjs/
 
 > `readonly` **description**: `string`
 
-Defined in: [src/provider-contract/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L246)
+Defined in: [src/provider-contract/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L51)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/provider-contract/types.ts:246](https://github.com/footprintjs/
 
 > `readonly` **inputSchema**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/provider-contract/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L247)
+Defined in: [src/provider-contract/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L52)
 
 ***
 
@@ -28,4 +28,4 @@ Defined in: [src/provider-contract/types.ts:247](https://github.com/footprintjs/
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L245)
+Defined in: [src/provider-contract/types.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L50)

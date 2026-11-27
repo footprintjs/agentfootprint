@@ -363,7 +363,9 @@ describe('slidingWindow — scenario', () => {
       .window(slidingWindow({ keepRecentTurns: 2 }))
       .build();
 
-    await expect(agent.run({ message: OPENING })).resolves.toBe('final answer');
+    await expect(agent.run({ message: OPENING })).resolves.toBe(
+      'final answer\n\n---\n\nNot sure — 1 result from this turn was dropped from the conversation before the answer.',
+    );
     expect(recordsOf(agent).some((r) => r.removedMessageCount > 0)).toBe(true);
   });
 

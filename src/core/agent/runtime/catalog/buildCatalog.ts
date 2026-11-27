@@ -31,7 +31,14 @@ export function buildCatalog(
   // auto-attached `present` tool when a store is attached, 9.22.0) +
   // skill-supplied tools (with autoActivate scoping); validates
   // name uniqueness; produces the dispatch map.
-  const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants } = buildToolRegistry(
+  const {
+    registryByName,
+    toolSchemas,
+    toolDeclaringSkills,
+    toolClaimants,
+    scopedSkillTools,
+    listedScopedTools,
+  } = buildToolRegistry(
     this.configuration.sourceEvidenceConfig === undefined
       ? environment.registry
       : [
@@ -47,6 +54,10 @@ export function buildCatalog(
       // …and, under declared sources (either door), a RULED tool's: the arm
       // plants `_findings.from` on it and its sentences name that argument.
       ...(this.configuration.argumentSourcesArmed === true && { argumentSources: true as const }),
+      // The skill context (`skillContext/decide.ts`): every scoped tool listed.
+      ...(this.configuration.skillContext?.strategy === 'listed' && {
+        listedScopedTools: true as const,
+      }),
     },
   );
   if ([...registryByName.values()].some(carriesArgumentView)) declarePrivateFields(this.runner);
@@ -208,6 +219,7 @@ export function buildCatalog(
       }),
       results: resultsArmed,
       answer: answerArmed,
+      sourceNotConsulted: this.configuration.answerLayerOption?.sourceNotConsulted === true,
     });
     environment.ledgerRestoreArmed = true;
   }
@@ -225,6 +237,8 @@ export function buildCatalog(
     toolSchemas,
     toolDeclaringSkills,
     toolClaimants,
+    scopedSkillTools,
+    listedScopedTools,
     inputsArmed,
     argumentSources,
     resultsArmed,

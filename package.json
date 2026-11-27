@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "16.0.1",
+  "version": "20.3.1",
   "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
@@ -76,7 +76,8 @@
     "test:watch": "vitest --watch",
     "docs:api": "typedoc",
     "docs:regen": "npm run build && npm run docs:generate",
-    "docs:generate": "node scripts/gen-ai-instructions.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:truth:report",
+    "docs:chart-map": "node scripts/generate-chart-map.mjs",
+    "docs:generate": "node scripts/gen-ai-instructions.mjs && node scripts/generate-answer-warning-readme.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:chart-map && npm run docs:truth:report",
     "docs:check": "npm run docs:regen && node scripts/check-generated.mjs",
     "docs:truth": "node scripts/docs-truth-check.mjs",
     "docs:truth:baseline": "node scripts/docs-truth-check.mjs --update-baseline",
@@ -396,7 +397,7 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^14.0.0",
+    "footprintjs": "^14.3.0",
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
@@ -512,7 +513,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-import": "^2.32.0",
-    "footprintjs": "^14.0.0",
+    "footprintjs": "^14.3.0",
     "github-slugger": "^2.0.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
@@ -532,6 +533,6 @@
   },
   "dependencies": {
     "contextfootprint": "0.1.1",
-    "foottrace": "^2.1.0"
+    "foottrace": "^2.3.2"
   }
 }

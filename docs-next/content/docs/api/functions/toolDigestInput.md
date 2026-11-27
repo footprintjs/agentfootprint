@@ -6,7 +6,7 @@ title: toolDigestInput
 
 > **toolDigestInput**(`tool`): `string`
 
-Defined in: [src/core/agent/receipt/receipt.ts:542](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L542)
+Defined in: [src/core/agent/receipt/receipt.ts:514](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L514)
 
 The bytes a tool schema's hash covers: the whole `LLMToolSchema` — `name`,
 `description`, `inputSchema` — as sorted-key JSON, so two schemas that are

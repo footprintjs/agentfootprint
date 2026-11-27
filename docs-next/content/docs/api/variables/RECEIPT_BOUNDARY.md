@@ -6,7 +6,7 @@ title: RECEIPT_BOUNDARY
 
 > `const` **RECEIPT\_BOUNDARY**: `string`
 
-Defined in: [src/core/agent/receipt/receipt.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L190)
+Defined in: [src/core/agent/receipt/receipt.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L193)
 
 The boundary every receipt field is true at, in one sentence — exported so a
 renderer prints the library's own wording instead of inferring a stronger
@@ -20,8 +20,8 @@ screen is rarely the person who read the source. Print it beside the record.
 ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
 `buildReceipt` is called with the request about to be passed to
 `LLMProvider.complete` — the PORT, this library's last sight of it. Four
-stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
-`LLMCall.ts` · `callLLM`, and the two message-API charts' through
+stages call it since 9.91.0: the agent charts' (`stages/callLLM/prepareCall.ts`),
+`LLMCall/chart.ts` · `callLLM`, and the two message-API charts' through
 `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
 record: a provider decorated by the consumer (`complete()` wrapping
 `complete()`), a vendor adapter's own serializer, and the vendor's

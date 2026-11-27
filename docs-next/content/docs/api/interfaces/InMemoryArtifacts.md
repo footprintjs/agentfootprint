@@ -4,7 +4,7 @@ title: InMemoryArtifacts
 
 # Interface: InMemoryArtifacts
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L74)
+Defined in: [src/artifacts/inMemoryArtifacts.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L75)
 
 The in-memory store, plus the accounting a bounded store owes its owner.
 
@@ -18,7 +18,7 @@ The in-memory store, plus the accounting a bounded store owes its owner.
 
 > `readonly` **dropped**: `number`
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L78)
+Defined in: [src/artifacts/inMemoryArtifacts.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L79)
 
 Artifacts evicted by the byte/row budgets since construction (TTL expiry
  is the calendar doing its job and is not counted here). Non-zero means
@@ -30,7 +30,7 @@ Artifacts evicted by the byte/row budgets since construction (TTL expiry
 
 > `readonly` **retention**: [`ArtifactRetention`](/docs/api/interfaces/ArtifactRetention)
 
-Defined in: [src/artifacts/inMemoryArtifacts.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L80)
+Defined in: [src/artifacts/inMemoryArtifacts.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/inMemoryArtifacts.ts#L81)
 
 The dials in force, defaults included.
 
@@ -40,7 +40,7 @@ The dials in force, defaults included.
 
 > **delete**(`scope`, `ref`): `Promise`\<`void`\>
 
-Defined in: [src/artifacts/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L257)
+Defined in: [src/artifacts/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L264)
 
 Remove one artifact. No-op when it does not exist — deleting an absence
  is not an error, it is agreement.
@@ -69,7 +69,7 @@ Remove one artifact. No-op when it does not exist — deleting an absence
 
 > **get**(`scope`, `ref`): `Promise`\<[`ArtifactRecord`](/docs/api/interfaces/ArtifactRecord) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L253)
+Defined in: [src/artifacts/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L260)
 
 The ticket and the payload. `null` for missing-or-expired. When the meta
 carries a `digest`, the payload is re-verified here — a mismatch throws
@@ -99,7 +99,7 @@ carries a `digest`, the payload is re-verified here — a mismatch throws
 
 > `optional` **getStream**(`scope`, `ref`): `Promise`\<[`ArtifactStreamRecord`](/docs/api/interfaces/ArtifactStreamRecord) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L288)
+Defined in: [src/artifacts/types.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L295)
 
 OPTIONAL — read a payload as a stream of its canonical bytes. `null` for
 missing-or-expired, exactly like `get`. Absent on stores that would have
@@ -135,7 +135,7 @@ silently traded.
 
 > **head**(`scope`, `ref`): `Promise`\<[`ArtifactMeta`](/docs/api/interfaces/ArtifactMeta) \| `null`\>
 
-Defined in: [src/artifacts/types.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L246)
+Defined in: [src/artifacts/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L253)
 
 The ticket without the payload — the render-by-ref decision. `null` for
 missing-or-expired (the deliberate ambiguity; both mean "no data").
@@ -164,7 +164,7 @@ missing-or-expired (the deliberate ambiguity; both mean "no data").
 
 > **list**(`scope`, `options?`): `Promise`\<[`ArtifactListResult`](/docs/api/interfaces/ArtifactListResult)\>
 
-Defined in: [src/artifacts/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L260)
+Defined in: [src/artifacts/types.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L267)
 
 Page through this scope's tickets, newest first.
 
@@ -192,7 +192,7 @@ Page through this scope's tickets, newest first.
 
 > **put**(`scope`, `input`): `Promise`\<[`ArtifactPutResult`](/docs/api/interfaces/ArtifactPutResult)\>
 
-Defined in: [src/artifacts/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L240)
+Defined in: [src/artifacts/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L247)
 
 Store a payload; mint and return the ticket. Validates the input (a
 malformed put is refused by name), validates `parentRefs` resolve in the
@@ -223,7 +223,7 @@ store's retention — and reports what retention swept to make room.
 
 > `optional` **putStream**(`scope`, `input`, `body`): `Promise`\<[`ArtifactPutResult`](/docs/api/interfaces/ArtifactPutResult)\>
 
-Defined in: [src/artifacts/types.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L271)
+Defined in: [src/artifacts/types.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L278)
 
 OPTIONAL — store a payload the caller streams, without either side
 holding it whole. Absent on stores that cannot honor that promise; detect
@@ -254,3 +254,30 @@ The stream is consumed exactly once. Everything else is `put`'s law:
 #### Inherited from
 
 [`ArtifactStore`](/docs/api/interfaces/ArtifactStore).[`putStream`](/docs/api/interfaces/ArtifactStore#putstream)
+
+***
+
+### scopeBudget()?
+
+> `optional` **scopeBudget**(`scope`): `Promise`\<[`ArtifactScopeBudget`](/docs/api/interfaces/ArtifactScopeBudget) \| `null`\>
+
+Defined in: [src/artifacts/types.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L303)
+
+OPTIONAL — the budget `put` enforces in `scope`: the most bytes and the
+most artifacts the scope may hold. `null` when neither binds. A statement
+of the store's retention, never a reservation: other writers may still
+fill the scope, and a put may still evict older artifacts to make room.
+
+#### Parameters
+
+##### scope
+
+`MemoryIdentity`
+
+#### Returns
+
+`Promise`\<[`ArtifactScopeBudget`](/docs/api/interfaces/ArtifactScopeBudget) \| `null`\>
+
+#### Inherited from
+
+[`ArtifactStore`](/docs/api/interfaces/ArtifactStore).[`scopeBudget`](/docs/api/interfaces/ArtifactStore#scopebudget)

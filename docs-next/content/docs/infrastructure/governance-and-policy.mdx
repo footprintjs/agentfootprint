@@ -182,9 +182,9 @@ const policy = PermissionPolicy.fromRoles(roles, 'support', {
 A refused skill is governed at **both** ends of one rule:
 
 - its row **disappears** from the `read_skill` menu the model reads;
-- activating it anyway is refused with the policy's own message
-  (`Skill 'payroll' is not available to the 'support' role.`), before `execute`
-  runs — so a `surfaceMode: 'tool-only'` skill's body is never even computed.
+- selecting an unavailable skill gets a generic refusal before `execute` can compute its body.
+
+Permission rows are for operators. Filter them out before serving `toSSE` in `full` format to a role-restricted user.
 
 Three design points worth the ink:
 
@@ -194,10 +194,10 @@ model route in one step. A hidden skill is about *who is asking*: no cursor move
 makes it available, and naming it would tell one role about another role's
 capabilities. So it appears in neither section.
 
-**The enum stays the full catalog.** `toolArgValidation` defaults to `'enforce'`
-and runs *before* the gate, so narrowing the enum would turn a policy refusal
-into a generic schema error and the model would never read the policy's own
-message — the same reasoning 8.5.0 recorded for the graph offer.
+**The served schema follows the role filter.** Visible off-route IDs stay in
+the enum so the graph can explain its routing decision. The provider request
+and its saved replay carry the same visible catalog. If the role can see no
+skills, the agent withholds the tool for that request.
 
 **Opt-in on both sides, again.** A `PermissionPolicy` built without `skills`
 declares no `governs`, so nothing is asked and every skill stays visible. This

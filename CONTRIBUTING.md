@@ -36,14 +36,15 @@ the new export in prose on a page under `docs-next/content/docs`, or accept the
 debt consciously:
 
 ```bash
-npm run docs:truth:baseline   # re-record + regenerate docs/DOCS_TRUTH_REPORT.md
+npm run docs:truth:baseline   # re-record docs/docs-truth/baseline.json
 ```
 
 The re-baseline lands as a reviewable diff, so new debt is visible rather than
 silent. `npm run docs:truth:exercise` refreshes the reference-run evidence behind
 the "exercised" column by running every `examples/` script — no credentials
-needed, and it never reads any. The human-readable findings live in
-[docs/DOCS_TRUTH_REPORT.md](docs/DOCS_TRUTH_REPORT.md).
+needed, and it never reads any. The human-readable findings are a
+derived report, not a committed file: `npm run docs:truth:report` writes
+`docs/DOCS_TRUTH_REPORT.md` locally, and CI's `docs-truth` job attaches it to each run.
 
 ## Project Structure
 
@@ -178,8 +179,10 @@ Settings → Rules → Rulesets → **New branch ruleset**: target the default b
 (0 required approvals if you are the only maintainer — otherwise every release PR waits for
 an approval) and **Require status checks to pass** with: `test (22)`, `test (24)`, `lint`,
 `docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`, `tested-tree`. The
-release PR skips `docs` and `changes`; GitHub reports a job skipped by its `if:` as passing,
-so neither holds it up. Leave the bypass list empty. Tags are not affected, so the Release
+release PR skips `docs` and `changes`, and an ordinary pull request skips `coverage` (it and the
+test suite on Node 22 run on every push to main, on the release PR and on dependency PRs);
+GitHub reports a job skipped by its `if:` as passing, so none of them holds a pull request up.
+A release still needs `coverage` and both `test` checks to have passed (`publish.yml` · `verdict`). Leave the bypass list empty. Tags are not affected, so the Release
 workflow can still tag and publish.
 
 CI splits the test run across machines. `test (22)`, `test (24)` and `coverage` stay the required

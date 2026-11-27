@@ -1,17 +1,16 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { batchAddress } from '../../../arguments/batchAddress.js';
-import { buildArgumentRefusal } from '../access/argumentValidation.js';
-import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
+import { noteExecutionEntry } from '../../../scripts/executionEvidence.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
 import { isPauseRequest } from '../../../../pause.js';
 import {
   type ToolResultStatus,
-  readToolResultEnvelope,
   explainStatusOnlyNearMiss,
   unknownStatusOf,
   unknownStatusWarning,
@@ -31,57 +30,26 @@ import { requestEvidenceFor } from '../../../../../tools/requestEvidence.js';
 import { mcpClientUseFor } from '../../../../../tools/mcpClientUse.js';
 import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest.js';
 import { rewrittenAfterApproval } from '../access/bindings.js';
-import { recheckResumedCall, recordResumedRefusal } from '../access/resumedAdmission.js';
+import {
+  buildResumedArgumentRefusal,
+  buildResumedSkillAdmission,
+  recheckResumedCall,
+  recordResumedRefusal,
+} from '../access/resumedAdmission.js';
 import { resumedCredential } from './resumedCredential.js';
 import { resumedPauseRefusal } from './resumedPauseRefusal.js';
+import { classifyToolFailure } from './outcomeField.js';
 import { awaitUnder } from '../../../../../lib/abort.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
-import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
-import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
-import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
-import type { ToolCredentialsOperations } from '../contracts/operations/credentials.js';
-import type { ToolContextOperations } from '../contracts/operations/context.js';
-import type { ToolProgressOperations } from '../contracts/operations/progress.js';
-import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
-import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
-import type { ToolCoverageOperations } from '../contracts/operations/coverage.js';
-import type { ToolSemanticsOperations } from '../contracts/operations/semantics.js';
-import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
-import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
-import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type {
   ResumedCallResult,
   ResumedInvocation,
+  ResumedInvocationLinks,
 } from '../contracts/operations/resumedInvocation.js';
 import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
-
-interface ResumedInvocationLinks {
-  readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
-  readonly unmountedRules: ToolCatalogOperations['unmountedRules'];
-  readonly parkedNow: ToolCatalogOperations['parkedNow'];
-  readonly historyForCheckIn: ToolSettlementOperations['historyForCheckIn'];
-  readonly argumentRefusal: ReturnType<typeof buildArgumentRefusal>;
-  readonly noteOffWire: ToolCatalogOperations['noteOffWire'];
-  readonly resolveWantsAtDispatch: ToolArtifactsOperations['resolveWantsAtDispatch'];
-  readonly credentialsIn: ToolCredentialsOperations['credentialsIn'];
-  readonly hasCredentials: boolean;
-  readonly toolArtifacts: ToolContextOperations['toolArtifacts'];
-  readonly toolProgress: ToolProgressOperations['toolProgress'];
-  readonly sessionContext: ToolResourcesOperations['sessionContext'];
-  readonly toolDispatchCtx: ToolContextOperations['toolDispatchCtx'];
-  readonly endCall: ToolResourcesOperations['endCall'];
-  readonly searchFunnel: ReturnType<typeof buildSearchCoverage>;
-  readonly runFactsOf: ToolResourcesOperations['runFactsOf'];
-  readonly programOfCall: ToolScriptsOperations['programOfCall'];
-  readonly proposedArgsOf: ToolScriptsOperations['proposedArgsOf'];
-  readonly takeCodeRun: ToolScriptsOperations['takeCodeRun'];
-  readonly declareCoverage: ToolCoverageOperations['declareCoverage'];
-  readonly declareSemantics: ToolSemanticsOperations['declareSemantics'];
-  readonly refuseOverCeiling: ToolLimitsOperations['refuseOverCeiling'];
-  readonly judgeColumns: ToolIntegrityOperations['judgeColumns'];
-  readonly warnEffect: ToolEffectsOperations['warnEffect'];
-}
+import { captureToolReturn, readExecutedResult } from './readExecutedResult.js';
+import { beginDeclaredToolDispatch } from '../../../honesty/declaredToolDispatch.js';
 
 /** Compose the existing resumed invocation without changing its catch/cleanup boundary. */
 export function buildResumedInvocation(
@@ -95,14 +63,20 @@ export function buildResumedInvocation(
     | 'time'
     | 'negativeClaimsArmed'
     | 'sourceEvidenceConfig'
+    | 'citationOptions'
     | 'columnCheckMode'
     | 'resultRowsetsFor'
     | 'integrityLedger'
+    | 'answerLayer'
     | 'currentRun'
     | 'isRunRetired'
+    | 'toolClaimants'
+    | 'resolveHiddenSkillIds'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
+  const resolveSkillAdmission = buildResumedSkillAdmission(deps);
+  const argumentRefusal = buildResumedArgumentRefusal(deps, links);
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -119,7 +93,7 @@ export function buildResumedInvocation(
   const executeResumed = async (
     binding: OuterCallBinding,
     scope: TypedScope<AgentState>,
-    resolved: Resolution,
+    candidate: Resolution,
     toolName: string,
     approved: Readonly<Record<string, unknown>>,
     toolCallId: string,
@@ -128,6 +102,8 @@ export function buildResumedInvocation(
     heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
+    const admission = resolveSkillAdmission(scope, toolName, candidate, env.signal);
+    const { resolved, role } = admission instanceof Promise ? await admission : admission;
     const tool = resolved.tool;
     const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
     if (seen !== undefined)
@@ -147,7 +123,7 @@ export function buildResumedInvocation(
     // and a name whose offered party cannot answer on this resume.
     if (!tool) {
       return {
-        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope)),
+        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope, role)),
         error: true,
       };
     }
@@ -167,12 +143,12 @@ export function buildResumedInvocation(
         .get(batchAddress(toolCallId, seen?.callOccurrenceKey))?.refused ??
       (unmounted === undefined ? undefined : await unmounted);
     if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
-    const invalidArgs = links.argumentRefusal(scope, tool, approved, {
-      toolName,
-      toolCallId,
-      iteration,
-    });
-    if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
+    const accessFrame = { ...occurrence, gate: heldTo, tool, toolName, toolCallId, iteration, env };
+    const invalidArgs = argumentRefusal(scope, role, { ...accessFrame, args: approved });
+    if (invalidArgs !== undefined) {
+      const result = typeof invalidArgs === 'string' ? invalidArgs : await invalidArgs;
+      return { result, error: true };
+    }
     links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
@@ -192,38 +168,19 @@ export function buildResumedInvocation(
       wantedMeta = resolution.wanted;
     }
     let executed = false;
+    let toolInvoked = false;
     let negativeDispatch: NegativeDispatch | undefined;
     /** What the run ended with, when it ended before the call could run. */
     let ended: Error | undefined;
     try {
-      // The time layer's dispatch moment — a resumed call is dispatched NOW,
-      // so its `dispatchedAt` is the resume's, not the pause's.
-      const dispatched =
-        deps.time !== undefined
-          ? (await import('../../timeLayer.js')).timeAtDispatch(
-              scope,
-              { toolCallId, toolName, ...occurrence },
-              iteration,
-              tool,
-              prepared,
-              deps.time.appZone,
-            )
-          : undefined;
-      const callTime = dispatched?.context;
       const access = await recheckResumedCall(scope, deps, {
-        ...occurrence,
-        gate: heldTo,
-        tool,
-        toolName,
-        toolCallId,
-        iteration,
-        args: dispatched?.args ?? prepared,
-        env,
+        ...accessFrame,
+        args: prepared,
         parkedNow: links.parkedNow,
         historyForCheckIn: links.historyForCheckIn,
       });
       if (!access.allowed) return access.refusal;
-      const { args } = access;
+      const gatedArgs = access.args;
       const credentials = await awaitUnder(env.signal, () =>
         resumedCredential(
           scope,
@@ -237,9 +194,26 @@ export function buildResumedInvocation(
       );
       if (!credentials.ok) return { result: credentials.result, error: true };
       const resolvedCredential = credentials.credential;
-      // This dispatch's own slot for the runner's facts (`CODE_RUN_SLOT`):
-      // facts reach the exact dispatch that ran, never another run's call
-      // that happens to reuse the provider's id.
+      // The time layer's dispatch moment — a resumed call is dispatched NOW, so its
+      // `dispatchedAt` is the resume's, not the pause's. Read AFTER the access and credential
+      // gates: a refused call files no `call` row, and a length the library measures from this
+      // moment (a covering look-back) is not made short by a gate that took time. The one
+      // value this may change after approval is the library's OWN look-back fill, lengthened to
+      // still reach the window the person confirmed; the `call` row records it (`covered`).
+      const dispatched =
+        deps.time !== undefined
+          ? (await import('../../timeLayer.js')).timeAtDispatch(
+              scope,
+              { toolCallId, toolName, ...occurrence },
+              iteration,
+              tool,
+              gatedArgs,
+              deps.time.appZone,
+            )
+          : undefined;
+      const callTime = dispatched?.context;
+      const args = (dispatched?.args ?? gatedArgs) as typeof gatedArgs;
+      // Keep runner facts on this dispatch even when another call reuses its provider ID.
       const codeRunSlot: CodeRunSlot = {};
       const executionContext = {
         [CODE_RUN_SLOT]: codeRunSlot,
@@ -260,6 +234,8 @@ export function buildResumedInvocation(
           toolCallId,
           seen?.resultFinalizer?.needsPublications,
           seen?.callOccurrenceKey,
+          binding,
+          seen,
         ),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...links.toolProgress(scope, { toolName, toolCallId, iteration, ...occurrence }),
@@ -277,6 +253,7 @@ export function buildResumedInvocation(
             binding,
           },
           env.signal,
+          role,
         ),
       };
       // The last moment before the call runs, after every await that prepared
@@ -293,7 +270,7 @@ export function buildResumedInvocation(
       const approvalChanged =
         heldTo !== 'credential' &&
         !runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved);
-      if (approvalChanged || !access.matchesPrepared(args)) {
+      if (approvalChanged || !access.matchesPrepared(gatedArgs)) {
         // Nothing ran. Release the sessions as for a run that ended here.
         await links.endCall(scope).catch(() => undefined);
         recordResumedRefusal(
@@ -326,7 +303,11 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
-      seen?.resultFinalizer?.entered(executionContext);
+      seen?.resultFinalizer?.entered(
+        executionContext,
+        args,
+        negativeDispatch?.resultId ?? searchDispatch?.resultId,
+      );
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -340,10 +321,21 @@ export function buildResumedInvocation(
       }
       let result: unknown;
       let returned = false;
+      let declaredFailure: ReturnType<typeof captureToolReturn>['declaredFailure'];
       try {
+        markWantedResultsRead(scope, wantedMeta);
         recordToolEntry(scope, seen?.callOccurrenceKey);
+        noteExecutionEntry(scope);
+        toolInvoked = true;
+        const dispatch = beginDeclaredToolDispatch(scope, toolName);
+        const startedAt = Date.now();
+        const startedMonotonic = performance.now();
         result = await tool.execute(args, executionContext);
         returned = true;
+        const captured = captureToolReturn(result, startedAt, startedMonotonic, dispatch);
+        result = captured.result;
+        declaredFailure = captured.declaredFailure;
+        seen?.resultFinalizer?.captureReturned?.(result);
       } finally {
         await binding.close(env.signal);
         if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';
@@ -356,6 +348,7 @@ export function buildResumedInvocation(
         toolName,
         toolCallId,
         takeListed: false,
+        callOccurrenceKey: seen?.callOccurrenceKey,
       });
       if (seen !== undefined && codeRun !== undefined) seen.codeRun = codeRun;
       if (negativeDispatch !== undefined)
@@ -372,7 +365,7 @@ export function buildResumedInvocation(
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
       // judged exactly as an inline one's.
-      const envelope = readToolResultEnvelope(result);
+      const envelope = readExecutedResult(tool, result, codeRunSlot, declaredFailure);
       if (envelope !== undefined) {
         // Coverage (this release) before the ceiling, for the same reason the
         // effects are judged even when the payload is refused: the boundary a
@@ -571,6 +564,10 @@ export function buildResumedInvocation(
           executed,
           negativeResultId: negativeDispatch?.resultId,
         };
+      }
+      if (toolInvoked && seen?.toolResultExecution === 'threw' && binding.halt === undefined) {
+        const category = classifyToolFailure(err, deps.answerLayer);
+        if (category !== undefined) seen.toolFailureCategory = category;
       }
       // A tool that threw still RAN, and may have done half its work; the
       // after-tool moment exists precisely for the rules that care about that.

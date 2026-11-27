@@ -113,7 +113,7 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
   },
   {
     adapter: 'AgentCoreStore',
-    sources: ['src/adapters/memory/agentcore.ts'],
+    sources: ['src/adapters/memory/agentcore/sdkClient.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
     client: 'BedrockAgentCoreClient',
     commands: [
@@ -300,7 +300,7 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
   },
   {
     adapter: 'bedrock (LLM provider)',
-    sources: ['src/adapters/llm/BedrockProvider.ts'],
+    sources: ['src/adapters/llm/BedrockProvider/client.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-runtime',
     client: 'BedrockRuntimeClient',
     commands: ['ConverseCommand', 'ConverseStreamCommand'],

@@ -163,10 +163,17 @@ export function protocolRoute<TRequest, TEvent>(
         custom: (name, payload) => frames(getTranslation().publish?.(name, payload) ?? []),
         complete: (output) => frames(getTranslation().settle({ kind: 'finished', output })),
         awaiting: () => frames(getTranslation().settle({ kind: 'paused' })),
-        failure(_message, code) {
+        failure(_message, code, _origin, settlement) {
           terminalRefusal = true;
+          // Provider outcomes need the HTTP host's class-derived settlement evidence.
+          // A string-only failure retains no proof that a provider withheld anything.
           const refusal: RunRefusal | undefined =
-            hostRefusalCode(code) ??
+            settlement?.refusal ??
+            (code === 'ERR_PROVIDER_BLOCKED' ||
+            code === 'ERR_PROVIDER_INTERVENTION_UNKNOWN' ||
+            code === 'ERR_PROVIDER_GUARDRAIL_LIMIT'
+              ? undefined
+              : hostRefusalCode(code)) ??
             (code === 'ERR_FRONTEND_TOOLS_UNSUPPORTED' || code === 'ERR_STREAM_LIMIT'
               ? code
               : undefined);

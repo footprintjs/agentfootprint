@@ -3,13 +3,17 @@ import { UnsupportedToolChoiceError } from './forcedToolChoice.js';
 import { UnsupportedNativeOutputError } from './nativeOutputSchema.js';
 import { UnsupportedThinkingError } from '../thinking/errors.js';
 import { UnsafeThinkingReplayError } from '../thinking/replay.js';
+import { ContextChangedError } from '../thinking/contextChange.js';
+import { isProviderInterventionError } from './intervention.js';
 
 /** Deliberately narrow: unrelated application errors keep their existing policy. */
 export function isRequestRefusal(error: unknown): boolean {
   return (
+    isProviderInterventionError(error) ||
     error instanceof UnsupportedToolChoiceError ||
     error instanceof UnsupportedNativeOutputError ||
     error instanceof UnsupportedThinkingError ||
-    error instanceof UnsafeThinkingReplayError
+    error instanceof UnsafeThinkingReplayError ||
+    error instanceof ContextChangedError
   );
 }

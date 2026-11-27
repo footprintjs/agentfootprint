@@ -1,4 +1,5 @@
-import type { RunView } from 'footprintjs';
+import type { ObserverStats, RunView } from 'footprintjs';
+import { keepSnapshotSourceLinkGrant } from '../redaction/sourceLinkPolicy.js';
 import {
   createContextShapeCapture,
   markNativeShapeSource,
@@ -15,6 +16,10 @@ export interface RunnerSnapshotOptions {
 
 export type ServedRunnerSnapshot = ReturnType<RunView['snapshot']> & {
   readonly contextShapes?: ContextShapeIndex;
+  readonly observerStats?: ObserverStats & {
+    /** Native emit envelopes delivered as summaries instead of complete events. */
+    readonly summarizedEmits?: number;
+  };
 };
 
 /** Live reads use the same capture as saved recordings, after the native serving policy. */
@@ -32,16 +37,30 @@ export function createRunnerSnapshotReader() {
     const coverage = redaction?.coverage?.state;
     if (!selected || (coverage !== 'covered' && coverage !== 'declared-none')) return undefined;
     const redact = coverage === 'covered' || redaction?.recordPolicy !== undefined;
-    const snapshot = redact ? selected.view.snapshot({ redact: true }) : selected.view.snapshot();
+    const native = redact ? selected.view.snapshot({ redact: true }) : selected.view.snapshot();
+    if (native === undefined) return undefined;
+    const summarizedEmits = selected.value.summarizedEmits;
+    const snapshot: ServedRunnerSnapshot =
+      native.observerStats !== undefined && summarizedEmits !== undefined
+        ? { ...native, observerStats: { ...native.observerStats, summarizedEmits } }
+        : native;
     markNativeShapeSource(snapshot);
+    const grant =
+      snapshot.logAddress === undefined
+        ? undefined
+        : redaction?.sourceLinkPolicy(snapshot.logAddress);
     const shapes = options?.contextShapes;
-    if (shapes === false) return snapshot;
-    if (shapes === undefined) return (defaults ??= createContextShapeCapture())(snapshot);
+    if (shapes === false) return keepSnapshotSourceLinkGrant(snapshot, grant);
+    if (shapes === undefined)
+      return keepSnapshotSourceLinkGrant(
+        (defaults ??= createContextShapeCapture())(snapshot),
+        grant,
+      );
     let capture = configured.get(shapes);
     if (!capture) {
       capture = createContextShapeCapture(shapes);
       configured.set(shapes, capture);
     }
-    return capture(snapshot);
+    return keepSnapshotSourceLinkGrant(capture(snapshot), grant);
   };
 }

@@ -31,7 +31,8 @@
  * only, and no upward runtime edge is left — so the fence is CLOSED. UPWARD_ALLOWANCES
  * stays empty (the checker refuses an entry), and a value-level folder cycle fails.
  *
- *   L0  leaves          imports nothing above itself: lib, events, bridge, maps, recipes, time
+ *   L0  leaves          imports nothing above itself: lib, events, bridge, maps, recipes, time,
+ *                       llm-ledger
  *   L1  vocabularies    the one law each spells: semantics, redaction, thinking, classify,
  *                       ontology, cache, trust-boundaries
  *   L2  ports           provider-contract (what a provider implements), memory
@@ -68,6 +69,9 @@ const LAYERS = [
       'src/recipes/**',
       // The time layer: one owner of every time grammar, imports nothing outside itself.
       'src/time/**',
+      // The LLM ledger: a closed leaf that imports only footprintjs and foottrace, so moving it
+      // to its own package stays a file move (src/llm-ledger/README.md).
+      'src/llm-ledger/**',
     ],
   },
   {
@@ -166,11 +170,17 @@ const LAYERS = [
  * `time` — the time layer (instants, ranges, zones, the run clock, the readers) is
  * self-contained: every layer that speaks about time imports it, and it imports none of them.
  *
+ * `llm-ledger` — the LLM ledger imports nothing in `src/` outside itself, so a later move to
+ * its own package is a file move. This list sees relative edges only; the bare specifiers it
+ * may name (footprintjs, foottrace, and Node in `fileStore.ts`) are held by
+ * `test/architecture/llm-ledger-fence.test.ts`.
+ *
  * @type {ReadonlyArray<{ name: string, files: string[] }>}
  */
 const CLOSED_FOLDERS = [
   { name: 'lib', files: ['src/lib/**'] },
   { name: 'time', files: ['src/time/**'] },
+  { name: 'llm-ledger', files: ['src/llm-ledger/**'] },
 ];
 
 /**

@@ -112,6 +112,8 @@ export interface ModelConfiguration {
    *  validated at `AgentBuilder.build()`. Undefined = no brain anywhere:
    *  callLLM, the gate, seed and RouteTurn wire nothing new. */
   readonly skillBrains?: import('../../skillBrains.js').FoldedSkillBrains;
+  /** How skills reach the model (`skillContext/decide.ts`); undefined with no skill. */
+  readonly skillContext?: import('../../skillContext/decide.js').SkillContextDecision;
 
   /**
    * The evidence gate (9.35.0) — `.namesAndNumbersFromEvidence()`, resolved by

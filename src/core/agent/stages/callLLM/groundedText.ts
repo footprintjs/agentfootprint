@@ -1,6 +1,7 @@
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../../lib/toolBytes.js';
+import { isRecoveryFeedback } from './requestOnly.js';
 
 /**
  * The frame's non-assistant messages as GROUNDS for the unsupported-argument
@@ -20,15 +21,20 @@ import { toolBytesOf } from '../../../../lib/toolBytes.js';
 export function groundedTextOf(
   frame: readonly LLMMessage[],
   committed: readonly LLMMessage[],
+  historyPositions?: readonly (number | undefined)[],
 ): string[] {
   const grounds: string[] = [];
   frame.forEach((message, i) => {
     if (
       message.role === 'assistant' ||
+      isRecoveryFeedback(message) ||
       (message.role === 'user' && message.content.startsWith(FINDINGS_DATA_FRAME_PREFIX))
     )
       return;
-    const twin = committed[i];
+    const historyIndex =
+      historyPositions !== undefined && i < historyPositions.length ? historyPositions[i] : i;
+    if (historyIndex === undefined) return;
+    const twin = committed[historyIndex];
     grounds.push(
       twin !== undefined && twin.role === 'tool' && twin.content === message.content
         ? toolBytesOf(twin)

@@ -219,6 +219,7 @@ export interface ToolEvidencePort {
    * @internal
    */
   readonly time?: {
+    readonly allowProven?: boolean;
     readonly takePassedOnResume: (scope: object) => ReadRunTime | undefined;
     readonly appZone?: ZoneName;
     /**

@@ -55,6 +55,28 @@ export interface LLMStartPayload {
     readonly via: 'skill' | 'escalation';
     readonly skillId?: string;
   };
+  /**
+   * On a model whose thinking is bound to its context, or whose binding the
+   * provider cannot tell (`thinkingBinding` answers `bound` or `unknown`): what
+   * this request changes under the newest signed reasoning on its wire, by
+   * name, when that reasoning was written by a model of the same family.
+   * `refused: true` means the call stops here with `ContextChangedError`
+   * (bound models only). A row with `check: 'unchecked'` appears ONCE per
+   * signed response this run did not record (a continued or restored
+   * conversation): nothing could be compared for it.
+   * ABSENT otherwise: when nothing changed, when no such reasoning is on the
+   * wire, and on every unbound model — those runs keep their exact prior bytes.
+   */
+  readonly contextChange?: import('./contextChange.js').ContextChangeCheck;
+  /**
+   * Which way the agent's skills reach the model, and why — on the run's
+   * first request only: the tool strategy (`listed` / `declared`) and the body
+   * channel, each in the shared decision-record shape, and the binding fact
+   * that decided them. ABSENT when the agent has no skill and when the rule
+   * table's default chose `declared` (every model that does not bind its
+   * reasoning), so those runs keep their exact prior bytes.
+   */
+  readonly skillContext?: import('./skillContext.js').SkillContextRecord;
 }
 
 export interface LLMEndPayload {

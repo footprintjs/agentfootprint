@@ -52,7 +52,9 @@
       [["cacheMarkers"], "array", 2]
     ]],
     [15, [
-      [["receipt"], "object"]
+      [["receipt"], "object"],
+      [["sourceLinkServedRows"], "array", 1],
+      [["sourceLinkConsumer"], "object"]
     ]],
     [16, [
       [["answerGuarantee"], "string"]

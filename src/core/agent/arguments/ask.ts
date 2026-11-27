@@ -428,6 +428,9 @@ export function withSettled(
       toolCallId: entry.toolCallId,
       ...callOccurrenceField(entry.callOccurrenceKey),
       iteration: entry.iteration,
+      ...(entry.removePeriodArguments !== undefined && {
+        removePeriodArguments: entry.removePeriodArguments,
+      }),
       ...(fills.length > 0 && { fills }),
     });
   }

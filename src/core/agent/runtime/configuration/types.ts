@@ -1,6 +1,6 @@
 import type { ModelConfiguration } from './model.js';
 import type { AroundTurn } from '../../aroundTurn/index.js';
-import type { ReadTrackingMode } from 'footprintjs';
+import type { ReadTrackingMode, WriteTrackingMode } from 'footprintjs';
 import type { CommitValuesMode } from 'foottrace';
 
 import type { ReliabilityConfig } from '../../../../reliability/types.js';
@@ -22,6 +22,7 @@ import type { ResolvedOutputFallback } from '../../../outputFallback.js';
 import type { OutputSchemaParser } from '../../../../answer-validation/outputSchema.js';
 import type { ReadTimeOptions } from '../../../../time/clock.js';
 import type { ResolvedOutputEnforcement } from '../../outputEnforcement.js';
+import type { AnswerLayerArm } from '../../assessment/answerLayerOptions.js';
 
 import type { ToolProvider } from '../../../../tools/toolProvider.js';
 import type {
@@ -41,10 +42,13 @@ import type { MessageMiddleware, ToolMiddleware } from '../../middleware/types.j
 import type { ToolArgValidationMode } from '../../../../tools/toolArgsValidation.js';
 import type { ThinkingHandler } from '../../../../thinking/types.js';
 import type { ResolvedSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
+import type { ResolvedProseCitations } from '../../citations/config.js';
 
 /** Static run-policy and service declarations, resolved once at construction. */
 export interface AgentConfiguration extends ModelConfiguration {
+  readonly hostEndedTurns: boolean;
   readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
+  readonly citationOptions?: ResolvedProseCitations;
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
    *  stashed by `applyContinuation`, consumed-and-cleared by seed. */
   readonly pricingTable?: PricingTable;
@@ -104,9 +108,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  (`'always'` for `standingLine: true`). Undefined when the layer is off,
    *  and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
-  readonly answerLayerOption?: {
-    readonly standingLine?: import('../../assessment/compose.js').StandingLineWhen;
-  };
+  readonly answerLayerOption?: AnswerLayerArm;
 
   /** `.time()` (the time layer, `time/`): the fallback zone, as read.
    *  Undefined on every agent that did not ask — then no clock is read, no
@@ -182,6 +184,11 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
   readonly readTracking: ReadTrackingMode;
+
+  /** Snapshot write-tracking policy — forwarded to the internal executor.
+   *  Agent default is `'summary'` (cheap markers), NOT footprintjs's
+   *  `'full'`. See AgentOptions.writeTracking. */
+  readonly writeTracking: WriteTrackingMode;
 
   /** Commit-log value encoding (#13c-B) — forwarded to the internal
    *  executor. Agent default is `'delta'` (append/delete verbs; growing
@@ -416,6 +423,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    * wire format. Undefined = no thinking activation (default behavior).
    */
   readonly thinkingBudget?: number;
+  readonly liveThinkingWithHeldDrafts?: AgentOptions['liveThinkingWithHeldDrafts'];
 
   /** Threaded to footprintjs `flowChart()` so every node the Agent
    *  builder creates is observed by these recorders at build time. Set

@@ -25,7 +25,7 @@
  * | Source | The read |
  * |--------|----------|
  * | `declared` | the result's own `period.queried` — inclusive at both ends, read back as `[from, to + step)`, `step` the tool's `granularity` (else 1 ms; § 3.3). Several declared: each is a read |
- * | `sent` | a widened fill the tool does not trim — the `call-window` row's `sent` |
+ * | `sent` | a widened fill the tool does not trim — the `call-window` row's `sent`; or a look-back lengthened at dispatch (the `call` row's `drift: { outcome: 'covered', sent }`) — what the source reads if its clock agrees with ours |
  * | `shifted` | a look-back that ran as sent after the clock moved past the tool's step — the asked range moved by the `call` row's `drift.byMs` |
  * | `asked` | nothing says otherwise — the read IS the asked range (a fill, a binding, a redrawn look-back, a widened fill the tool trims) |
  *
@@ -34,16 +34,18 @@
  * (§ 9.3: claims about the person's window are then "not sure"). A call with
  * neither — refused, not filled, unread — is not compared.
  *
- * Two differences are not differences: a piece no longer than one
- * millisecond (a closed end read as open — `[now − L, now]` against
- * `[now − L, now)`), and § 7.4's first row — a call that SENT a look-back
+ * Old rows without an endpoint witness keep two allowances: a piece no
+ * longer than one millisecond (a closed end read as open — `[now − L, now]`
+ * against `[now − L, now)`), and § 7.4's first row — a call that SENT a look-back
  * (`drift.ts` · `sentLookback`), with no drift recorded (the dispatch was
  * within the step), whose declared read has the asked length and moved LATER
  * by no more than the tool's step (one minute when none): the tool evaluated
  * the look-back on its own clock, a little after `now`, and that read IS the
  * asked range. Nothing else moves: a read moved EARLIER, a read of a window
  * sent as bounds, or a look-back with a recorded drift is compared as read —
- * its `missing` stands, and the answer is "not sure" (§ 9.2).
+ * its `missing` stands, and the answer is "not sure" (§ 9.2). An explicit
+ * endpoint is compared exactly; normalizing an inclusive declaration may
+ * pad the end of its sample grid, but a sample at an excluded cutoff counts.
  *
  * ## Retention (§ 9.4)
  *
@@ -70,8 +72,16 @@
  * ```
  */
 
-import { instantOf, spellInstant, type InstantText } from './instant.js';
+import {
+  compareInstants,
+  instantOf,
+  shiftInstant,
+  spellInstant,
+  type Instant,
+  type InstantText,
+} from './instant.js';
 import { fromInclusive, stepMsOf, type InclusiveSpan, type TimeRange } from './range.js';
+import { endpointFits } from './windowEndpoint.js';
 import { durationMs } from './duration.js';
 import { FACT_UNITS, granularityMsOf, type PeriodFacts, type PeriodForm } from './convert.js';
 import { sentLookback } from './drift.js';
@@ -143,26 +153,39 @@ function spanOf(range: TimeRange): Span | undefined {
   return from === undefined || to === undefined || !(from < to) ? undefined : [from, to];
 }
 
-function rangeOf([from, to]: Span): TimeRange {
-  // Both are finite millisecond instants read from a range — each spells.
-  return {
-    from: spellInstant({ ms: from, nanos: 0 }, 0) as InstantText,
-    to: spellInstant({ ms: to, nanos: 0 }, 0) as InstantText,
-  };
+type InstantSpan = readonly [Instant, Instant];
+
+function comparisonSpan(range: TimeRange, exact: boolean): InstantSpan | undefined {
+  const from = instantOf(range.from, 'lenient');
+  const to = instantOf(range.to, 'lenient');
+  if (from === undefined || to === undefined) return undefined;
+  const span: InstantSpan = exact
+    ? [from, to]
+    : [
+        { ms: from.ms, nanos: 0 },
+        { ms: to.ms, nanos: 0 },
+      ];
+  return compareInstants(span[0], span[1]) < 0 ? span : undefined;
+}
+
+function rangeOf([start, end]: InstantSpan): TimeRange | undefined {
+  const from = spellInstant(start, 0);
+  const to = spellInstant(end, 0);
+  return from === undefined || to === undefined ? undefined : { from, to };
 }
 
 /** The parts of `a` covered by none of `bs`, in time order. */
-function minus(a: Span, bs: readonly Span[]): Span[] {
-  let pieces: Span[] = [a];
+function minus(a: InstantSpan, bs: readonly InstantSpan[]): InstantSpan[] {
+  let pieces: InstantSpan[] = [a];
   for (const [bFrom, bTo] of bs) {
-    const next: Span[] = [];
+    const next: InstantSpan[] = [];
     for (const [from, to] of pieces) {
-      if (bTo <= from || bFrom >= to) {
+      if (compareInstants(bTo, from) <= 0 || compareInstants(bFrom, to) >= 0) {
         next.push([from, to]);
         continue;
       }
-      if (bFrom > from) next.push([from, bFrom]);
-      if (bTo < to) next.push([bTo, to]);
+      if (compareInstants(bFrom, from) > 0) next.push([from, bFrom]);
+      if (compareInstants(bTo, to) < 0) next.push([bTo, to]);
     }
     pieces = next;
   }
@@ -172,22 +195,46 @@ function minus(a: Span, bs: readonly Span[]): Span[] {
 /** A piece no longer than one millisecond is a closed end read as open — not a difference. */
 const WIDTH_OF_AN_INSTANT_MS = 1;
 
-const kept = (pieces: readonly Span[]): TimeRange[] =>
-  pieces.filter(([from, to]) => to - from > WIDTH_OF_AN_INSTANT_MS).map(rangeOf);
+function kept(pieces: readonly InstantSpan[], exact: boolean): TimeRange[] | undefined {
+  const ranges: TimeRange[] = [];
+  for (const piece of pieces) {
+    if (!exact && piece[1].ms - piece[0].ms <= WIDTH_OF_AN_INSTANT_MS) continue;
+    const range = rangeOf(piece);
+    if (range === undefined) return undefined;
+    ranges.push(range);
+  }
+  return ranges;
+}
 
 /** The parts of `asked` not read, and the parts read not asked. */
 export function rangeDifference(
   asked: TimeRange,
   read: readonly TimeRange[],
 ): { readonly missing: TimeRange[]; readonly extra: TimeRange[] } | undefined {
-  const a = spanOf(asked);
-  const reads = read.map(spanOf);
-  if (a === undefined || reads.some((r) => r === undefined)) return undefined;
-  const spans = reads as Span[];
-  const missing = kept(minus(a, spans));
-  const extraSpans: Span[] = [];
+  return differenceOf(asked, read, false);
+}
+
+function differenceOf(
+  asked: TimeRange,
+  read: readonly TimeRange[],
+  exact: boolean,
+): { readonly missing: TimeRange[]; readonly extra: TimeRange[] } | undefined {
+  const a = comparisonSpan(asked, exact);
+  if (a === undefined) return undefined;
+  const spans: InstantSpan[] = [];
+  for (const range of read) {
+    const span = comparisonSpan(range, exact);
+    if (span === undefined) return undefined;
+    spans.push(span);
+  }
+  const missing = kept(minus(a, spans), exact);
+  const extraSpans: InstantSpan[] = [];
   for (const r of spans) extraSpans.push(...minus(r, [a, ...extraSpans]));
-  return { missing, extra: kept(extraSpans.sort((x, y) => x[0] - y[0])) };
+  const extra = kept(
+    extraSpans.sort((x, y) => compareInstants(x[0], y[0])),
+    exact,
+  );
+  return missing === undefined || extra === undefined ? undefined : { missing, extra };
 }
 
 /**
@@ -220,12 +267,33 @@ interface ReadOf {
 }
 
 /** What the call read, first found wins (the module table) — `undefined` when nothing says. */
-function readOf(input: PeriodCheckInput): ReadOf | undefined {
+function declaredRange(span: InclusiveSpan, stepMs: number, exactEnd?: InstantText): TimeRange {
+  const normalized = fromInclusive(span, stepMs);
+  if (exactEnd === undefined) return normalized;
+  const last = instantOf(span.to, 'lenient');
+  const end = instantOf(exactEnd, 'lenient');
+  const extended = instantOf(normalized.to, 'strict');
+  // The last included sample may be followed by grid padding beyond the
+  // cutoff. Discard only that padding, never an actually excluded sample.
+  return last !== undefined &&
+    end !== undefined &&
+    extended !== undefined &&
+    compareInstants(last, end) < 0 &&
+    compareInstants(extended, end) > 0
+    ? { from: normalized.from, to: exactEnd }
+    : normalized;
+}
+
+function readOf(input: PeriodCheckInput, exactEnd?: InstantText): ReadOf | undefined {
   const declared = input.declared ?? [];
   if (declared.length > 0) {
     const stepMs = stepMsOf(input.facts?.granularity, FACT_UNITS);
     try {
-      return { read: declared.map((q) => fromInclusive(q, stepMs)), source: 'declared', stepMs };
+      return {
+        read: declared.map((q) => declaredRange(q, stepMs, exactEnd)),
+        source: 'declared',
+        stepMs,
+      };
     } catch {
       return undefined; // a declaration the rule set refused never reaches here; nothing to compare
     }
@@ -235,11 +303,18 @@ function readOf(input: PeriodCheckInput): ReadOf | undefined {
   if (window.sent !== undefined && window.trimmedByTool !== true) {
     return { read: [window.sent], source: 'sent' };
   }
+  // A look-back lengthened at dispatch: what the source reads if its clock agrees with ours.
+  if (input.drift?.outcome === 'covered' && window.trimmedByTool !== true) {
+    return { read: [input.drift.sent], source: 'sent' };
+  }
   if (window.asked === undefined) return undefined;
-  const asked = spanOf(window.asked);
-  if (input.drift?.outcome === 'shifted' && asked !== undefined) {
+  if (input.drift?.outcome === 'shifted') {
+    const asked = comparisonSpan(window.asked, exactEnd !== undefined);
     const by = input.drift.byMs;
-    return { read: [rangeOf([asked[0] + by, asked[1] + by])], source: 'shifted' };
+    if (asked !== undefined && Number.isSafeInteger(by)) {
+      const moved = rangeOf([shiftInstant(asked[0], by), shiftInstant(asked[1], by)]);
+      return moved === undefined ? undefined : { read: [moved], source: 'shifted' };
+    }
   }
   return { read: [window.asked], source: 'asked' };
 }
@@ -257,19 +332,23 @@ function referenceOf(
 
 function differsOf(input: PeriodCheckInput): PeriodDiffers | undefined {
   const reference = referenceOf(input.window);
-  const found = readOf(input);
-  if (reference === undefined || found === undefined) return undefined;
+  if (reference === undefined) return undefined;
+  const endpoint = input.window?.person?.endpoint;
+  const exact = endpoint !== undefined;
+  const found = readOf(input, exact ? reference.asked.to : undefined);
+  if (found === undefined) return undefined;
   // Within the step the look-back IS the asked range (§ 7.4) — then judged like one.
   const read: ReadOf =
-    lookbackWithinStep(input, found) && input.window?.asked !== undefined
+    !exact && lookbackWithinStep(input, found) && input.window?.asked !== undefined
       ? { read: [input.window.asked], source: 'asked' }
       : found;
-  const difference = rangeDifference(reference.asked, read.read);
+  const difference = differenceOf(reference.asked, read.read, exact);
   if (difference === undefined) return undefined;
   if (difference.missing.length === 0 && difference.extra.length === 0) return undefined;
   return {
     against: reference.against,
     asked: reference.asked,
+    ...(endpoint !== undefined && endpointFits(endpoint, reference.asked) && { endpoint }),
     read: read.read,
     source: read.source,
     ...(read.stepMs !== undefined && { stepMs: read.stepMs }),

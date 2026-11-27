@@ -38,6 +38,7 @@ export interface ArgumentAskDeps {
    * mention after a zone answer, `messages` are the app's catalog overrides.
    */
   readonly time?: {
+    readonly allowProven?: boolean;
     readonly appZone?: ZoneName;
     readonly reader?: {
       readonly policy: TimePolicy;

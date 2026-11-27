@@ -25,6 +25,8 @@ Every runner exposes typed events. Subscribe to `agentfootprint.stream.*` for th
 The event taxonomy:
 - `stream.llm_start` — provider call about to start (model, request shape)
 - `stream.token` — one token chunk arrived (content, tokenIndex)
+- `stream.thinking_delta` — one live thinking fragment arrived (content, kind, iteration)
+- `stream.thinking_end` — completed thinking blocks for one model call, when available
 - `stream.llm_end` — one model call ended (content, usage, stopReason); output-governed drafts have empty content and `contentWithheld: true`
 - `stream.tool_start` — agent about to dispatch a tool (name, args)
 - `stream.tool_progress` — a long-running tool reporting mid-call (`ctx.progress(payload)`; framework-stamped `toolCallId` / `toolName` / `iteration`, author's `payload` verbatim)
@@ -33,11 +35,35 @@ The event taxonomy:
 
 Every event arrives as an envelope `{ type, payload, meta }`. `e.payload` is typed by the event name you subscribed to; `e.meta` says where it came from (`runId`, `runtimeStageId`, `turnIndex`, `iterIndex`, `wallClockMs`, …). `.on()` returns an unsubscribe function, and `'agentfootprint.stream.*'` / `'*'` subscribe to a whole domain or to everything — see [Observability](doc:observability) for the full taxonomy.
 
+With `observerDelivery: 'deferred'`, the engine uses clone capture by default. If the engine can only deliver a summary, `getLastSnapshot()?.observerStats?.summarizedEmits` counts that native emit once. Queue overflow is accounted for separately in `drops`. With FootprintJS dev mode enabled, the first unexpected summary also logs a diagnostic. Explicit `capture: 'summary'` is for telemetry that uses summarized envelopes.
+
+For a plain tool result with a callback, inline and deferred reference listeners receive the original result, including the callback. Deferred clone listeners receive the closing event with the result's data fields and without its callable fields. Tool middleware receives the original result in every mode, and the model receives its usual serialized view.
+
 ### Token events follow the provider
 
 Without a delivery policy, token events follow the provider: a `stream()` provider emits text chunks, while a `complete()`-only provider emits the other lifecycle events without tokens. The same subscriber code works with either kind.
 
 An [output middleware policy](doc:middleware#output-policy-holds-drafts-until-the-answer-is-accepted) changes delivery, not the provider call. It holds all draft tokens and withholds `llm_end.content` with `contentWithheld: true`, while retaining usage and timing. Final capture releases one accepted answer token, even for complete-only providers; an empty accepted answer has no token. A refusal releases no answer and the API boundary emits `error.fatal`. Declared input-only `.act({ input: [...] })` rules retain normal streaming. Generic `.messageMiddleware(...)` may inspect both phases and therefore holds drafts too. Answer validation can also hold tokens; policy acceptance is not a validation result.
+
+### Show live thinking summaries
+
+Subscribe to `agentfootprint.stream.thinking_delta` before starting an Agent run. Each event carries one text fragment. The events follow the provider's order alongside streamed answer tokens and carry the iteration number of the model call that produced them.
+
+The event's `kind` comes from the adapter's request and provider contract:
+
+- `provider-summary` identifies thinking text explicitly requested as a provider summary. The adaptive request from `.thinking({ budget })` with `anthropic()` uses `display: 'summarized'`.
+- `raw-reasoning` identifies structured reasoning such as Ollama's thinking field.
+- `unclassified` identifies text whose display mode is unknown, including budgeted Anthropic thinking without an explicit display setting and custom chunks without a recognized `LLMChunk.thinkingKind`.
+
+The `ThinkingDeltaKind` type names these categories. Older events can lack `kind`. Select only an explicit `provider-summary` for a summary view.
+
+When output middleware or answer validation holds drafts, all live thinking deltas are held by default. Set `liveThinkingWithHeldDrafts: 'provider-summary'` on `Agent.create` when your application can share the provider's summaries before it approves the answer. Raw and unclassified deltas stay held during the model call. The answer policy still decides what answer to deliver, and the first delivered summary counts as a live chunk for [retry arbitration](doc:reliability).
+
+<CodeFile path="examples/features/96-thinking-per-model.ts" region="live-summary" title="Collect Anthropic summaries while output middleware holds the answer" />
+
+Empty or omitted thinking text yields no live delta. Anthropic signatures and redacted blocks stay out of live deltas. The event carries the fragment as served by the [run's redaction policy](doc:security#keep-personal-data-out-of-the-record). The completed `stream.thinking_end` event has its existing block payload. A summary-only view can render the selected live fragments and use the completed event for lifecycle handling.
+
+For browser clients, `toSSE()` carries these events in its default `'full'` format. The `'text'` format streams the answer. The [AG-UI reasoning option](doc:ag-ui#what-reaches-the-browser) enables a general reasoning stream.
 
 ## The order events arrive in
 
@@ -194,6 +220,16 @@ try {
 ```
 
 The browser consumes via `EventSource` and renders tokens into the UI as they arrive.
+
+### Bind a stream to one invocation
+
+Pass `start` to let `toSSE()` subscribe before it starts the run. The stream calls `start` once when iteration begins and watches the returned promise in either format. Return the invocation's promise from `start`, including when you use a block-bodied JavaScript callback. It sends the admitted frames in order even when the consumer reads them after the promise settles. The filter selects output independently of completion.
+
+<CodeFile path="examples/features/124-sse-start.ts" region="start-stream" title="Stream both steps and keep the final answer" />
+
+The captured promise gives you the invocation's value, pause checkpoint, or rejection. The stream adds no terminal frame. A pause settles the current invocation, so open a new stream with `start: () => runner.resume(checkpoint, answer)` to continue. Breaking out of the loop releases the subscription while the invocation continues.
+
+For a composition, `format: 'text'` with `start` is the transcript of admitted tokens in order, using the contents the record serves. When a member's redaction policy covers token text, the transcript shows `[REDACTED]` placeholders for the affected tokens. Read the composition's answer from the promise. An owning Agent's text still includes its authorized answer and any appended suffix. With an `on()`-only event source, give each stream the events of one invocation. Omit `start` to use the event-based closing rules above.
 
 ## When streaming isn't useful
 

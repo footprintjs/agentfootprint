@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/readingAsk — the choices an OPEN reading offers (time design
  * § 6.1, § 6.3): the one field a `time-reading` row whose choice is `open`
@@ -29,7 +30,7 @@ import {
   type TimeFormat,
 } from './ask.js';
 import { spellRange } from './range.js';
-import { presentRange } from './present.js';
+import { presentRange, presentSpan, type Presentation } from './present.js';
 import type { TimeReadingRow } from './rows.js';
 import type { TimeCandidate } from './resolve.js';
 import { shownGrain } from './resolveRecord.js';
@@ -75,8 +76,9 @@ export function timeAskOf(
   row: TimeReadingRow,
   messages: TimeAskMessages,
   id = 'time',
+  display?: Pick<Presentation, 'viewerZone' | 'viewerDisplayUnavailable'>,
 ): TimeAsk | undefined {
-  const choice = row.choice;
+  const choice = choiceForConfirmation(row.choice);
   if (row.quote === undefined || row.refused !== undefined) return undefined;
   if (choice?.by === 'none') {
     return {
@@ -115,11 +117,11 @@ export function timeAskOf(
   const labels = offered.map(({ candidate }) => {
     // The end as said when it was widened, a look-back's at now: "8 AM to 9 AM" is shown
     // 8:00 – 9:00, not 8:59; "last 40 minutes" 8:00 – 8:40, not 8:40:00.001.
-    const window = presentRange(
-      candidate.range,
-      { zone: candidate.zone, locale: row.reader.locale },
-      shownGrain(candidate),
-    );
+    const presentation = { zone: candidate.zone, locale: row.reader.locale, ...display };
+    const window =
+      candidate.endpoint === undefined
+        ? presentRange(candidate.range, presentation, shownGrain(candidate))
+        : presentSpan(candidate.range.from, candidate.endpoint.cutoff, presentation);
     const unconverted = candidate.notes.find((note) => note.kind === 'zone-unconverted');
     if (unconverted?.kind === 'zone-unconverted') {
       return fillMessage(

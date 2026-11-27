@@ -27,7 +27,7 @@
  * | `clock-on-resume` | first thing in the resumed leg's ToolCalls stage — either pause shape: the pausable resume door, or the stage re-run an `interrupt()` pause makes — when a resume passed a `time` that differs from the kept clock | what was passed and what was kept — the kept clock still rules |
  * | `call` | once per dispatched call, just before the tool runs | `dispatchedAt`: the wall clock at dispatch (a look-back is evaluated by the TOOL at dispatch, which after a pause is later than `now`); `drift` when a look-back was sent more than the tool's step after `now` — `redrawn` into an absolute form, or `shifted` (§ 7.4, `drift.ts`) |
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
- * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
+ * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — a proposal is `open` with `confirm`, its candidates `said: []`; a measured opt-in look-back may record `proven` with its receipt), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
  * | `time-reply` | by the resumed batch ask, once per correction decision | the time-row coordinates, bounded decision and fixed rule label; no raw reply |
  * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
@@ -40,10 +40,12 @@ import { isTimeReplyEvidence, type TimeReplyEvidence } from './replyRecord.js';
 import { isCorrectedMeaning } from './rows/meaning.js';
 import { instantOf } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
+import { isCallDrift, isLookbackReceipt, widenedOk } from './rows/shapes.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { isTimeParts, type TimeParts } from './reader.js';
 import { TIME_REFUSALS, type TimeRefusal } from './periodForm.js';
 import { candidateIsWellFormed, choiceIsWellFormed } from './resolveRecord.js';
+import { isRecordedWindow, type WindowEndpoint } from './windowEndpoint.js';
 import type {
   CallRow,
   CallWindowRow,
@@ -133,6 +135,7 @@ export function timeAnswerRow(
     readonly range: TimeRange;
     readonly zone: ZoneName;
     readonly how: 'confirmed' | 'edited';
+    readonly endpoint?: WindowEndpoint;
     readonly corrected?: TimeAnswerRow['corrected'];
   },
   at: { readonly turn: number; readonly iteration: number },
@@ -146,6 +149,7 @@ export function timeAnswerRow(
     to: answer.range.to,
     zone: answer.zone,
     how: answer.how,
+    ...(answer.endpoint !== undefined && { endpoint: { ...answer.endpoint } }),
     ...(answer.corrected !== undefined && { corrected: { ...answer.corrected } }),
   };
 }
@@ -306,7 +310,7 @@ function isKept(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const k = value as Record<string, unknown>;
   return (
-    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isTimeRange(k.window))
+    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isRecordedWindow(k.window))
   );
 }
 
@@ -319,14 +323,14 @@ function isPassed(value: unknown): boolean {
     keys.every((k) => k === 'now' || k === 'zone' || k === 'window') &&
     (p.now === undefined || isInstant(p.now)) &&
     (p.zone === undefined || isZoneName(p.zone)) &&
-    (p.window === undefined || isTimeRange(p.window))
+    (p.window === undefined || isRecordedWindow(p.window))
   );
 }
 
 function isControlWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const { source, ...range } = value as Record<string, unknown>;
-  return source === 'control' && isTimeRange(range);
+  return source === 'control' && isRecordedWindow(range);
 }
 
 const nonEmpty = (value: unknown): boolean => typeof value === 'string' && value.length > 0;
@@ -343,7 +347,16 @@ function isReaderStamp(value: unknown): boolean {
   );
 }
 
-const MENTION_FIELDS = ['mention', 'quote', 'parses', 'problem', 'refused', 'candidates', 'choice'];
+const MENTION_FIELDS = [
+  'mention',
+  'quote',
+  'parses',
+  'problem',
+  'refused',
+  'candidates',
+  'choice',
+  'qualifiedLookback',
+];
 
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
@@ -353,7 +366,9 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (row.refused !== undefined) {
     return (
       (row.refused === 'quote-not-in-text' || row.refused === 'malformed') &&
-      ['quote', 'parses', 'problem', 'candidates', 'choice'].every((k) => row[k] === undefined)
+      ['quote', 'parses', 'problem', 'candidates', 'choice', 'qualifiedLookback'].every(
+        (k) => row[k] === undefined,
+      )
     );
   }
   const parses = row.parses;
@@ -365,7 +380,10 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
     (row.problem === undefined || (row.problem === 'unreadable' && parses.length === 0)) &&
     Array.isArray(candidates) &&
     candidates.every(candidateIsWellFormed) &&
-    choiceIsWellFormed(row.choice, candidates.length)
+    choiceIsWellFormed(row.choice, candidates.length) &&
+    ((row.choice as { by: unknown }).by === 'proven'
+      ? isLookbackReceipt(row.qualifiedLookback)
+      : row.qualifiedLookback === undefined || (row.choice as { by: unknown }).by === 'open')
   );
 }
 
@@ -374,7 +392,7 @@ const WHYS = ['no-window', 'several-mentions', 'open-reading', 'no-exact-form'];
 
 function isPersonWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const { source, mention, ...range } = value as Record<string, unknown>;
+  const { source, mention, frozenLookback, ...range } = value as Record<string, unknown>;
   return (
     (source === 'said' ||
       source === 'derived-from-reading' ||
@@ -382,24 +400,9 @@ function isPersonWindow(value: unknown): boolean {
       source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
-    isTimeRange(range)
+    (frozenLookback === undefined || (frozenLookback === true && range.endpoint !== undefined)) &&
+    isRecordedWindow(range)
   );
-}
-
-function isRangeList(value: unknown): boolean {
-  return Array.isArray(value) && value.length >= 1 && value.length <= 2 && value.every(isTimeRange);
-}
-
-/** A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of the three. */
-function widenedOk(row: Readonly<Record<string, unknown>>): boolean {
-  if (row.sent === undefined) return row.differs === undefined && row.trimmedByTool === undefined;
-  if (!isTimeRange(row.sent)) return false;
-  if (row.trimmedByTool !== undefined)
-    return row.trimmedByTool === true && row.differs === undefined;
-  const differs = row.differs;
-  if (differs === null || typeof differs !== 'object' || Array.isArray(differs)) return false;
-  const d = differs as Record<string, unknown>;
-  return Object.keys(d).length === 1 && isRangeList(d.extra);
 }
 
 function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
@@ -417,6 +420,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
       'sent',
       'differs',
       'trimmedByTool',
+      'coversAtDispatch',
       'partlyBeyondRetention',
       'refused',
       'argument',
@@ -435,6 +439,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
           'sent',
           'differs',
           'trimmedByTool',
+          'coversAtDispatch',
           'partlyBeyondRetention',
         ) &&
         formOk &&
@@ -487,14 +492,6 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
   }
 }
 
-function isCallDrift(value: unknown): boolean {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const d = value as Record<string, unknown>;
-  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs) || d.byMs === 0) return false;
-  if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
-  return d.outcome === 'shifted' && Object.keys(d).length === 2;
-}
-
 /** A `time-answer` row: its mention, range, zone, how and optional canonical correction. */
 function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
   const { kind: _k, turn: _t, iteration: _i, mention, zone, how, corrected, ...range } = row;
@@ -505,7 +502,7 @@ function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
     isCount(mention) &&
     isZoneName(zone) &&
     (how === 'confirmed' || how === 'edited') &&
-    isTimeRange(range) &&
+    isRecordedWindow(range) &&
     (corrected === undefined || isCorrectedMeaning(corrected, range))
   );
 }
@@ -539,7 +536,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
           row.zoneSource === 'builder' ||
           row.zoneSource === 'answered' ||
           row.zoneSource === 'unknown') &&
-        (row.window === undefined || isControlWindow(row.window))
+        (row.window === undefined || isControlWindow(row.window)) &&
+        (row.provenInputPosition === undefined || isCount(row.provenInputPosition))
       );
     case 'clock-on-resume':
       return isPassed(row.passed) && isKept(row.kept);

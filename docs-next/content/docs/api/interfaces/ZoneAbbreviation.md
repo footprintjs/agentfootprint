@@ -4,7 +4,7 @@ title: ZoneAbbreviation
 
 # Interface: ZoneAbbreviation
 
-Defined in: [src/time/resolveRecord.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L133)
+Defined in: [src/time/resolveRecord.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L135)
 
 One zone abbreviation the app's people write, as data (§ 11): the zone it
 stands for, and the fixed offset it literally spells. `PST` in October is
@@ -18,7 +18,7 @@ BOTH readings, never corrects one into the other.
 
 > `readonly` **offset**: `string`
 
-Defined in: [src/time/resolveRecord.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L136)
+Defined in: [src/time/resolveRecord.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L138)
 
 `±HH:MM` (or `±HH`, `±HHMM`).
 
@@ -28,4 +28,4 @@ Defined in: [src/time/resolveRecord.ts:136](https://github.com/footprintjs/agent
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/resolveRecord.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L134)
+Defined in: [src/time/resolveRecord.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L136)

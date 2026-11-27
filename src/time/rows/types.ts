@@ -3,19 +3,23 @@ import type { DurationText } from '../duration.js';
 import type { InstantText } from '../instant.js';
 import type { TimeRange } from '../range.js';
 import type { ZoneName } from '../zone.js';
+import type { TimeDisplay } from '../display.js';
 import type { ClockChange, TimeClock } from '../clock.js';
 import type { MentionRefusal, TimeParts } from '../reader.js';
 import type { CallWindow, WindowSource } from '../bind.js';
 import type { TimeRefusal } from '../periodForm.js';
 import type { ReadingChoice, TimeCandidate } from '../resolveRecord.js';
+import type { RecordedWindow } from '../windowEndpoint.js';
 
 /** A window set in a UI, as the clock row records it. */
-export interface ControlWindow extends TimeRange {
+export interface ControlWindow extends RecordedWindow {
   readonly source: 'control';
 }
 
 /** The turn's clock stamp — one per turn (time design § 4). */
 export interface ClockRow extends TimeClock {
+  /** Reported viewer zone, explicitly excluded from interpretation. */
+  readonly display?: TimeDisplay;
   readonly kind: 'clock';
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;
@@ -23,6 +27,8 @@ export interface ClockRow extends TimeClock {
   readonly iteration: number;
   /** The run's `time.window`, when it passed one. */
   readonly window?: ControlWindow;
+  /** The retained position of this turn's person-authored input, under the opt-in. */
+  readonly provenInputPosition?: number;
 }
 
 /** A resume passed a `time` that differs from the frozen clock: recorded, not applied (TQ21). */
@@ -60,7 +66,11 @@ export interface CallRow extends TimeCallIdentity {
    * tool's step. `redrawn`: the library's own look-back fill was re-sent as
    * the asked range in absolute form `form`; `shifted`: the look-back ran as
    * sent (the model's value, or no absolute form), so the tool read a window
-   * shifted by `byMs` — `period-shifted`.
+   * shifted by `byMs` — `period-shifted`. `covered`: a confirmed look-back in
+   * a length-only form (`call-window` · `coversAtDispatch`) was lengthened to
+   * still reach the window's start from the dispatch moment; `sent` is what
+   * the source reads with it if its clock agrees with ours. Always present on
+   * such a call, whatever `byMs` (zero and negative included).
    */
   readonly drift?: CallDrift;
 }
@@ -68,7 +78,13 @@ export interface CallRow extends TimeCallIdentity {
 /** A look-back call's dispatch drift (§ 7.4) — see {@link CallRow.drift}. */
 export type CallDrift =
   | { readonly byMs: number; readonly outcome: 'redrawn'; readonly form: number }
-  | { readonly byMs: number; readonly outcome: 'shifted' };
+  | { readonly byMs: number; readonly outcome: 'shifted' }
+  | {
+      readonly byMs: number;
+      readonly outcome: 'covered';
+      readonly form: number;
+      readonly sent: TimeRange;
+    };
 
 /** The reader a reading came from, as recorded. */
 export interface TimeReaderStamp {
@@ -105,6 +121,12 @@ export interface TimeReadingRow {
   readonly candidates?: readonly TimeCandidate[];
   /** How the reading settled under the policy — `open` waits for the person. */
   readonly choice?: ReadingChoice;
+  /** The proof and original input position recorded at native seed. */
+  readonly qualifiedLookback?: {
+    readonly receipt: string;
+    readonly inputPosition: number;
+    readonly clockNow: InstantText;
+  };
 }
 
 /**
@@ -115,7 +137,7 @@ export interface TimeReadingRow {
  * `bind.ts` · `turnWindowsOf`, so the rest of the turn uses it as an
  * `answered` window and the served sentence names it with its source.
  */
-export interface TimeAnswerRow extends TimeRange {
+export interface TimeAnswerRow extends RecordedWindow {
   readonly kind: 'time-answer';
   readonly turn: number;
   readonly iteration: number;
@@ -141,10 +163,12 @@ export interface TimeReplyRow extends TimeReplyEvidence {
   readonly mention: number;
 }
 /** The person's window a `call-window` row names — its range, who gave it, and its mention. */
-export interface PersonWindow extends TimeRange {
+export interface PersonWindow extends RecordedWindow {
   readonly source: WindowSource;
   /** The `time-reading` row's mention index — absent on a `control` window. */
   readonly mention?: number;
+  /** This call admitted an absolute encoding of this look-back. */
+  readonly frozenLookback?: true;
 }
 
 /**
@@ -154,7 +178,7 @@ export interface PersonWindow extends TimeRange {
  *
  * | `how` | Means |
  * |-------|-------|
- * | `filled` | the model left the period out; the turn's one window (`person`) went into form `form` exactly (`rounded`: an epoch-seconds bound or a look-back's length moved outward) |
+ * | `filled` | the model left the period out; the turn's one window (`person`) went into form `form` exactly (`rounded`: an epoch-seconds bound or a look-back's length moved outward; `coversAtDispatch`: a confirmed look-back in a length-only form, lengthened at dispatch) |
  * | `bound` | the sent window IS the person's window `person` — named by the model's quote (`by: 'quote'`) or equal in value (`by: 'value'`) |
  * | `model-chosen` | the sent window (`asked`) differs from the person's (`person`, when one window is theirs): it ran as sent (the v1 law) |
  * | `model` | the sent window, and no window of the person's this turn |
@@ -194,6 +218,13 @@ export interface CallWindowRow extends TimeCallIdentity {
   readonly differs?: { readonly extra: readonly TimeRange[] };
   /** A widened fill to a tool that declares `filtersToAsked`. */
   readonly trimmedByTool?: true;
+  /**
+   * A confirmed look-back filled into a length-only form: the source counts
+   * the length back from ITS clock, so the library lengthens it at dispatch
+   * (the `call` row's `drift: { outcome: 'covered', sent }`). The read is
+   * wider than `asked` and its exact bounds are the source's clock's.
+   */
+  readonly coversAtDispatch?: true;
   readonly partlyBeyondRetention?: true;
   /** Why the call was refused before dispatch. */
   readonly refused?: TimeRefusal;

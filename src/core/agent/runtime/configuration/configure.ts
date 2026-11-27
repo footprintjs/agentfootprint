@@ -7,7 +7,7 @@ import { cacheRequestedWithoutSupport } from '../../cacheSupport.js';
 import { registerConsentLedger, registerConsentRules } from '../../../consentRequest.js';
 import { assertArtifactPlacement } from '../../../../artifacts/placement.js';
 import { assertRedactionPolicy } from '../../../../redaction/policy.js';
-import { declareRedaction } from '../../../../redaction/declared.js';
+import { declarePrivateFields, declareRedaction } from '../../../../redaction/declared.js';
 import { TOOL_TEARDOWN_TIMEOUT_MS } from '../../../../tools/toolSessions.js';
 import type { SkillGraphDeclaredMap } from '../../skillGraphDeclared.js';
 import type { AppliedRecipe } from '../../../../recipes/types.js';
@@ -52,6 +52,8 @@ import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from '../../run/ledger
 import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
 import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
+import { resolveProseCitations } from '../../citations/config.js';
+import { applySkillContext } from '../../skillContext/apply.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -117,6 +119,9 @@ export function configureAgent(
   scriptTravel?: ResolvedScriptTravel,
   aroundTurn?: AroundTurn,
 ): void {
+  if (opts.hostEndedTurns !== undefined && typeof opts.hostEndedTurns !== 'boolean')
+    throw new TypeError('Agent: hostEndedTurns must be a boolean');
+  config.hostEndedTurns = opts.hostEndedTurns === true;
   config.negativeClaimsConfig = negativeClaimsConfig;
   config.typedNegativeClaimsConfig =
     negativeClaimsConfig?.mode === 'typed' ? negativeClaimsConfig : undefined;
@@ -184,6 +189,7 @@ export function configureAgent(
     (answerValidationConfig?.mode === 'enforce' || config.typedNegativeClaimsConfig !== undefined)
       ? { ...evidenceGate, toolsOffAfterRevision: true }
       : evidenceGate;
+  applySkillContext(config, opts.provider, opts.model, opts.skillContext, skillBrains);
   config.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
   config.scriptTravel = scriptTravel;
   config.appliedRecipes = recipes;
@@ -219,6 +225,13 @@ export function configureAgent(
   if (opts.contextBudget !== undefined) config.contextBudget = opts.contextBudget;
   if (opts.permissionChecker) config.permissionChecker = opts.permissionChecker;
   if (opts.toolArgValidation !== undefined) config.toolArgValidation = opts.toolArgValidation;
+  const liveThinkingWithHeldDrafts = opts.liveThinkingWithHeldDrafts;
+  if (liveThinkingWithHeldDrafts !== undefined) {
+    if (liveThinkingWithHeldDrafts !== 'provider-summary') {
+      throw new TypeError("Agent.create: liveThinkingWithHeldDrafts must be 'provider-summary'.");
+    }
+    config.liveThinkingWithHeldDrafts = liveThinkingWithHeldDrafts;
+  }
   if (opts.findings !== undefined)
     config.findingsOptions = {
       ...opts.findings,
@@ -242,12 +255,18 @@ export function configureAgent(
   else if (typeof answerLayer === 'object' && answerLayer !== null) {
     // The builder judged the option (`assessment/answerLayerOptions.ts` · `answerLayerArm`); `true` is 'always'.
     const line = answerLayer.standingLine;
-    config.answerLayerOption =
-      line === true
+    const sourceNotConsulted = answerLayer.sourceNotConsulted === true;
+    config.answerLayerOption = {
+      ...(sourceNotConsulted && { sourceNotConsulted: true }),
+      ...(line === true
         ? { standingLine: 'always' }
-        : typeof line === 'object' && line !== null
-        ? { standingLine: line.when }
-        : {};
+        : typeof line === 'object' &&
+          line !== null && {
+            standingLine: line.when,
+            ...(line.raiseOn !== undefined && { standingLineRaiseOn: line.raiseOn }),
+          }),
+    };
+    if (sourceNotConsulted) readsMessageFrom(runner);
   }
   // The time layer's door (`.time()` / `AgentOptions.time`): `true` or the
   // options, read once; a malformed zone is refused here, at build.
@@ -320,6 +339,12 @@ export function configureAgent(
   // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
   // data per 200 iterations. Consumers opt into 'full' explicitly.
   config.readTracking = opts.readTracking ?? 'summary';
+  // Default 'summary' — the write view's full values have no reader that needs
+  // them (the stored-cause reader checks the view is a plain object; durability
+  // reads commit mutation keys; explainable-ui treats markers as atomic), and
+  // they grew the recorded tree with the square of the run length because each
+  // pass rewrites growing arrays. Consumers opt into 'full' explicitly.
+  config.writeTracking = opts.writeTracking ?? 'summary';
   // Default 'delta' — the accepted #13c-B design: agentfootprint opts in
   // immediately (the agent's history-append workload is exactly the case
   // the verb exists for; reconstruction stays lossless via commitValueAt).
@@ -516,6 +541,8 @@ export function configureAgent(
           throw new TypeError(
             'Agent artifacts.recordings.trustBoundaries needs a recorder factory.',
           );
+        if (![undefined, 'whole', 'parts'].includes(recordings.layout))
+          throw new TypeError("Agent artifacts.recordings.layout is 'whole' or 'parts'.");
         config.artifactRecordings = { ...recordings, trustBoundaries: trust };
       }
     } else {
@@ -525,6 +552,10 @@ export function configureAgent(
   if (opts.sourceEvidence !== undefined) {
     if (!config.artifactStore) throw new Error('Agent.sourceEvidence requires an artifact store.');
     config.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
+  }
+  if (opts.citations !== undefined) {
+    config.citationOptions = resolveProseCitations(opts.citations);
+    declarePrivateFields(runner);
   }
   // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
   // read at exactly one place — the tool-dispatch loop, AFTER

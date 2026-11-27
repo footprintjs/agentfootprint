@@ -7,19 +7,19 @@ import { getPublishedInputs, sourceProductionManifest, consumerProductionManifes
 function fixture() {
   const manifest = {
     name: 'agentfootprint', version: '15.0.0-rc.0', type: 'commonjs',
-    dependencies: { contextfootprint: '0.1.1', foottrace: '^2.1.0', unrelated: '^7.1.0' },
-    devDependencies: { footprintjs: '^14.0.0', typescript: '~5.4.5' },
-    peerDependencies: { footprintjs: '^14.0.0', 'required-peer': '^4.0.0' },
+    dependencies: { contextfootprint: '0.1.1', foottrace: '^2.3.2', unrelated: '^7.1.0' },
+    devDependencies: { footprintjs: '^14.3.0', typescript: '~5.4.5' },
+    peerDependencies: { footprintjs: '^14.3.0', 'required-peer': '^4.0.0' },
     peerDependenciesMeta: { 'optional-peer': { optional: true } },
     optionalDependencies: { 'optional-library': '^3.0.0' },
     scripts: { build: 'original build' }, exports: { '.': './dist/index.js' },
   };
-  const versions = { footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+  const versions = { footprintjs: '14.3.0', foottrace: '2.3.2', contextfootprint: '0.1.1' };
   const packages = Object.fromEntries(Object.entries(versions).map(([name, version], i) => [
     `node_modules/${name}`,
     { version, resolved: `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`,
       integrity: `sha512-${Buffer.alloc(64, i + 1).toString('base64')}`,
-      ...(name === 'footprintjs' ? { dev: true, peerDependencies: { foottrace: '^2.1.0' } } : {}) },
+      ...(name === 'footprintjs' ? { dev: true, peerDependencies: { foottrace: '^2.3.1' } } : {}) },
   ]));
   const lock = { name: manifest.name, version: manifest.version, lockfileVersion: 3,
     packages: { '': structuredClone(manifest), ...packages } };
@@ -43,6 +43,18 @@ test('refuses the coherent previous engine 13 and Foottrace 2.0 cohort', () => {
   assert.throws(() => admit(f), TypeError);
 });
 
+test('refuses the coherent previous engine 14.0 cohort, with its own Foottrace peer ^2.1.0', () => {
+  const f = fixture();
+  for (const manifest of [f.manifest, f.lock.packages['']]) {
+    manifest.peerDependencies.footprintjs = manifest.devDependencies.footprintjs = '^14.0.0';
+  }
+  const row = f.lock.packages['node_modules/footprintjs'];
+  row.version = '14.0.0';
+  row.resolved = 'https://registry.npmjs.org/footprintjs/-/footprintjs-14.0.0.tgz';
+  row.peerDependencies.foottrace = '^2.1.0';
+  assert.throws(() => admit(f), /engine range/);
+});
+
 test('refuses earlier Foottrace 2.0 even when its source ranges and engine peer agree', () => {
   const f = fixture();
   f.manifest.dependencies.foottrace = f.lock.packages[''].dependencies.foottrace = '^2.0.0';
@@ -54,7 +66,7 @@ test('refuses earlier Foottrace 2.0 even when its source ranges and engine peer 
 });
 
 test('refuses earlier prereleases and unselected stable engine archives', () => {
-  for (const version of ['13.0.0', '14.0.0-rc.0', '14.0.0-rc.1', '14.0.1']) {
+  for (const version of ['13.0.0', '14.0.0', '14.2.0', '14.3.0-rc.0', '14.3.0-rc.1', '14.3.1']) {
     const f = fixture(), row = f.lock.packages['node_modules/footprintjs'];
     row.version = version;
     row.resolved = `https://registry.npmjs.org/footprintjs/-/footprintjs-${version}.tgz`;
@@ -95,7 +107,7 @@ test('keeps selected published records and original document identities, includi
 test('promotes the required engine peer into a detached exact production setup without losing unrelated constraints', () => {
   const f = fixture(), before = JSON.stringify(f), held = admit(f);
   const temporary = sourceProductionManifest(held);
-  assert.deepEqual(temporary.dependencies, { contextfootprint: '0.1.1', foottrace: '2.1.0', unrelated: '^7.1.0', footprintjs: '14.0.0' });
+  assert.deepEqual(temporary.dependencies, { contextfootprint: '0.1.1', foottrace: '2.3.2', unrelated: '^7.1.0', footprintjs: '14.3.0' });
   assert.equal(Object.hasOwn(temporary, 'devDependencies'), false);
   assert.deepEqual(temporary.peerDependencies, f.manifest.peerDependencies);
   assert.deepEqual(temporary.optionalDependencies, f.manifest.optionalDependencies);
@@ -112,7 +124,7 @@ test('uses a neutral consumer and original archive URL without relabel, alias, o
   const held = admit(fixture()), pack = artifact(), before = structuredClone(pack);
   const consumer = consumerProductionManifest(held, pack);
   assert.deepEqual(consumer, { name: 'agentfootprint-context-package-consumer', private: true, type: 'module',
-    dependencies: { agentfootprint: pathToFileURL(pack.path).href, footprintjs: '14.0.0', foottrace: '2.1.0' } });
+    dependencies: { agentfootprint: pathToFileURL(pack.path).href, footprintjs: '14.3.0', foottrace: '2.3.2' } });
   assert.deepEqual(pack, before);
   assert.equal(Object.hasOwn(consumer, 'overrides'), false);
   assert.equal(Object.hasOwn(consumer, 'devDependencies'), false);
@@ -122,19 +134,28 @@ for (const [name, mutate] of [
   ['mismatched source version', (f) => { f.manifest.version = '15.0.0'; }],
   ['engine alias', (f) => { f.manifest.peerDependencies.footprintjs = 'npm:other@13.0.0'; }],
   ['broader engine range', (f) => { f.manifest.peerDependencies.footprintjs = '^12 || ^13'; }],
-  ['old foottrace range', (f) => { f.manifest.dependencies.foottrace = '^1.11.1'; }],
+  ['old authored Foottrace range', (f) => {
+    f.manifest.dependencies.foottrace = '^2.1.0';
+    f.lock.packages[''].dependencies.foottrace = '^2.1.0';
+  }],
   ['context range', (f) => { f.manifest.dependencies.contextfootprint = '^0.1.1'; }],
   ['mismatched root lock', (f) => { f.lock.packages[''].dependencies.foottrace = '^1.0.0'; }],
   ['missing selected record', (f) => { delete f.lock.packages['node_modules/footprintjs']; }],
-  ['wrong selected version', (f) => { f.lock.packages['node_modules/foottrace'].version = '2.1.1'; }],
+  ['previous selected Foottrace version', (f) => {
+    const row = f.lock.packages['node_modules/foottrace'];
+    row.version = '2.1.0';
+    row.resolved = 'https://registry.npmjs.org/foottrace/-/foottrace-2.1.0.tgz';
+  }],
   ['non-registry selected input', (f) => { f.lock.packages['node_modules/foottrace'].resolved = 'file:/tmp/foottrace.tgz'; }],
   ['malformed integrity', (f) => { f.lock.packages['node_modules/contextfootprint'].integrity = 'sha512-YQ=='; }],
   ['linked selected input', (f) => { f.lock.packages['node_modules/foottrace'].link = true; }],
   ['nested duplicate', (f) => { f.lock.packages['node_modules/other/node_modules/foottrace'] = { ...f.lock.packages['node_modules/foottrace'] }; }],
-  ['optional selected input', (f) => { f.manifest.optionalDependencies.footprintjs = '14.0.0'; }],
+  ['optional selected input', (f) => { f.manifest.optionalDependencies.footprintjs = '14.3.0'; }],
   ['optional engine peer', (f) => { f.manifest.peerDependenciesMeta.footprintjs = { optional: true }; }],
   ['override', (f) => { f.manifest.overrides = { foottrace: '2.1.0' }; }],
-  ['mismatched engine peer record', (f) => { f.lock.packages['node_modules/footprintjs'].peerDependencies.foottrace = '^1.0.0'; }],
+  ['substituting the source range for the engine peer range', (f) => {
+    f.lock.packages['node_modules/footprintjs'].peerDependencies.foottrace = '^2.3.2';
+  }],
 ]) {
   test(`refuses ${name} rather than manufacture a supported input`, () => {
     const f = fixture(); mutate(f);

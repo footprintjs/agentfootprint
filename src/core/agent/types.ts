@@ -2,11 +2,9 @@
  * Agent type definitions — both PUBLIC types (AgentOptions, AgentInput,
  * AgentOutput) consumed by `Agent.create({...}).run({...})` callers AND
  * the INTERNAL `AgentState` shape used by stage functions.
- *
  */
 
 import type { ReadTrackingMode, RedactionPolicy, StructureRecorder } from 'footprintjs';
-import type { CommitValuesMode } from 'foottrace';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMProvider,
@@ -23,9 +21,10 @@ import type { TimeOptions } from '../../time/clock.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk } from '../../ontology/types.js';
 import type { AnswerLayerOptions } from './assessment/answerLayerOptions.js';
-import type { ObserverDeliveryOptions, WriteProvenanceMode } from './types/observation.js';
+import type { AgentObservationOptions, WriteProvenanceMode } from './types/observation.js';
 import type { ExternalGroundsProvider } from './types/grounds.js';
 import type { AgentArtifactsOptions } from './types/artifacts.js';
+import type { AgentSkillContextOptions } from './types/skillContext.js';
 import type { InvocationState } from './types/state/invocation.js';
 import type { PauseState } from './types/state/pause.js';
 import type { MiddlewareState } from './types/state/middleware.js';
@@ -49,7 +48,9 @@ export type { AgentArtifactsOptions, AgentRecordingsOptions } from './types/arti
 export type { RunConfig, RunConfigContext, RunConfigFn } from './types/configuration.js';
 export type { AgentInput, AgentOutput } from './types/input.js';
 
-export interface AgentOptions {
+export interface AgentOptions extends AgentObservationOptions, AgentSkillContextOptions {
+  /** Enable host-ended turns and record reply authorship. Defaults to false. */
+  readonly hostEndedTurns?: boolean;
   readonly provider: LLMProvider;
   /** Human-friendly name shown in events/metrics. Default: 'Agent'. */
   readonly name?: string;
@@ -466,20 +467,6 @@ export interface AgentOptions {
    * behavior-change callout.
    */
   readonly readTracking?: ReadTrackingMode;
-  /**
-   * Commit-log value encoding (#13c-B) — forwarded to the internal
-   * executor as `{ commitValues }`. Agent default is **`'delta'`**: a
-   * stage whose net change to a tracked array is "the old array plus a
-   * tail" (the agent's `history` every iteration) records ONLY the tail
-   * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
-   * step's full value reconstructs by replay (`commitValueAt` from
-   * `foottrace`), which is why this is safe for audit trails.
-   * Retained commit-log memory becomes linear instead of quadratic.
-   * Set `'full'` for footprintjs's default encoding (every changed key
-   * stores its full final value) if a downstream consumer reads
-   * `bundle.overwrite[key]` as the complete value.
-   */
-  readonly commitValues?: CommitValuesMode;
   /**
    * Per-write read provenance — forwarded to the internal executor as
    * `{ writeProvenance }`. Default **`'off'`** (footprintjs's own default):
@@ -1124,42 +1111,6 @@ export interface AgentOptions {
    * it re-seeds context every turn by design, so there is no classic-grouped.)
    */
   readonly reactMode?: 'classic' | 'dynamic' | 'dynamic-grouped';
-  /**
-   * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
-   * byte-identical to every prior release: the Agent's bridge recorders
-   * (and your `.watch()` attachments) run synchronously inside the
-   * producing statement, so a slow `agent.on()` listener taxes every
-   * stage of every iteration.
-   *
-   * `'deferred'` moves observation off the hot path: every observer event
-   * is captured into footprintjs's bounded queue (≈ microseconds) and
-   * delivered at the next microtask checkpoint — "one beat behind", with
-   * listener work overlapping the LLM/tool await windows instead of
-   * serializing with the loop. Same events, same payloads, same order;
-   * only the timing meta (`wallClockMs` / `runOffsetMs`) reflects the
-   * later delivery. Terminal boundaries (run resolve, reject, pause)
-   * drain the queue synchronously BEFORE control returns, so crash
-   * reports / checkpoints always carry the complete record.
-   *
-   * Exception kept inline for correctness: the causal-evidence harvest
-   * recorder (mounted with CAUSAL memories) — the memory write stage
-   * reads its accumulators MID-run, so it cannot run one beat behind.
-   *
-   * Per-recorder override: a consumer recorder that declares its own
-   * `delivery` field keeps it — the agent-level option is the default
-   * tier for recorders that don't declare one.
-   *
-   * For serverless / graceful shutdown, settle async listener work with
-   * `await agent.drainObservers({ timeoutMs })` before the process exits.
-   * Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
-   */
-  readonly observerDelivery?: 'inline' | 'deferred';
-  /**
-   * Queue dials for `observerDelivery: 'deferred'` — see
-   * `ObserverDeliveryOptions`. Throws at construction when set without
-   * `observerDelivery: 'deferred'` (no silently-ignored combinations).
-   */
-  readonly observerDeliveryOptions?: ObserverDeliveryOptions;
 }
 
 // ─── INTERNAL state (stage functions) ──────────────────────────────

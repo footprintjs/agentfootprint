@@ -4,10 +4,11 @@ shape. The transport of the Lens, not the composition of it.
 
 ## What it reads / what it writes
 Reads the request `callLLM` assembled
-(`src/core/agent/stages/callLLM.ts` · `buildCallLLMStage`);
+(`src/core/agent/stages/callLLM/prepareCall.ts` · `prepareCall`);
 returns content, tool calls, thinking blocks, optional replay evidence and usage.
-It adds no clause. The narrowly permitted completed-turn thinking omission below
-is explicit, observed and persisted, never a silent context rewrite.
+It adds nothing by default. The opt-in citation offer is described below.
+The narrowly permitted completed-turn thinking omission is explicit,
+observed and persisted, never a silent context rewrite.
 
 ## The one law here
 No adapter silently narrows what the model is shown. Budget failures refuse;
@@ -88,6 +89,20 @@ replay of empty input; active signed-thinking safety remains unchanged. Pinned b
 `buildMessagesBody` — it once kept a private copy of the messages mapping, and a
 fix to one missed the other; a private copy of the body would have done the same
 to the thinking rule below.
+
+An internal observer can pair a source message with the exact tool-result block
+that this projection emits. `anthropicToolResultLocations.ts` then reads the
+final message and block coordinates in a bounded scan. Coalesced sibling
+results can share a provider call ID and contain identical text, so neither
+value establishes identity. Unobserved blocks and rewritten copies carry no
+pairing.
+
+The Anthropic SDK adapter uses this pairing for opt-in citation offers on plain
+requests. It appends a separate uncached system block after the existing cache
+markers are applied, and binds its offer only to the completed response. A
+stream that does not return a terminal response binds nothing. Requests with
+thinking or a retained thinking prefix keep the original request layout and
+replay binding.
 
 ## Thinking: one shape per MODEL, declared in one table
 Claude models disagree about a thinking request, and the wrong shape is a 400 on

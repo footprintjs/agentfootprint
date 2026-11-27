@@ -100,6 +100,7 @@
  * places a reader is most likely to mistake it for wire-level proof.
  */
 
+import type { ReceiptCacheCommand, ReceiptCacheMarker } from './cacheTypes.js';
 import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import type { ContextRole, ContextSlot, ContextSource } from '../../../events/types.js';
 import { contributingPieces } from '../composeRequest.js';
@@ -108,6 +109,8 @@ import { stableJson } from '../../../lib/stableJson.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
 import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 
+import type { ReceiptAttentionOmission, ReceiptToolSelection } from './omissions.js';
+export type { ReceiptAttentionOmission } from './omissions.js';
 export type { RequestMeasurement, RequestJsonSize } from './requestMeasurement.js';
 
 /** What {@link receiptPieces} needs from one committed injection record — the
@@ -160,8 +163,8 @@ export const UNSERIALIZABLE = '\u001F<unserializable>';
  * ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
  * `buildReceipt` is called with the request about to be passed to
  * `LLMProvider.complete` — the PORT, this library's last sight of it. Four
- * stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
- * `LLMCall.ts` · `callLLM`, and the two message-API charts' through
+ * stages call it since 9.91.0: the agent charts' (`stages/callLLM/prepareCall.ts`),
+ * `LLMCall/chart.ts` · `callLLM`, and the two message-API charts' through
  * `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
  * record: a provider decorated by the consumer (`complete()` wrapping
  * `complete()`), a vendor adapter's own serializer, and the vendor's
@@ -228,36 +231,6 @@ export interface ReceiptRequestOnlyMessage {
 }
 
 /**
- * One `cache_control` breakpoint the cache strategy actually APPLIED — three
- * scalars, no bytes.
- *
- * `cache.transformHash` collapses a whole rewrite into one bit ("something
- * changed"), and a digest over the whole prepared request is not comparable
- * across epochs. The question that decides an Anthropic bill is narrower and
- * concrete: *did the breakpoints move between call 3 and call 4?* Two receipts'
- * `markersApplied` answer it by inspection.
- *
- * APPLIED, not offered: `scope.cacheMarkers` holds the CANDIDATES the strategy
- * was given, and a strategy clamps them to what the provider allows. The
- * candidates are on the record; which survived is not, which is why they ride
- * here.
- *
- * @example did the breakpoints move between two turns?
- * ```ts
- * import { receiptAt } from 'agentfootprint';
- *
- * const at = (k: number) =>
- *   JSON.stringify(receiptAt(agent.getSnapshot()!, k)?.cache.markersApplied);
- * at(3) === at(4); // false ⇒ the cached prefix moved, and the bill with it
- * ```
- */
-export interface ReceiptCacheMarker {
-  readonly field: 'system' | 'tools' | 'messages';
-  readonly boundaryIndex: number;
-  readonly ttl: 'short' | 'long';
-}
-
-/**
  * The sampling knobs the call went out with — scalars and short strings, no
  * bytes, no privacy change.
  *
@@ -307,16 +280,6 @@ export interface ReceiptParams {
   readonly outputFormat?: { readonly type: string; readonly schemaHash: string };
 }
 
-/** What a budget dropped before the request was composed — the window's
- *  evictions at this iteration's head. */
-export interface ReceiptAttentionOmission {
-  readonly count: number;
-  /** One hash per dropped turn — the turn's own `messages.entries[].hash`, so
-   *  it pairs with the receipt that last served it. See the first law for why
-   *  not the text. */
-  readonly hashes: readonly string[];
-}
-
 /**
  * THE RECEIPT. One per composed request, committed at the call-llm stop.
  *
@@ -332,6 +295,8 @@ export interface ReceiptAttentionOmission {
  * ```
  */
 export interface Receipt {
+  /** Visible tool exclusions and competing claims proved on this accepted request. */
+  readonly toolSelection?: ReceiptToolSelection;
   /**
    * Actual leaf-provider preparation omitted thinking after this port receipt
    * was minted. Original hashes/measurement/cache verdict remain port-level;
@@ -391,6 +356,13 @@ export interface Receipt {
     /** The breakpoints the strategy actually applied, in the order it applied
      *  them — see {@link ReceiptCacheMarker}. Empty when it applied none. */
     readonly markersApplied: readonly ReceiptCacheMarker[];
+    /** Bounded prepared SDK inputs, separate from the strategy's markers. */
+    readonly commandPreparations?: readonly ReceiptCacheCommand[];
+    /** True when another command was prepared beyond the retained rows. */
+    readonly commandOverflow?: true;
+    /** Ordinal that owns the accepted response and its metered usage.
+     * Null means a response arrived without a valid retained command link. */
+    readonly acceptedCommand?: number | null;
     /**
      * WHICH strategy stood between assembly and the port, or `null` when none
      * did (9.93.0). The value is the strategy's `name`: for the built-ins,
@@ -1017,3 +989,4 @@ export function buildReceipt(input: BuildReceiptInput, digests?: ReceiptDigests)
     },
   };
 }
+export type { ReceiptCacheMarker } from './cacheTypes.js';

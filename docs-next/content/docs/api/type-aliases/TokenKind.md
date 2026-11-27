@@ -6,4 +6,4 @@ title: TokenKind
 
 > **TokenKind** = `"input"` \| `"output"` \| `"cacheRead"` \| `"cacheWrite"`
 
-Defined in: [src/provider-contract/types.ts:943](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L943)
+Defined in: [src/provider-contract/types.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L236)

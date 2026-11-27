@@ -1,6 +1,9 @@
 /** Runtime admission and delivery for typed negative citations. The pure checker
  * compares reads; this boundary additionally binds every citation to this app's
  * admitted dispatches and trusted caller context. Model text is never evidence. */
+import type { TypedScope } from 'footprintjs';
+import { unwrapHandles } from 'footprintjs/advanced';
+import type { AgentState } from '../types.js';
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js';
@@ -46,6 +49,17 @@ export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'dis
 import type { DeliveredNegative } from '../../../events/payloads.js';
 export type { DeliveredNegative } from '../../../events/payloads.js';
 export type AnswerNegatives = import('../../../events/payloads.js').AnswerNegativesPayload;
+
+/** Detach the delivered report from the stage and its committed state before emitting it. */
+export function deliveredNegativesOf(
+  scope: TypedScope<AgentState>,
+  commitValidated: boolean,
+): AnswerNegatives | undefined {
+  if (!commitValidated || scope.answerValidation?.delivery === undefined) return undefined;
+  const report = scope.answerNegatives;
+  return report === undefined ? undefined : structuredClone(unwrapHandles(report));
+}
+
 const HANDLE = /^r[1-9][0-9]{0,3}$/;
 const own = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);

@@ -189,7 +189,11 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'asked',
         'check-unreachable',
         'invariant-violation',
+        'memory-retrieval-timeout',
+        'memory-retrieval-excluded',
+        'result-dropped-from-window',
         'result-withheld',
+        'source-not-consulted',
         'step-skipped',
         'steps-unfinished',
         'stopped-early',
@@ -198,11 +202,13 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
     expect(byKind('answer')).toEqual(
       [
         'answer-check-failed',
+        'answer-output-limit',
         'claim-exceeds-search',
         'claim-unsettled',
         'derived-from-reading',
         'negative-prose-unverified',
         'script-unmatched',
+        'ungrounded-entity',
         'unsupported-claim',
         'value-survived-revision',
         'value-unsupported',
@@ -229,6 +235,9 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'sources-conflict',
         'unsupported-argument',
         'value-contingent',
+        'result-cut',
+        'placed-unread',
+        'times-without-zone',
         'work-not-finished',
       ].sort(),
     );
@@ -824,6 +833,7 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
                 toolCallId: 'c2',
                 toolName: 'read_incidents',
                 outcome: kind === 'throw' ? 'failed' : 'refused',
+                ...(kind === 'throw' ? { category: 'unknown' } : {}),
               },
             ],
           });
@@ -1082,7 +1092,9 @@ describe('SECURITY — a source holds kinds, call ids and tool names only', () =
     expect(sources.length).toBeGreaterThan(0);
     const text = JSON.stringify(sources);
     expect(text).not.toContain(secret);
-    expect(text).not.toContain('9917');
+    // The reply's own number, as a number of its own (digits inside a hash do not count).
+    expect(text).not.toContain('9917 rows');
+    expect(text).not.toMatch(/(?<!\d)9917(?!\d)/);
     const keys = new Set<string>();
     const walk = (v: unknown): void => {
       if (Array.isArray(v)) v.forEach(walk);

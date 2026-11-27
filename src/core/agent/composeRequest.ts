@@ -4,7 +4,7 @@
  *
  * Role:  Lens. Two pure functions, no scope, no events, no I/O. They are the
  *        model-facing half of request assembly that a Fold must be able to
- *        repeat: `callLLM.ts` · `buildCallLLMStage` applies them on the way
+ *        repeat: `callLLM/prepareCall.ts` · `prepareCall` applies them on the way
  *        out, and `servedView.ts` · `servedAt` applies the same two on the way
  *        back, over the same committed values.
  * Reads: its arguments.
@@ -114,7 +114,7 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * settled call's sentence; the marker is that fact for the library's readers),
  * `toolResultOrigin`, the findings-only producer notice origin,
  * `toolResultDisposition`, the after-tool rule's disposition,
- * `toolResultExecution`, the tool's entry and return, and
+ * `toolResultExecution`, the tool's entry and return, `toolFailureCategory`, and
  * `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
@@ -200,9 +200,14 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     notDispatched: _settled,
     toolResultOrigin: _resultOrigin,
     toolResultDisposition: _resultDisposition,
+    toolSkillBody: _skillBody,
     toolResultExecution: _resultExecution,
+    toolOutputCounts: _outputCounts,
+    toolFailureCategory: _failureCategory,
+    toolDeclaredFailure: _declaredFailure,
     toolChars: _toolBytes,
     foldedExempt: _lineage,
+    replyOrigin: _replyOrigin,
     answersAsk: _typedAnswer,
     calls: _inner,
     outcome: _settledAs,
@@ -214,9 +219,14 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _settled;
   void _resultOrigin;
   void _resultDisposition;
+  void _skillBody;
   void _resultExecution;
+  void _outputCounts;
+  void _failureCategory;
+  void _declaredFailure;
   void _toolBytes;
   void _lineage;
+  void _replyOrigin;
   void _typedAnswer;
   void _inner;
   void _settledAs;
@@ -241,9 +251,14 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.notDispatched !== undefined ||
     message.toolResultOrigin !== undefined ||
     message.toolResultDisposition !== undefined ||
+    'toolSkillBody' in message ||
     message.toolResultExecution !== undefined ||
+    message.toolOutputCounts !== undefined ||
+    'toolFailureCategory' in message ||
+    'toolDeclaredFailure' in message ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
+    'replyOrigin' in message ||
     message.answersAsk !== undefined ||
     message.calls !== undefined ||
     message.outcome !== undefined ||

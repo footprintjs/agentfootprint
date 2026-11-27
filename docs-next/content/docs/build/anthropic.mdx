@@ -73,6 +73,8 @@ The same option exists on `browserAnthropic()`, and both adapters put the identi
 
 **Adaptive thinking takes no budget.** The model decides whether and how much to think, so the budget is not sent (dev mode says so once per model) and no effort level is guessed from it. It still keeps `max_tokens` above itself — `budget + 1024` when the request's is lower — because thinking counts toward `max_tokens`. `display: 'summarized'` is what makes the thinking readable; these models otherwise return it empty.
 
+With the SDK-based `anthropic()` adapter, use [live thinking deltas](doc:streaming#show-live-thinking-summaries) to display requested adaptive summaries while the call is still running.
+
 **Refused before anything is sent**, as an `UnsupportedThinkingError` (from `agentfootprint/providers`; `provider`, `model`, `reason`, `retryable: false`):
 
 - `'no-thinking'` — at `build()` for the agent's model and its skill and escalation brains; on the first call for a model `.configure()` picks at run time.
@@ -161,11 +163,77 @@ one removed block without its contents, and `ThinkingReplayReason` describes
 the locally observed inconsistency. These types do not authenticate signatures
 or prove that a prepared request was sent.
 
-Only documented bound model families get the local prefix check. Older models,
-unknown aliases and cross-model signature compatibility are not guessed. No
+Only documented bound model families get the adapter's local prefix check.
+Older models and cross-model signature compatibility are not guessed. No
 preserved-thinking beta or server drop policy is enabled. Prefix and contiguous
 sequence rules follow Anthropic's
 [preserved-thinking documentation](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking).
+
+## A tool turn that changes its own context
+
+On Claude Haiku, Sonnet and Opus 5.5, Fable 5.1 and 5.2, and Mythos 5.2, a
+signed thinking block stays valid only under the system prompt, tool list and
+earlier messages it was written under. These models think on requests that do
+not ask for it, so this holds with or without `.thinking()`. The Anthropic
+adapters answer per model through `thinkingBinding`, read with
+`thinkingBindingOf(provider, model)`, which returns a `ThinkingBinding`: `bound`,
+`unbound`, or `unknown`. It is `unknown` for an id their table cannot place, such
+as an inference profile, a gateway alias or a model newer than the table, and
+for Mythos 5.1, which Anthropic documents as checked by default on some
+platforms and not on Amazon Bedrock.
+
+The answer that counts is the one for the model this call goes to, and the
+reasoning must have been written by a bound model of the same family. A model
+named only later in a reliability chain, or the fallback side of
+`withFallback`, does not change it: that provider's own adapter checks the calls
+it serves. A block written by an unbound model, or by another family after a
+model switch, has nothing here to check.
+
+When a feature changes that context in the middle of a tool turn, the agent
+refuses the next request before sending it, with `ContextChangedError` from
+`agentfootprint/providers`. The message names each change: the skill or
+injection that changed the system prompt, the tool that was added, removed or
+redescribed, or the earlier message that moved. It never quotes their content.
+The same names are on `error.changes`, one `ContextChange` each: the `slot`, the
+kind of `change`, and the `source` and `id`, `tool` and `party`, or `position`
+and `role` that apply to that slot.
+A skill whose body goes into the system prompt, loaded under
+`skillContext: 'declared'`, is the common case:
+
+<CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="refused" title="examples/features/context-changed-in-tool-turn.ts (region: refused)" />
+
+The same refusal names an instruction or fact whose `activeWhen` reads the
+tool result, a tool provider whose list moves between calls, and a skill graph
+whose cursor moves. Until the agent can deliver such changes as appended
+messages, keep them out of a tool turn. For skills the agent does this by
+default on such a model (`skillContext: 'listed'`, see
+[Skills on a model that binds its reasoning](/docs/build/skills#skills-on-a-model-that-binds-its-reasoning)):
+every skill tool is listed from the first request and the body is the
+`read_skill` result:
+
+<CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="passes" title="examples/features/context-changed-in-tool-turn.ts (region: passes)" />
+
+An id the table cannot place may serve an older model whose thinking is not
+bound, so the agent does not refuse there: it sends the request and records the
+change with `binding: 'unknown'`, and the provider's own answer stands. If you
+know the model behind the id, say so with the adapter's `thinkingBinding`
+option. It is asked only for ids the table cannot place; for a model the table
+knows, the table answers, so the option and the adapter's own replay check
+never disagree. `'bound'` gives that id the named refusal, `'unbound'` leaves it
+untouched, and the record says `by: 'app'`. A statement that throws or answers
+anything else is not used: the id stays `unknown` and the record says
+`appStatement: 'failed'`.
+
+<CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="declare" title="examples/features/context-changed-in-tool-turn.ts (region: declare)" />
+
+A change outside an unfinished tool turn is not refused. The finished turn's
+reasoning is retired, as described above, and the request's
+`agentfootprint.stream.llm_start` event carries `contextChange` naming what
+changed. The final wrap-up call, which withdraws the tools, is recorded the
+same way. Retiring that earlier reasoning is not itself a change. A
+conversation continued from an earlier run is recorded `unchecked` once, on the
+first request that carries the earlier reasoning: this release keeps the
+comparison bases for one run only.
 
 ## Streaming
 

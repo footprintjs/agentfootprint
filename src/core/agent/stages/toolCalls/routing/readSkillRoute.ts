@@ -7,12 +7,14 @@ import type {
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import { spoken } from '../../../../../lib/spokenIds.js';
+import { skillVisibleToRole, spoken } from '../../../../../lib/spokenIds.js';
 import { classifySkillTarget } from '../../../../../injection-engine/skillGraph.js';
 import { dedupeIds } from '../helpers/dedupeIds.js';
 import type { LLMToolSchema } from '../../../../../provider-contract/types.js';
 import { selfCallNotice, selfSkillTools } from '../../../selfCallNotice.js';
 import type { ActiveInjection } from '../../../../../injection-engine/types.js';
+import { bodyInHistory } from '../../../../../injection-engine/skillContext.js';
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { skillActivationConfirmation } from '../../../../../injection-engine/skillToolDescriptors.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { composeReadSkillRefusal } from '../helpers/readSkillRefusal.js';
@@ -23,6 +25,8 @@ import type { ToolStepsOperations } from '../contracts/operations/steps.js';
 
 interface ReadSkillRouteBindings {
   readonly tc: DispatchCall;
+  readonly listedSkillReader: boolean;
+  readonly history: readonly LLMMessage[];
   readonly iteration: number;
   readonly parkedNow: ToolCatalogOperations['parkedNow'];
   readonly noteSkillRefusal: ToolStepsOperations['noteSkillRefusal'];
@@ -65,7 +69,7 @@ export function applyReadSkillRoute(
       // gate above denies it first, on the same checker. The filter is
       // what keeps that true by construction rather than by coincidence.)
       const hiddenIds = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
-      const mayName = (id: string): boolean => !hiddenIds.has(id);
+      const mayName = (id: string): boolean => skillVisibleToRole(id, hiddenIds);
       const hops = deps.allowedSkillIds(currentSkillId);
       const openAll = deps.openSkillIds ?? [];
       // `spoken` keeps BOTH halves — what may be named, and whether the
@@ -172,21 +176,25 @@ export function applyReadSkillRoute(
         // escalation budget to find out — was the live bug. The routing
         // map belongs to the `read_skill` DESCRIPTION, which is
         // recomposed on every call and is therefore never stale.
+        const active = scope.activeInjections as readonly ActiveInjection[] | undefined;
+        const instructionsInSystemPrompt = bindings.listedSkillReader
+          ? scope.servedSystemSkillBodies?.some((record) => record.sourceId === reqId) === true
+          : undefined;
+        const alreadyInHistory =
+          bindings.listedSkillReader &&
+          typeof bindings.outcome.result === 'string' &&
+          bodyInHistory(reqId, bindings.outcome.result, bindings.history);
         bindings.outcome.result = selfCallNotice({
           skillId: reqId,
-          tools: selfSkillTools(
-            reqId,
-            scope.activeInjections as readonly ActiveInjection[] | undefined,
-            wire,
-          ),
-          // A body only exists under `surfaceMode: 'both'` (`'tool-only'`
-          // is refused at build for anything a graph routes, and only a
-          // graph-wired skill can be the cursor); every other mode
-          // returns the activation confirmation, which would promise an
-          // activation that is not pending. `ceilingRefused` is the third
-          // shape `result` can hold — a `resultCeiling`/`resultColumns`
-          // refusal composed above — and it is nobody's instructions.
+          tools: selfSkillTools(reqId, active, wire),
+          ...(instructionsInSystemPrompt !== undefined && { instructionsInSystemPrompt }),
+          // Declared 'both' offers a deliberate repeat. Listed carries the
+          // result only if its current system slot did not already carry it.
+          // An activation confirmation would promise activation, and a
+          // resultCeiling/resultColumns refusal is nobody's instructions.
           ...(typeof bindings.outcome.result === 'string' &&
+            !instructionsInSystemPrompt &&
+            !alreadyInHistory &&
             !bindings.execution.ceilingRefused &&
             bindings.outcome.result !== skillActivationConfirmation(reqId) && {
               body: bindings.outcome.result,

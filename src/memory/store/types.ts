@@ -133,6 +133,17 @@ export interface SearchOptions {
   readonly namespaceScope?: Readonly<Record<string, string>>;
 }
 
+/** An explicit, recoverable store read outcome. Other failures reject as before. */
+export type MemoryReadOutcome<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly code: 'timeout' };
+
+/** Outcome-aware searches may return store-ranked entries without a score. */
+export interface SearchResultEntry<T = unknown> {
+  readonly entry: MemoryEntry<T>;
+  readonly score?: number;
+}
+
 /**
  * A `MemoryEntry` annotated with its similarity score. Returned by
  * `store.search()`. Score semantics are adapter-defined but SHOULD
@@ -314,6 +325,12 @@ export interface MemoryStore {
    */
   list<T = unknown>(identity: MemoryIdentity, options?: ListOptions): Promise<ListResult<T>>;
 
+  /** Read with typed failure evidence. Takes precedence for optional recall. */
+  listWithOutcome?<T = unknown>(
+    identity: MemoryIdentity,
+    options?: ListOptions,
+  ): Promise<MemoryReadOutcome<ListResult<T>>>;
+
   /** Remove one entry. No-op if the entry doesn't exist. */
   delete(identity: MemoryIdentity, id: string): Promise<void>;
 
@@ -394,4 +411,11 @@ export interface MemoryStore {
     query: readonly number[],
     options?: SearchOptions,
   ): Promise<readonly ScoredEntry<T>[]>;
+
+  /** Search with typed failure evidence. Takes precedence for semantic recall. */
+  searchWithOutcome?<T = unknown>(
+    identity: MemoryIdentity,
+    query: readonly number[],
+    options?: SearchOptions,
+  ): Promise<MemoryReadOutcome<readonly SearchResultEntry<T>[]>>;
 }

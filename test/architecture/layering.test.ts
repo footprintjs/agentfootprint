@@ -9,8 +9,9 @@
  *             the REAL table fails the real checker
  *   scenario  THE REAL TREE: every file and every top-level folder sits at exactly one layer,
  *             no runtime import points up, UPWARD_ALLOWANCES is empty, every upward type-only
- *             import is named, `lib/` and `time/` are closed, `src/*.ts` and the doors are
- *             barrels, and no top-level folder is in a value-level cycle
+ *             import is named, `lib/`, `time/` and `llm-ledger/` are closed (and nothing outside
+ *             imports `llm-ledger/`), `src/*.ts` and the doors are barrels, and no top-level
+ *             folder is in a value-level cycle
  *   lint      the zones forbid exactly what the table forbids, and the rule is live
  *
  * WHAT A GREEN RUN PROVES: the tree is layered. No runtime import points up the table, and no
@@ -629,6 +630,20 @@ describe('check-layering — this repository', () => {
     ).toEqual([]);
   });
 
+  it('nothing outside src/llm-ledger/ imports it, by value or by type — it has no door yet', () => {
+    // Owner decision 2: the main entry and the agent runtime never reach the folder. When the door
+    // lands (`src/doors/llm-ledger.ts`), it becomes the one importer this case allows.
+    const ledger = 'src/llm-ledger/';
+    expect(
+      edges
+        .filter((edge) => edge.to.startsWith(ledger) && !edge.from.startsWith(ledger))
+        .map((edge) => `${edge.kind}: ${edge.from} -> ${edge.to}`),
+    ).toEqual([]);
+    expect(edges.some((edge) => edge.from.startsWith(ledger) && edge.to.startsWith(ledger))).toBe(
+      true,
+    );
+  });
+
   it('auditShapes has no index file to compete with the facade', () => {
     expect(existsSync(join(REPO, 'src/adapters/observability/auditShapes/index.ts'))).toBe(false);
   });
@@ -678,10 +693,11 @@ describe('check-layering — this repository', () => {
     }
   });
 
-  it('src/lib/** and src/time/** import nothing outside themselves at run time; time/ not even by type, lib/ by type only the one named edge', () => {
+  it('src/lib/**, src/time/** and src/llm-ledger/** import nothing outside themselves at run time; time/ and llm-ledger/ not even by type, lib/ by type only the one named edge', () => {
     expect(CLOSED_FOLDERS).toEqual([
       { name: 'lib', files: ['src/lib/**'] },
       { name: 'time', files: ['src/time/**'] },
+      { name: 'llm-ledger', files: ['src/llm-ledger/**'] },
     ]);
     expect(result.closedEscapes).toEqual([]);
     const outOf = (dir: string) =>
@@ -689,6 +705,9 @@ describe('check-layering — this repository', () => {
         .filter((e) => e.from.startsWith(dir) && !e.to.startsWith(dir))
         .map((e) => `${e.kind}: ${e.from} -> ${e.to}`);
     expect(outOf('src/time/')).toEqual([]);
+    // A fence over an empty folder proves nothing: the ledger's files are really read.
+    expect(files.filter((f) => f.startsWith('src/llm-ledger/')).length).toBeGreaterThan(5);
+    expect(outOf('src/llm-ledger/')).toEqual([]);
     // Erased by tsc, and named in src/lib/README.md: the slot vocabulary the protocol keys use.
     expect(outOf('src/lib/')).toEqual(['type: src/lib/conventions.ts -> src/events/types.ts']);
   });

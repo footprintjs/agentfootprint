@@ -19,6 +19,11 @@ Support: `errors.ts`, `messagePhase.ts`, `index.ts`.
 Every decision is recorded, including the boring ones. A chain that allowed
 silently and a chain that never ran must not look the same afterwards.
 
+An allowed after-tool replacement changes the model's result view, not what
+the original read declared it could cover. Native coverage/absence/period limits
+remain answer evidence; replacement declarations add their own witnesses. The
+existing decision ledger supplies optional named rewrite detail to readers.
+
 ## The `'input'` verdict is the turn's user entry — on every turn
 The user entry a run adds to the conversation is the message the `'input'`
 chain let through, on a first turn and on a continued one
@@ -146,7 +151,7 @@ secrets").
   rewrite of a ruled tool's arguments is filed with `changedKeys` (and, when
   declared, `allow(args, why, { from })`'s origin per key); this is the ONE
   reading of those rows, taken by the answer's standing
-  (`assessment/assess.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
+  (`assessment/inputs/stage.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
   block (`arguments/serve/assumed.ts` · `assumedBlockOf`), so the two cannot disagree
   about which value a call ran with. Both readers load through `import()`, so
   a plain agent never carries this module. The call's recorded occurrence

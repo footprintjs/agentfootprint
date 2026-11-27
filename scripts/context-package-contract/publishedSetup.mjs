@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { assertRecord } from './protocol.mjs';
 
 const COHORT = Object.freeze({
-  footprintjs: Object.freeze({ version: '14.0.0', range: '^14.0.0' }),
-  foottrace: Object.freeze({ version: '2.1.0', range: '^2.1.0' }),
+  footprintjs: Object.freeze({ version: '14.3.0', range: '^14.3.0', foottracePeerRange: '^2.3.1' }),
+  foottrace: Object.freeze({ version: '2.3.2', range: '^2.3.2' }),
   contextfootprint: Object.freeze({ version: '0.1.1', range: '0.1.1' }),
 });
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -94,7 +94,10 @@ export function getPublishedInputs(manifestText, lockText) {
     requireThat(manifest[field] === undefined, field);
   }
   const selected = Object.fromEntries(Object.keys(COHORT).map((name) => [name, selectedRecord(packages, name)]));
-  requireThat(selected.footprintjs.peerDependencies?.foottrace === COHORT.foottrace.range, 'engine record peer');
+  requireThat(
+    selected.footprintjs.peerDependencies?.foottrace === COHORT.footprintjs.foottracePeerRange,
+    'engine record peer',
+  );
   return freeze({
     source: { name: manifest.name, version: manifest.version, manifestSha256: sha256(manifestText), lockSha256: sha256(lockText) },
     manifest,

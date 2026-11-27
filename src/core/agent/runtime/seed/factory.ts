@@ -1,6 +1,8 @@
+import { canQualifyProvenWindow } from '../provenWindow.js';
+import { MAX_SELECTION_ROWS } from '../../../slots/providerOmissions.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMToolSchema } from '../../../../provider-contract/types.js';
 import type { FindingsLedger } from '../../findings/types.js';
 import type { MemoryStore } from '../../../../memory/store/index.js';
 import { draftClock, type ClockDraft } from '../../../../time/clock.js';
@@ -9,6 +11,8 @@ import type { AgentInput, RunConfig, RunConfigContext } from '../../types.js';
 import { buildSeedStage } from '../../stages/seed.js';
 import { type HonestyLayers } from '../../honesty/armed.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import { CITATION_PRIVATE_FIELDS } from '../../../../redaction/privateFields.js';
+import { canStorePrivateFields, markPrivateFields } from '../../../../redaction/runRedaction.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
@@ -18,6 +22,7 @@ export interface SeedEnvironment {
   readonly cachingDisabled: boolean;
   readonly costBudget: AgentConfiguration['costBudget'];
   readonly toolSchemasResolved: readonly LLMToolSchema[];
+  readonly observesCodeExecution: boolean;
   readonly seededToolWants: Readonly<Record<string, readonly string[]>> | undefined;
   readonly seededRuledTools: ReadonlyMap<string, Tool> | undefined;
   readonly seededHonestyLayers: HonestyLayers | undefined;
@@ -39,7 +44,11 @@ export function seedFactory(environment: SeedEnvironment) {
       run.value.pendingResumeFindingsLedger = undefined;
       return l;
     };
-    return buildSeedStage({
+    const seed = buildSeedStage({
+      hostDecision: run.value.hostTurn !== undefined,
+      observesCodeExecution:
+        run.own && environment.observesCodeExecution && run.value.hostTurn === undefined,
+      hostOnly: run.value.hostTurn?.hasInput === false,
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceMaxReceipts:
           environment.configuration.sourceEvidenceConfig.limits.maxReceipts,
@@ -90,6 +99,9 @@ export function seedFactory(environment: SeedEnvironment) {
           timeReader: {
             reader: environment.configuration.timeOptions.reader,
             policy: environment.configuration.timeOptions.policy,
+            ...(canQualifyProvenWindow(environment.configuration) && {
+              skipProvenConfirmation: true as const,
+            }),
           },
         }),
       // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
@@ -110,6 +122,8 @@ export function seedFactory(environment: SeedEnvironment) {
       },
       consumePendingResumeHistory: () => {
         const h = run.value.pendingResumeHistory;
+        run.value.servedTools.remainingToolOmissions =
+          !h || h.appendsUserTurn ? MAX_SELECTION_ROWS : undefined;
         run.value.pendingResumeHistory = undefined;
         return h;
       },
@@ -156,6 +170,9 @@ export function seedFactory(environment: SeedEnvironment) {
       ...(environment.configuration.ontology !== undefined && {
         ontology: environment.configuration.ontology,
         ontologyTools: () => environment.ontologyTools,
+        ...(checkerGoverns(environment.configuration.permissionChecker, 'skill_read') && {
+          ontologyRoleViewRequired: true,
+        }),
       }),
       // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
       // on every run; HONORED only when the mounted graph declared
@@ -207,9 +224,10 @@ export function seedFactory(environment: SeedEnvironment) {
       }),
       // The `'input'` half of the message chain, run BEFORE `userMessage` and
       // `history` are committed — see SeedStageDeps.messageMiddleware.
-      ...(environment.configuration.messageMiddleware.length > 0 && {
-        messageMiddleware: environment.configuration.messageMiddleware,
-      }),
+      ...(run.value.hostTurn?.hasInput !== false &&
+        environment.configuration.messageMiddleware.length > 0 && {
+          messageMiddleware: environment.configuration.messageMiddleware,
+        }),
       // `.configure()` — seed is where run-level facts are decided and
       // committed, so the resolver rides that commit. The closure supplies
       // the build-time defaults so a resolver can decide RELATIVE to them
@@ -227,5 +245,10 @@ export function seedFactory(environment: SeedEnvironment) {
         },
       }),
     });
+    if (environment.configuration.citationOptions === undefined) return seed;
+    return (scope: Parameters<typeof seed>[0]) => {
+      if (canStorePrivateFields(scope)) markPrivateFields(scope, CITATION_PRIVATE_FIELDS);
+      return seed(scope);
+    };
   };
 }

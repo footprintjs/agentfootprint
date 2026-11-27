@@ -116,7 +116,14 @@ const NAMES = {
     'droppedSummaries',
   ],
   /** The model's thinking. */
-  thinking: ['thinkingBlocks', 'rawThinking', 'blocks'],
+  thinking: [
+    'thinkingBlocks',
+    'rawThinking',
+    'blocks',
+    'priorReplayThinking',
+    'requestReplay',
+    'priorRequestReplay',
+  ],
   /** Tool calls: what they took, what they returned, what a rule saw. */
   tools: [
     'args',
@@ -139,6 +146,9 @@ const NAMES = {
     // A code-running call that asked from inside `execute`: its program as
     // proposed and as handed to the tool, carried to the row that settles it.
     'pausedScriptPrograms',
+    'codeExecutionReceipt',
+    'previousCodeExecutionReceipt',
+    'answerExecutionClaims',
     // A consent request's record: its nonce lets whoever holds it confirm a
     // guess of the paused call's arguments against the request id
     // (`core/consentRequest.ts`), so it is kept out with them.
@@ -153,7 +163,11 @@ const NAMES = {
     // `turn_end.scripts` is a model-written string the value-kind rule already
     // serves as the placeholder.
     'findingsLedger',
+    'retrievalRequest',
     'findingsRequest',
+    // This private native projection can also contain prior findings DATA.
+    'requestReplay',
+    'priorRequestReplay',
     // The opt-in verifier's private evidence/selected executed scope. Resume
     // checkpoints remain private; exported records must not disclose this bag.
     'claimVerification',
@@ -188,6 +202,8 @@ const NAMES = {
     'unsupported',
     'unsupportedValues',
     'evidenceRecovery',
+    'requestReplay',
+    'priorRequestReplay',
     'evidence',
     'explanation',
     // The values a guarding evidence gate found unsupported in the draft.
@@ -227,10 +243,13 @@ const NAMES = {
 
 /**
  * Keys named per memory or retrieval definition — `memoryInjection_<id>`,
- * `retrievalEvidence_<id>` (`memory/define.types.ts` · `memoryInjectionKey`,
- * `retrievalEvidenceKey`) — matched by their prefix.
+ * `retrievalEvidence_<id>` and `memoryRecallOutcomes_<id>` — matched by their prefix.
  */
-const PATTERN_PREFIXES: readonly string[] = ['memoryInjection_', 'retrievalEvidence_'];
+const PATTERN_PREFIXES: readonly string[] = [
+  'memoryInjection_',
+  'retrievalEvidence_',
+  'memoryRecallOutcomes_',
+];
 const PATTERNS: readonly RegExp[] = PATTERN_PREFIXES.map((prefix) => new RegExp(`^${prefix}`));
 
 /**

@@ -83,7 +83,7 @@
  *   in the record, so a JSON-text envelope the run never recognized reads as
  *   data in "It found";
  * - the standing fold, only for a call that has a committed coverage row
- *   (`core/agent/assessment/assess.ts` · `readTurnResults`). Committed state
+ *   (`core/agent/assessment/resultEvidence.ts` · `readTurnResults`). Committed state
  *   can LOSE a row the run filed (a history restored by `resumeOnError` does
  *   not carry `coverageDeclared`; a trimmed recording drops it), so for a call
  *   with no row the fold passes no door and the envelope in the committed
@@ -147,6 +147,11 @@ export interface ReturnedDoor {
    * fold never has it.
    */
   readonly described?: unknown;
+}
+
+/** A native declaration cannot classify the replacement's bytes or erase its own declaration. */
+export function deliveredDeclarationDoor<T>(rewritten: boolean, nativeDoor: T): T | undefined {
+  return rewritten ? undefined : nativeDoor;
 }
 
 export interface EmptinessContext {

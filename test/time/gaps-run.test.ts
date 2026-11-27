@@ -32,7 +32,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Agent, defineTool, englishTimeReader, isInputPause, type Tool } from '../../src/index.js';
+import {
+  Agent,
+  defineTool,
+  englishTimeReader,
+  isInputPause,
+  type AgentOptions,
+  type Tool,
+} from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
 import { servedAt } from '../../src/time-travel/servedView.js';
@@ -82,9 +89,18 @@ type Row = { kind: string } & Record<string, unknown>;
 const ofKind = (agent: { findings(): unknown }, kind: string): Row[] =>
   ((agent.findings() as Row[] | undefined) ?? []).filter((r) => r.kind === kind);
 
-function build(script: readonly Reply[], tools: readonly Tool[]) {
+function build(
+  script: readonly Reply[],
+  tools: readonly Tool[],
+  integrityPosture: AgentOptions['integrityPosture'] = 'observe',
+) {
   const s = scripted(script);
-  const agent = Agent.create({ provider: s.provider as never, model: 'mock', maxIterations: 6 })
+  const agent = Agent.create({
+    provider: s.provider as never,
+    model: 'mock',
+    maxIterations: 6,
+    integrityPosture,
+  })
     .tools(tools)
     .time({ zone: LA, reader: englishTimeReader() })
     .build();
@@ -163,6 +179,7 @@ describe('G1 — a reading waiting on its ZONE is open: an assume rule is asked,
     const { agent } = build(
       [call('c1', 'smb_records', { server: '10.0.0.1' }), answer('done')],
       [rangeTool(seen)],
+      'dev',
     );
     const zone = paused(
       await agent.run({
@@ -187,7 +204,10 @@ describe('G1 — a reading waiting on its ZONE is open: an assume rule is asked,
     });
     expect(isInputPause(done)).toBe(false);
     expect(seen).toEqual([
-      { server: '10.0.0.1', window: '2026-10-09T08:00:00-07:00..2026-10-09T08:40:59-07:00' },
+      {
+        server: '10.0.0.1',
+        window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00',
+      },
     ]);
     expect(ofKind(agent, 'argument').some((r) => r.source === 'default')).toBe(false);
   });
@@ -233,7 +253,10 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
     expect(isInputPause(done)).toBe(false);
     // The tool's own spelling (`..`, inclusive end) — never the raw `/` interval.
     expect(seen).toEqual([
-      { server: '10.0.0.1', window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00' },
+      {
+        server: '10.0.0.1',
+        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00',
+      },
     ]);
     expect(ofKind(agent, 'time-answer')).toMatchObject([
       {
@@ -248,8 +271,8 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
       person: { source: 'answered', mention: 0 },
     });
     expect(timeLineOf(requests[1])).toContain(
-      '“yesterday morning” is 2026-10-08 06:00–11:59 America/Los_Angeles (UTC-07:00), the window ' +
-        'the person gave when asked what their words meant',
+      '“yesterday morning” is 2026-10-08 06:00–12:00 America/Los_Angeles (UTC-07:00) (end excluded), ' +
+        'the window the person gave when asked what their words meant',
     );
   });
 
@@ -304,7 +327,10 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
       values: { f1: '2026-10-08T06:00:00-07:00/2026-10-08T12:00:00-07:00' },
     });
     expect(seen).toEqual([
-      { server: '10.0.0.1', window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00' },
+      {
+        server: '10.0.0.1',
+        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00',
+      },
     ]);
   });
 
@@ -345,10 +371,10 @@ describe('G7 — the value served to the model is the value the tool is handed',
 describe('G9 — the window set in the app’s time control is served by the library', () => {
   const WINDOW = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' };
   const CONTROL_LINE =
-    'The window the person set in the app’s time control is 2026-10-09 08:00–08:39 ' +
-    'America/Los_Angeles (UTC-07:00) — smb_records window ' +
-    '"2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00". A call may pass these values as ' +
-    'written; an answer built on them states that window.';
+    'The window the person set in the app’s time control is 2026-10-09 08:00–08:40 ' +
+    'America/Los_Angeles (UTC-07:00) (end excluded) — smb_records window ' +
+    '"2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00". A call may pass these ' +
+    'values as written; an answer built on them states that window.';
 
   for (const withReader of [true, false]) {
     it(`${
@@ -369,7 +395,10 @@ describe('G9 — the window set in the app’s time control is served by the lib
         `${TIME_LINE_SOURCE} ${CLOCK} ${CONTROL_LINE.replace('’', "'")}`,
       );
       expect(seen).toEqual([
-        { server: '10.0.0.1', window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00' },
+        {
+          server: '10.0.0.1',
+          window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00',
+        },
       ]);
     });
   }
@@ -390,7 +419,7 @@ describe('G14 — the control window is a fact about the person’s turn: served
   /** The control half with no tool values — the window alone (`serve/windows.ts` · `controlSentence`). */
   const BARE_LINE =
     `${TIME_LINE_SOURCE} ${CLOCK} The window the person set in the app's time control is 2026-10-09 ` +
-    '08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that window.';
+    '08:00–08:40 America/Los_Angeles (UTC-07:00) (end excluded). An answer built on it states that window.';
 
   /** A tool that declares no period — with an `askOrAssume` rule (arms the inputs layer) or none. */
   function noPeriodTool(ruled: boolean) {
@@ -464,7 +493,7 @@ describe('G14 — the control window is a fact about the person’s turn: served
     await agent.run({ message: 'any SMB?', time: { now: NOW, window: future } });
     expect(timeLineOf(requests[0])).toBe(
       `${TIME_LINE_SOURCE} ${CLOCK} The window the person set in the app's time control is 2026-10-10 ` +
-        '08:00–08:59 America/Los_Angeles (UTC-07:00). An answer built on it states that window.',
+        '08:00–09:00 America/Los_Angeles (UTC-07:00) (end excluded). An answer built on it states that window.',
     );
   });
 

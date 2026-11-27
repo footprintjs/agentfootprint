@@ -1,3 +1,6 @@
+import type { AttemptCategory } from 'footprintjs';
+import type { ToolFailureCategory } from '../../../provider-contract/toolResultRecord.js';
+import { readToolFailureCategory as readFailureCategory } from '../../../semantics/toolFailure.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { isRecord } from './record.js';
 import { toolRanOf } from '../../../semantics/toolRan.js';
@@ -66,6 +69,31 @@ export function assessmentCallOutcome(message: Readonly<Record<string, unknown>>
       ? 'refused'
       : undefined)
   );
+}
+
+// Keep the import-free provider port and the engine vocabulary in agreement.
+type RecordedFailureCategory = [AttemptCategory, ToolFailureCategory] extends [
+  ToolFailureCategory,
+  AttemptCategory,
+]
+  ? AttemptCategory
+  : never;
+
+export const readToolFailureCategory: (value: unknown) => RecordedFailureCategory | undefined =
+  readFailureCategory;
+
+/** A category belongs only to a failed tool throw whose delivery was retained. */
+export function recordedToolFailureCategory(message: object): AttemptCategory | undefined {
+  const category = readToolFailureCategory(
+    Object.getOwnPropertyDescriptor(message, 'toolFailureCategory')?.value,
+  );
+  if (category === undefined) return undefined;
+  const disposition = Object.getOwnPropertyDescriptor(message, 'toolResultDisposition');
+  return Object.getOwnPropertyDescriptor(message, 'toolResultExecution')?.value === 'threw' &&
+    Object.getOwnPropertyDescriptor(message, 'outcome')?.value === 'failed' &&
+    (disposition === undefined || ('value' in disposition && disposition.value === undefined))
+    ? category
+    : undefined;
 }
 
 /** A protocol refusal has no valid tool-result correlation. Its frame is the witness. */

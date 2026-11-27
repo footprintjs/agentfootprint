@@ -19,6 +19,8 @@ export interface AgentAroundTurnFailedPayload {
 }
 
 export interface AgentTurnEndPayload {
+  /** A host-supplied reply settled under the run ID on this event. */
+  readonly replyAuthor?: 'host';
   readonly turnIndex: number;
   readonly finalContent: string;
   readonly totalInputTokens: number;
@@ -119,6 +121,9 @@ export interface AgentTurnEndPayload {
    * them so a reader rebuilds the very line from the record.
    */
   readonly standingLineNames?: Readonly<Record<string, string>>;
+
+  /** Present when the reason filter omitted this turn's otherwise eligible standing line. */
+  readonly standingLineOmittedByRaiseOn?: true;
   /** Runtime-composed typed negatives, with verification and delivery kept separate. */
   readonly answerNegatives?: AnswerNegativesPayload;
   /**

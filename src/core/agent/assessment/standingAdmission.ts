@@ -14,10 +14,13 @@ import {
   entryEvidenceOf,
   legacyEntryKeys,
 } from './entryEvidence.js';
-import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
+import { citationConflictIndex } from './pointer.js';
+import { reasonClassOf, isDeclarationWitness, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
+import { windowDropWitnesses } from './results/window/stage.js';
 import { callAddressOf, rowList } from './sources.js';
 import type { AssessmentPointer, AssessmentReason } from './types.js';
+import { declaredResultAdmitted } from './results/coverage/declarations.js';
 
 type Resolve = ReturnType<typeof historyCallResolver>;
 type Row = Readonly<Record<string, unknown>>;
@@ -145,8 +148,16 @@ export function standingAdmission(
       entered(undefined, key)
     );
   };
+  const declarationProof = {
+    native: nativeResult,
+    returned: (address: number | undefined, key: string | null | undefined) =>
+      returned(address, false, key),
+  };
+  const declaredResult = (row: Row, address?: number): boolean =>
+    declaredResultAdmitted(row, address, declarationProof);
 
   const admit = (reason: AssessmentReason, pointer: AssessmentPointer): boolean => {
+    if (reason === 'sources-conflict' && citationConflictIndex(pointer) !== undefined) return true;
     const row = rowOf(state, pointer);
     const kind = reasonClassOf(reason, witnessKind(row));
     if (kind === 'turn' || kind === 'settlement') return true;
@@ -177,7 +188,14 @@ export function standingAdmission(
       return kind === 'input'
         ? !(keyed && argument.occurrenceKey === undefined) &&
             entered(argument.historyIndex, argument.occurrenceKey)
-        : returned(argument.historyIndex, true, argument.occurrenceKey);
+        : // A period declaration reaches an argument row only through the period join,
+          // which reads `inputs/stage.ts · readInputs`' entered arguments: a keyless
+          // argument of a keyed record never joins, so it needs no second refusal here.
+          returned(
+            argument.historyIndex,
+            !isDeclarationWitness(pointer.key, row.kind, reason),
+            argument.occurrenceKey,
+          );
     }
     const occurrence =
       row.kind === 'argument'
@@ -191,10 +209,29 @@ export function standingAdmission(
     const key = readCallOccurrenceKey(
       row.kind === 'contingent' && isRecord(row.declaredOn) ? row.declaredOn : row,
     );
+    if (
+      pointer.key === 'libraryResultLimits' &&
+      (reason === 'result-cut' || reason === 'placed-unread' || reason === 'times-without-zone')
+    ) {
+      // A cut settles the original result as unserved. Its prefix can still carry a
+      // native dataset ticket. Only the post-policy writer can attest that it survived.
+      const zoneCount = reason === 'times-without-zone';
+      if (zoneCount && Object.getOwnPropertyDescriptor(row, 'nativeRefInCut')?.value !== true)
+        return nativeResult(row, occurrence);
+      if (returned(occurrence, zoneCount, key)) return true;
+      const fact = settlementOf(occurrence, key);
+      return (
+        fact?.execution === 'returned-unserved' &&
+        fact.delivery !== 'withheld' &&
+        fact.outcome === undefined
+      );
+    }
     return kind === 'input'
       ? entered(occurrence, key)
       : row.kind === 'contingent' && settlements !== undefined
       ? returned(occurrence, false, key)
+      : isDeclarationWitness(pointer.key, row.kind, reason)
+      ? declaredResult(row, occurrence)
       : nativeResult(row, occurrence);
   };
   // A rule can reject an error notice, even when there is no returned result.
@@ -216,7 +253,17 @@ export function standingAdmission(
   return {
     admit,
     dispositions,
-    settlements,
+    settlements:
+      settlements === undefined
+        ? undefined
+        : {
+            ...settlements,
+            windowDrops: windowDropWitnesses(
+              state.libraryResultLimits,
+              state.turnNumber,
+              settlements,
+            ),
+          },
     keyed,
     entered,
     returned,
@@ -230,7 +277,19 @@ export function standingAdmission(
           dispositions.get(index) === 'withheld' && calls.get(index)?.execution === 'returned',
       ),
     nativeResult,
+    declaredResult,
     entryIncomplete: entryEvidence?.complete === false,
     legacyEntry: entryEvidence?.legacy === true,
+    // A keyless record can predate occurrence and settlement evidence. Keep
+    // uncertainty separate from admitted result evidence, and leave records
+    // with delivery policy evidence on the existing strict path.
+    legacyConflictCheck:
+      !keyed &&
+      state.settledToolCalls === undefined &&
+      state.settledToolCallsComplete === undefined &&
+      state[ENTRY_EVIDENCE_KEY] === undefined &&
+      state[ENTRY_EVIDENCE_COMPLETE_KEY] === undefined &&
+      state.middlewareDecisions === undefined &&
+      [...calls.values()].every(({ markedWithheld }) => !markedWithheld),
   };
 }

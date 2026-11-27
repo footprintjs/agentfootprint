@@ -1,17 +1,16 @@
 /** Walker: convert one answered window into each member call's declared forms. */
 import type { InputValue } from '../../../../../tools/inputRequest.js';
 import { convertForTool, granularityMsOf, toolFacts } from '../../../../../time/convert.js';
-import { offeredLookback, windowToConvert, type TurnWindow } from '../../../../../time/windows.js';
-import type { TimeRange } from '../../../../../time/range.js';
-import type { ZoneName } from '../../../../../time/zone.js';
+import { windowToConvert, type TurnWindow } from '../../../../../time/windows.js';
 import { validatePropertyValue } from '../../../../../tools/toolArgsValidation.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf } from '../../../../../tools/declare.js';
 import type { BatchAddress } from '../../batchAddress.js';
 import { memberAddresses, windowAddressKey } from '../../askAddresses.js';
 import type { BatchCall, ToolOf } from '../../resolve.js';
+import { widerOf } from '../../wider.js';
 import { WINDOW_FORM_EXPECTATION } from '../constants.js';
 import { refusalExpectation } from '../fields.js';
-import type { AskField, AskTime, WindowAskField, WindowFill } from '../types.js';
+import type { AskField, AskTime, WindowFill } from '../types.js';
 import { propertyOf } from '../validation.js';
 import type { WindowFilled } from './types.js';
 
@@ -24,12 +23,10 @@ import type { WindowFilled } from './types.js';
  */
 export function windowFills(
   field: AskField,
-  range: TimeRange,
-  zone: ZoneName,
+  answered: TurnWindow,
   byAddress: ReadonlyMap<BatchAddress, BatchCall>,
   toolOf: ToolOf,
   time: AskTime,
-  keepLookback = true,
 ):
   | {
       readonly fills: Readonly<Record<string, WindowFill>>;
@@ -38,19 +35,6 @@ export function windowFills(
   | { readonly expected: string } {
   const fills: Record<string, WindowFill> = Object.create(null);
   const filled: Record<string, WindowFilled> = Object.create(null);
-  // The offered look-back, picked as offered, stays a look-back from now — the same window the
-  // served line and a later call's fill convert (`time/windows.ts` · `windowToConvert`), so the value
-  // this call is handed and the value the model is told are one spelling.
-  const lookback = keepLookback
-    ? offeredLookback(field.window?.reading ?? time.reading?.row, range)
-    : undefined;
-  const answered: TurnWindow = {
-    source: 'answered',
-    mention: (field.window as WindowAskField).mention,
-    range,
-    ...(lookback !== undefined && { lookback }),
-    zone,
-  };
   for (const member of field.members) {
     const rules = rulesOf(toolOf(member.toolName));
     if (rules === undefined || isRefused(rules)) return { expected: WINDOW_FORM_EXPECTATION };
@@ -58,7 +42,7 @@ export function windowFills(
     const facts = periodFactsOf(rules.period);
     const read = convertForTool(windowToConvert(answered), forms, facts, {
       now: time.now,
-      zone,
+      zone: answered.zone,
       ...(time.appZone !== undefined && { appZone: time.appZone }),
       granularityMs: granularityMsOf(facts),
     });
@@ -68,12 +52,7 @@ export function windowFills(
       return { expected: refusalExpectation(read.refused, toolFacts(forms, facts)) };
     }
     const conversion = read.conversion;
-    const wider =
-      'sent' in conversion
-        ? facts.filtersToAsked === true
-          ? ('tool-trims' as const)
-          : ('reads-more' as const)
-        : undefined;
+    const wider = widerOf(conversion, facts.filtersToAsked === true);
     for (const address of memberAddresses(member)) {
       const key = windowAddressKey(field, address);
       if (Object.hasOwn(fills, key) || !byAddress.has(address)) continue;
@@ -95,7 +74,9 @@ export function windowFills(
           how: 'filled',
           window: answered,
           conversion,
-          ...(wider === 'tool-trims' && { trimmedByTool: true as const }),
+          ...((wider === 'tool-trims' || wider === 'source-clock-trims') && {
+            trimmedByTool: true as const,
+          }),
           ...(read.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
         },
       };

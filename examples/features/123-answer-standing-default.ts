@@ -1,5 +1,6 @@
-/** Show what a person sees when a tool reports that its work is pending. */
-import { Agent, defineTool } from '../../src/index.js';
+/** Show the answer warning for pending work, timeouts, coverage gaps, and cut results. */
+import { AttemptTimeoutError } from 'footprintjs';
+import { Agent, coverage, defineTool, type Tool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import type { Payloads } from '../../src/events.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -24,24 +25,57 @@ const reportStatus = defineTool({
   execute: () => ({ content: 'The report is queued.', effects: [], status: 'pending' }),
 });
 
+const collectorCheck = defineTool({
+  name: 'collector_check',
+  displayName: 'Collector check',
+  description: 'Check the live collector.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () => {
+    throw new AttemptTimeoutError(1, 30_000);
+  },
+});
+
+const archivedReport = defineTool({
+  name: 'archived_report',
+  displayName: 'Archive lookup',
+  description: 'Read a report from the archive.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () =>
+    coverage(
+      { archivedReports: 1 },
+      {
+        checked: ['Yesterday’s saved report'],
+        notChecked: [
+          { what: 'The live report generated for the current request', short: 'Live report' },
+        ],
+      },
+    ),
+});
+
 const modelAnswer = 'The report is ready.';
 
-function reportAgent(disableAnswerLayer: boolean) {
+function reportAgent(tools: readonly Tool[], disableAnswerLayer: boolean) {
   const builder = Agent.create({
     provider: mock({
       replies: [
-        { toolCalls: [{ id: 'report-1', name: 'report_status', args: {} }] },
+        {
+          toolCalls: tools.map(({ schema }, index) => ({
+            id: `report-${index + 1}`,
+            name: schema.name,
+            args: {},
+          })),
+        },
         { content: modelAnswer },
       ],
     }),
     model: 'mock',
-  }).tool(reportStatus);
+  }).tools(tools);
 
   return (disableAnswerLayer ? builder.answerLayer(false) : builder).build();
 }
 
-async function readReport(message: string, disableAnswerLayer = false) {
-  const agent = reportAgent(disableAnswerLayer);
+async function readReport(message: string, tools: readonly Tool[], disableAnswerLayer = false) {
+  const agent = reportAgent(tools, disableAnswerLayer);
   let assessment: Payloads.AgentTurnEndPayload['answerAssessment'];
   agent.on('agentfootprint.agent.turn_end', (event) => {
     assessment = event.payload.answerAssessment;
@@ -55,8 +89,8 @@ async function readReport(message: string, disableAnswerLayer = false) {
 }
 
 export async function run(input: string): Promise<string> {
-  const byDefault = await readReport(input);
-  const off = await readReport(input, true);
+  const byDefault = await readReport(input, [reportStatus]);
+  const off = await readReport(input, [reportStatus], true);
   const warning = 'Not sure — a tool reported unfinished work.';
   if (byDefault.answer !== `${modelAnswer}\n\n---\n\n${warning}`) {
     throw new Error('Expected the delivered answer to carry the unfinished-work warning.');
@@ -67,9 +101,77 @@ export async function run(input: string): Promise<string> {
   if (off.answer !== modelAnswer) {
     throw new Error('Expected the model’s exact answer with the answer layer off.');
   }
-  return [`Default\n${byDefault.answer}`, `.answerLayer(false)\n${off.answer}`].join('\n\n');
+  const detailed = await readReport(input, [collectorCheck, archivedReport]);
+  if (
+    typeof detailed.answer !== 'string' ||
+    !detailed.answer.includes('Collector check timed out') ||
+    !detailed.answer.includes('Archive lookup') ||
+    !detailed.answer.includes('Live report')
+  ) {
+    throw new Error('Expected the default warning to explain the timeout and the coverage gap.');
+  }
+  const cut = await cutLogAnswer(input);
+  if (typeof cut !== 'string' || !cut.includes('Not sure') || !cut.includes('event log')) {
+    throw new Error('Expected a warning naming the cut log.');
+  }
+  const cutoff = await answerAtOutputLimit(input);
+  if (!cutoff.includes("the answer was cut off at the model's output limit")) {
+    throw new Error('Expected the delivered answer to explain the cutoff.');
+  }
+  return [
+    `Pending work\n${byDefault.answer}`,
+    `.answerLayer(false)\n${off.answer}`,
+    `Timeout and coverage gap\n${detailed.answer}`,
+    `Result cut\n${cut}`,
+    `Output cutoff\n${cutoff}`,
+  ].join('\n\n');
 }
 // #endregion answer-standing-default
+
+// #region recorded-result-cut
+async function cutLogAnswer(message: string) {
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'log-1', name: 'array_events', args: {} }] },
+        'Every event was healthy.',
+      ],
+    }),
+    maxToolResultChars: 2_000,
+  })
+    .tool(
+      defineTool({
+        name: 'array_events',
+        displayName: 'array event log',
+        description: 'Read the array event log.',
+        execute: () => 'OK\n'.repeat(1_000) + 'PORT DOWN',
+      }),
+    )
+    .build();
+  try {
+    return await agent.run({ message });
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion recorded-result-cut
+
+// #region answer-output-limit
+async function answerAtOutputLimit(message: string): Promise<string> {
+  const agent = Agent.create({
+    provider: mock({ reply: 'The report contains', stopReason: 'max_tokens' }),
+    model: 'mock',
+  }).build();
+  try {
+    const answer = await agent.run({ message });
+    if (typeof answer !== 'string') throw new Error('Unexpected pause.');
+    return answer;
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion answer-output-limit
 
 if (isCliEntry(import.meta.url)) {
   run(meta.defaultInput ?? '')

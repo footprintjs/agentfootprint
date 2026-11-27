@@ -9,6 +9,8 @@ export interface SkillReadFacts {
   readonly toolName: string;
   /** The arguments that will run (after any rewrite and the schema check). */
   readonly args: Readonly<Record<string, unknown>>;
+  /** Admission already refused. Keep the policy receipt without changing the result. */
+  readonly auditOnly?: true;
   /** The skill the cursor stands on — read only when the question is asked (a scope read is recorded). */
   readonly currentSkillId: () => unknown;
   /** The parked skills (`contracts/operations/catalog.ts` · `parkedNow`) — read only when asked. */
@@ -21,7 +23,8 @@ export interface SkillReadFacts {
  * the model reads was already filtered (the Tools slot asks the same checker
  * the same question), so this is the second half of one rule rather than a
  * second rule: a model that guessed a hidden id, or remembered one from an
- * earlier turn, reads the policy's own message.
+ * earlier turn receives the generic role validation result. The operator
+ * still gets the policy receipt for a recorded hidden selection.
  *
  * ONE owner for the model's call (`execution/dispatchCall.ts`) and a call one
  * tool makes through another (`innerCallGates.ts`): a composing tool that
@@ -68,10 +71,11 @@ export async function askSkillRead(
     target: requestedSkillId,
     parked: facts.parked(),
   });
-  if (stay) return;
+  if (stay && facts.auditOnly !== true) return;
   await askCapability(
     'skill_read',
     skillTarget(requestedSkillId),
     `Skill '${requestedSkillId}' is not available in this context.`,
+    facts.auditOnly === true,
   );
 }

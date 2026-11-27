@@ -208,7 +208,7 @@ which reads nothing of the answer.
 
 **One scanner for the text** — `answerText.ts`, shared by the peel
 (`peel.ts · peelAnswerFindings`, the whole answer) and the stream
-(`stages/callLLM.ts`, chunk by chunk), so the tokens a UI shows and the
+(`stages/callLLM/executeCall.ts`, chunk by chunk), so the tokens a UI shows and the
 answer the run returns are the same text.
 
 - **What.** Every JSON object written in the answer — the whole answer, one
@@ -494,7 +494,7 @@ offering it would invite a judgment of the library's own words, and counting
 it undeclared would report an absence that is not one. A model that names the
 id anyway is recorded exactly as written (`unknownId: true`, no tool name),
 and its standing never turns the sentence into a ticket. The live request
-(`../stages/callLLM.ts`) and its rebuild (`time-travel/servedView.ts`)
+(`../stages/callLLM/prepareCall.ts`) and its rebuild (`time-travel/servedView.ts`)
 both read the served ids and run the collapse on the committed conversation
 and strip AFTER, so the conformance law holds on a settled run.
 

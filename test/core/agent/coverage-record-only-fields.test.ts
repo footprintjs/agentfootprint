@@ -293,13 +293,31 @@ describe('record-only fields — a declaring tool changes the record, never the 
   it.each(cases)('%s × %s: the model’s requests are byte-identical', async (path, shape) => {
     const plain = build(path, shape, false, true);
     const declaring = build(path, shape, true, true);
-    const detail = shape === 'ledger' ? '' : '; a tool said nothing matched';
-    const expected = `done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover${detail}.`;
-    expect(await drive(plain, path, shape, false)).toBe(expected);
-    expect(await drive(declaring, path, shape, true)).toBe(expected);
+    const plainAnswer = await drive(plain, path, shape, false);
+    const declaredAnswer = await drive(declaring, path, shape, true);
     const requests = plain.requests.map(text);
     expect(requests.join('')).not.toContain('"callOccurrenceKey"');
     expect(declaring.requests.map(text)).toEqual(requests);
+    const prefix =
+      'done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover';
+    const absence = shape === 'ledger' ? '' : '; a tool said nothing matched';
+    if (path === 'pause') {
+      // The person's supplied result is not an admitted tool declaration.
+      expect(plainAnswer).toBe(`${prefix}${absence}.`);
+      expect(declaredAnswer).toBe(plainAnswer);
+    } else {
+      // The long subjects leave room only for the shorter explanation.
+      expect(plainAnswer).toBe(
+        `${prefix} (did not check “whether that name is a storage array, and which VM disks are on it”; ` +
+          `cannot cover “hosts that are not VMware — AIX LPARs and physical servers” ` +
+          `because “RVTools sees VMware only”)${absence}.`,
+      );
+      expect(declaredAnswer).toBe(
+        `${prefix} (did not check “whether that name is a storage array” ` +
+          `because “this tool places disks, it does not list arrays”; ` +
+          `cannot cover “hosts that are not VMware” because “RVTools sees VMware only”)${absence}.`,
+      );
+    }
     // History additionally carries the recorded addresses. Compare their
     // co-reference and slot, with only the random batch words normalized.
     const historyOf = (h: Harness) =>

@@ -1,0 +1,83 @@
+---
+title: Prose citations
+description: Link a prose answer to submitted tool results and check claims against authorized evidence.
+---
+
+Set `citations` in `Agent.create()` to check references in an ordinary prose
+answer. This option is off by default. It works with the Node `anthropic()`
+adapter's plain SDK requests, including successful streams. Typed output,
+other adapters, thinking requests and requests carrying a signed replay prefix
+are outside the feature's scope.
+
+## Configure a citation check
+
+Declare which tool, entity, field and executed arguments can establish a
+claim. Provide a synchronous `authorizeEvidence` policy that separately
+permits retention of the original structured result and the selected scope
+arguments. Derive the claim's entity, value and intended scope from the prose
+and your application context. Reading the intended scope from the cited result
+would let that result choose the question it is judged against.
+
+<CodeFile
+  path="examples/features/125-prose-citations.ts"
+  region="cite-prose"
+  title="Check a measurement citation against its declared scope"
+/>
+
+The [runnable example](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/125-prose-citations.ts)
+uses a scripted SDK client and synthetic data. It needs no API key and makes
+no network requests. In your app, use `anthropic()` with your usual
+credentials and make the authorization decision for the current reader.
+
+## Read the result
+
+After the run, read `(await agent.assessment())?.citations`. An offered
+marker links to a particular tool result body in the request that produced
+the accepted response. The slot is meaningful within that offer. Submission
+establishes which body the request contained. It cannot establish that the
+model attended to that body.
+
+- `supported` means the cited reading agrees with the authored claim for
+  its entity, field and scope.
+- `contradicted` means the comparable reading disagrees in that scope.
+- `unverified` covers unresolved claims, incomplete scope or coverage and
+  unavailable evidence. A finding with a slot can still identify the source
+  even if the claim could not be checked. A copied marker from an earlier
+  request can be unverified without a slot.
+
+Citation findings describe the terminal prose. Existing output and input
+policies keep their own retry, refusal and streaming behavior. The citation
+checker uses deterministic comparisons and adds no model call.
+
+## Compare two readings
+
+Add `comparisonGroups: [{ concept, rules: [firstRuleId, secondRuleId] }]` for
+independent tools with rules about the same concept. Use scope dimensions
+named `unit` and `grain`, declare `periodDimension` with an absolute queried
+interval, and include any other qualifiers. Values from two authorized tool
+results are compared only when their entity, field and scope match, coverage
+admits the queried period and the values have comparable types.
+
+`citations.conflicts` contains pairs of offer slots. A pair can be reported
+even if neither slot appears in a prose marker. `comparisonComplete`
+describes the bounded comparison pass. An empty list can also mean no
+comparable pair was available.
+
+## Check a requested column
+
+`requestedColumn` reads one explicit column name from the admitted user
+message. `completeColumns` supplies the whole authorized visible column
+set for the submitted result. When the answer cites one governing source,
+the checker can report that the requested column is absent and suggest a
+uniquely nearest visible name. Return `undefined` when visibility is partial
+or the full column set is unknown.
+
+## Evidence and privacy
+
+Authorize retention only when both the original structured facts and the
+selected scope can be retained. The citation assessment exposes the
+structural verdict, prose position, offer slots and any authorized column
+suggestion. Private evidence is used for comparison. The public assessment
+omits retained source contents and internal proof identifiers. Apply your
+existing content and recording policies to the prose and tool messages
+themselves.

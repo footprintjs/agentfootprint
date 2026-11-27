@@ -63,8 +63,11 @@ const PURE_CORE = [
   `${IE}/evaluator.ts`,
   `${IE}/hostContract.ts`,
   `${IE}/intentScorer.ts`,
+  `${IE}/projectActiveInjection.ts`,
   `${IE}/promptTemplate.ts`,
   `${IE}/routingPolicy.ts`,
+  `${IE}/skillBodyEvidence.ts`,
+  `${IE}/skillContext.ts`,
   `${IE}/skillContract.ts`,
   `${IE}/skillEntryEvidence.ts`,
   `${IE}/skillExamples.ts`,
@@ -106,6 +109,18 @@ const PURE_CORE = [
  * loop would hand the loop to the graph through the back door.
  */
 const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
+  [
+    'src/lib/callOccurrence.ts',
+    'The detached call address reader verifies that a skill body belongs to a recorded occurrence. No imports.',
+  ],
+  [
+    'src/lib/sha256.ts',
+    'A provider-neutral body digest over a string. No platform or runtime imports.',
+  ],
+  [
+    'src/lib/toolSkillBodyRecord.ts',
+    'The detached skill-body origin shared with the message record. One no-import type.',
+  ],
   [
     'src/semantics/toolOutcome.ts',
     '`ToolResultStatus` / `TOOL_RESULT_STATUSES` — the outcome words a route edge keys on ' +
@@ -183,6 +198,36 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'without naming a provider.',
   ],
   [
+    'src/provider-contract/types/message.ts',
+    'The whole LLMMessage declaration moved behind the stable provider-port facade. ' +
+      'Its imports name only the same closed record/thinking vocabularies already reached here.',
+  ],
+  [
+    'src/provider-contract/types/request.ts',
+    'The whole LLMRequest declaration moved behind the stable provider-port facade. ' +
+      'It names the same message, tool-schema, caching and thinking contracts as before.',
+  ],
+  [
+    'src/provider-contract/types/response.ts',
+    'The whole LLMResponse, WireToolManifest and LLMChunk declarations moved behind the ' +
+      'stable provider-port facade; only the closed response vocabulary belongs here.',
+  ],
+  [
+    'src/provider-contract/intervention.ts',
+    'The response port names safe intervention evidence and its typed terminal refusals. ' +
+      'Its bounded projection and error classes have no imports, vendor, recorder or engine dependency.',
+  ],
+  [
+    'src/provider-contract/types/provider.ts',
+    'The whole LLMProvider, resilience-report and per-call hook declarations moved behind ' +
+      'the stable facade, with the same provider request/response and capability types.',
+  ],
+  [
+    'src/provider-contract/types/code.ts',
+    'The whole code/browser ports and their three member feature detectors moved from the ' +
+      'same already-allowed provider facade. They have no imports or vendor/engine dependency.',
+  ],
+  [
     'src/thinking/types.ts',
     'reached by `provider-contract/types.ts` for `ThinkingBlock`. No imports.',
   ],
@@ -198,7 +243,7 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
   ],
   [
     'src/provider-contract/toolResultRecord.ts',
-    'The tool result fields of the provider port. One interface with no imports or runtime code.',
+    'The tool result fields of the provider port. Its only import is the pure skill-body record type.',
   ],
   [
     'src/provider-contract/wireRole.ts',
@@ -250,6 +295,10 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
 const HOST_ZONE = [
   `${IE}/SkillRegistry.ts`,
   `${IE}/buildInjectionEngineSubflow.ts`,
+  // The native Evaluate stage projects its recorder payload here. Neither
+  // module is part of the standalone skill-graph host contract.
+  `${IE}/evaluationCatalog.ts`,
+  `${IE}/routingEntries.ts`,
   `${IE}/devWarnHost.ts`,
   `${IE}/index.ts`,
   `${IE}/leases.ts`,

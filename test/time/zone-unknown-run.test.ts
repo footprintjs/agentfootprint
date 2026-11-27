@@ -32,6 +32,7 @@ import {
   defineTool,
   englishTimeReader,
   isInputPause,
+  type AgentOptions,
   type Tool,
   type ToolExecutionContext,
 } from '../../src/index.js';
@@ -113,11 +114,20 @@ function epochTool(seen: Record<string, unknown>[] = []) {
   });
 }
 
-function build(script: readonly Reply[], tools: readonly Tool[], reader = true) {
+function build(
+  script: readonly Reply[],
+  tools: readonly Tool[],
+  options: { reader?: boolean; integrityPosture?: AgentOptions['integrityPosture'] } = {},
+) {
   const s = scripted(script);
-  const agent = Agent.create({ provider: s.provider as never, model: 'mock', maxIterations: 6 })
+  const agent = Agent.create({
+    provider: s.provider as never,
+    model: 'mock',
+    maxIterations: 6,
+    integrityPosture: options.integrityPosture ?? 'observe',
+  })
     .tools(tools)
-    .time(reader ? { reader: englishTimeReader() } : {})
+    .time(options.reader === false ? {} : { reader: englishTimeReader() })
     .build();
   return { agent, requests: s.requests };
 }
@@ -323,41 +333,71 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     );
   });
 
-  it('the question says “use”: the answer moves the query, “yesterday 8 AM to 9 AM” is other instants in Tokyo', async () => {
-    const read = async (zone: string) => {
-      const seen: Record<string, unknown>[] = [];
-      const { agent } = build([call('c1', 'client_activity'), answer('ok')], [epochTool(seen)]);
-      const asked = paused(
-        await agent.run({ message: 'any activity yesterday 8 AM to 9 AM?', time: { now: NOW } }),
-      );
-      const offered = paused(
-        await agent.resume(asked.checkpoint as never, {
-          requestId: asked.awaitingInput.requestId,
-          values: { f1: zone },
-        }),
-      );
-      await agent.resume(offered.checkpoint as never, {
-        requestId: offered.awaitingInput.requestId,
-        values: { f1: offered.awaitingInput.fields[0]!.enum![0]! },
+  it.each(['same', 'fresh'] as const)(
+    '%s Agent: a zone reply asks for confirmation before new model work',
+    async (mode) => {
+      const read = async (zone: string) => {
+        const seen: Record<string, unknown>[] = [];
+        const tools = [epochTool(seen)];
+        const options = { integrityPosture: 'dev' } as const;
+        const initial = build([call('c1', 'client_activity'), answer('ok')], tools, options);
+        const resumed = mode === 'fresh' ? build([answer('ok')], tools, options) : initial;
+        const work: boolean[] = [];
+        const wireChecks: number[] = [];
+        for (const agent of new Set([initial.agent, resumed.agent])) {
+          agent.on('agentfootprint.integrity.disposition', ({ payload }) => {
+            work.push(payload.workExisted);
+            wireChecks.push(payload.rows.find((row) => row.seam === 'wire')!.unreachable);
+          });
+        }
+        try {
+          const asked = paused(
+            await initial.agent.run({
+              message: 'any activity yesterday 8 AM to 9 AM?',
+              time: { now: NOW },
+            }),
+          );
+          expect(asked.awaitingInput.fields[0]).toMatchObject({ format: 'zone' });
+          expect(initial.requests).toHaveLength(1);
+          const checkpoint =
+            mode === 'fresh' ? JSON.parse(JSON.stringify(asked.checkpoint)) : asked.checkpoint;
+          const offered = paused(
+            await resumed.agent.resume(checkpoint as never, {
+              requestId: asked.awaitingInput.requestId,
+              values: { f1: zone },
+            }),
+          );
+          expect(offered.awaitingInput.fields[0]).toMatchObject({ format: 'time-range' });
+          expect(resumed.requests).toHaveLength(mode === 'fresh' ? 0 : 1);
+          expect(seen).toEqual([]);
+          await resumed.agent.resume(offered.checkpoint as never, {
+            requestId: offered.awaitingInput.requestId,
+            values: { f1: offered.awaitingInput.fields[0]!.enum![0]! },
+          });
+          expect(work).toEqual([true, false, true]);
+          expect(wireChecks).toEqual([1, 0, 1]);
+          return { question: asked.awaitingInput.fields[0]!.description, sent: seen[0] };
+        } finally {
+          for (const agent of new Set([initial.agent, resumed.agent])) await agent.shutdown();
+        }
+      };
+      const question = 'Which time zone should I use for “yesterday 8 AM to 9 AM”?';
+      expect(await read(LA)).toMatchObject({
+        question,
+        sent: {
+          start_time: Date.parse('2026-10-08T15:00:00Z'),
+          end_time: Date.parse('2026-10-08T16:00:00Z'),
+        },
       });
-      return { question: asked.awaitingInput.fields[0]!.description, sent: seen[0] };
-    };
-    const question = 'Which time zone should I use for “yesterday 8 AM to 9 AM”?';
-    expect(await read(LA)).toMatchObject({
-      question,
-      sent: {
-        start_time: Date.parse('2026-10-08T15:00:00Z'),
-        end_time: Date.parse('2026-10-08T16:00:00Z'),
-      },
-    });
-    expect(await read('Asia/Tokyo')).toMatchObject({
-      question,
-      sent: {
-        start_time: Date.parse('2026-10-08T23:00:00Z'),
-        end_time: Date.parse('2026-10-09T00:00:00Z'),
-      },
-    });
-  });
+      expect(await read('Asia/Tokyo')).toMatchObject({
+        question,
+        sent: {
+          start_time: Date.parse('2026-10-08T23:00:00Z'),
+          end_time: Date.parse('2026-10-09T00:00:00Z'),
+        },
+      });
+    },
+  );
 
   it('the one sentence holds for elapsed words too, where the zone only names the same instants', async () => {
     const { agent } = build([call('c1', 'client_activity')], [epochTool()]);
@@ -375,15 +415,15 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     const { agent, requests } = build(
       [call('c1', 'client_activity'), answer('ok')],
       [epochTool(seen)],
-      false,
+      { reader: false },
     );
     const window = { from: '2026-10-09T15:00:00Z', to: '2026-10-09T15:30:00Z' };
     const out = await agent.run({ message: 'any client activity?', time: { now: NOW, window } });
     expect(isInputPause(out)).toBe(false);
     expect(timeLineOf(requests[0])).toBe(
       `${TIME_LINE_SOURCE} This turn's time: Friday 2026-10-09 15:40 UTC (the person's time zone is not ` +
-        "known). The window the person set in the app's time control is 2026-10-09 15:00–15:29 " +
-        "UTC (the person's time zone is not known) — client_activity start_time " +
+        "known). The window the person set in the app's time control is 2026-10-09 15:00–15:30 " +
+        "UTC (end excluded) (the person's time zone is not known) — client_activity start_time " +
         `${Date.parse(window.from)}, end_time ${Date.parse(window.to)}. A call may pass these ` +
         'values as written; an answer built on them states that window.',
     );

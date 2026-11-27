@@ -1,19 +1,24 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildBrainFor } from '../../skillBrains.js';
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMToolSchema } from '../../../../provider-contract/types.js';
 import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
+import { retrievalRequestWriter } from '../../honesty/retrievalRequests.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import type { ToolRegistrations } from '../../stages/toolResolver.js';
 import type { buildSlots } from '../slots/buildSlots.js';
+import { buildSourceConsultation } from '../../honesty/sourceConsultation.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface RequestEnvironment {
+  readonly registrations: Required<ToolRegistrations>;
   readonly configuration: AgentConfiguration;
   readonly argumentSources: boolean;
   readonly governsOutput: boolean;
   readonly provider: AgentConfiguration['provider'];
   readonly model: string;
+  readonly resolverForValues: ReturnType<typeof buildSlots>['resolverForValues'];
   readonly temperature: number | undefined;
   readonly maxTokens: number | undefined;
   readonly pricingTable: AgentConfiguration['pricingTable'];
@@ -33,8 +38,46 @@ export interface RequestEnvironment {
 
 /** Keep per-invocation stage creation inside the native component's existing memo. */
 export function requestFactory(environment: RequestEnvironment) {
+  const { memories, reactMode } = environment.configuration;
+  const recallRequests =
+    memories.length === 0
+      ? undefined
+      : retrievalRequestWriter(
+          memories.map(({ id }) => id),
+          reactMode === 'dynamic-grouped',
+        );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.citationOptions !== undefined && { offerCitations: true }),
+      ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
+        sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
+          ...(environment.configuration.ontology !== undefined && {
+            ontology: environment.configuration.ontology,
+          }),
+          ...(checkerGoverns(environment.configuration.permissionChecker, 'skill_read') && {
+            roleViewRequired: true,
+          }),
+          resolve: environment.resolverForValues(run.value),
+          servedTools: run.value.servedTools,
+          toolClaimants: environment.registrations.toolClaimants,
+        })),
+      }),
+      servedTools: run.value.servedTools,
+      contextBinding: run.value.contextBaseline,
+      registrations: environment.registrations,
+      ...(environment.configuration.recordReceiptValue !== false &&
+        run.own && {
+          canRecordToolSelection: () => {
+            const policy = run.value.redaction;
+            return policy?.coverage.state === 'declared-none' && !policy.serving.active();
+          },
+        }),
+      ...(recallRequests !== undefined && { recallRequests }),
+      onResponseCommitted: (scope, localFallback) => {
+        if (environment.configuration.hostEndedTurns)
+          scope.modelReplyRunId = localFallback ? undefined : run.context.runId;
+        run.value.modelResponseCommitted = true;
+      },
       onReplayPrepared: (preparation) => {
         if (
           run.value.checkpointTracker !== undefined &&
@@ -76,6 +119,9 @@ export function requestFactory(environment: RequestEnvironment) {
         environment.governsOutput) && {
         suppressDraftTokens: true,
         withholdDraftContent: true,
+        ...(environment.configuration.liveThinkingWithHeldDrafts === 'provider-summary' && {
+          allowHeldProviderSummary: true as const,
+        }),
       }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(environment.configuration.toolChoiceOptions !== undefined && {
@@ -182,6 +228,10 @@ export function requestFactory(environment: RequestEnvironment) {
       // Opt-in system-prompt capture (9.50.0) — value-conditional, so an agent
       // that never asked keeps byte-identical llm_start events.
       ...(environment.configuration.recordSystemPromptValue && { recordSystemPrompt: true }),
+      // The skill-context decision, recorded on the run's first request (`skillContext/decide.ts`).
+      ...(environment.configuration.skillContext?.recorded === true && {
+        skillContext: environment.configuration.skillContext.record,
+      }),
       // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
       // brain or an escalation exists, so every other agent's stage reads no
       // new scope key and resolves on the exact line it always did. The

@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/windows — the turn's windows, read from the record (time design
  * § 5.6): the window the person settled in the time ask (`answered`), a
@@ -28,6 +29,7 @@ import type { WindowToConvert } from './convert.js';
 import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import { sameRange, type TimeRange } from './range.js';
+import type { WindowEndpoint } from './windowEndpoint.js';
 import type { TimeCandidate } from './resolveRecord.js';
 import type { TimeRefusal } from './periodForm.js';
 import {
@@ -40,6 +42,7 @@ import {
   type TimeReadingRow,
 } from './rows.js';
 import type { ZoneName } from './zone.js';
+import { displayOfTurn } from './display.js';
 
 // ─── The turn's windows ──────────────────────────────────────────────────
 
@@ -62,6 +65,7 @@ export interface TurnWindow {
   /** The accepted correction supersedes the original words, which are not quoted as its source. */
   readonly corrected?: true;
   readonly range: TimeRange;
+  readonly endpoint?: WindowEndpoint;
   /** The look-back it was said as, when it was one. */
   readonly lookback?: DurationText;
   /** The zone the person meant, else the clock's. */
@@ -96,6 +100,8 @@ export interface TurnWindows {
  */
 function readingCandidate(row: TimeReadingRow): TimeCandidate | undefined {
   const choice = row.choice;
+  if (choice?.by === 'only' && row.qualifiedLookback !== undefined)
+    return row.candidates?.[choice.candidate];
   if (row.reader.kind !== 'model' || choice?.by !== 'open') return undefined;
   if (choice.open.length !== 1 || choice.open[0] !== 'confirm') return undefined;
   return row.candidates?.[choice.remaining[0] as number];
@@ -127,10 +133,15 @@ export function offeredLookback(
 export function windowToConvert(window: {
   readonly range: TimeRange;
   readonly lookback?: DurationText;
+  readonly endpoint?: WindowEndpoint;
 }): WindowToConvert {
   return {
     range: window.range,
-    ...(window.lookback !== undefined && { lookback: window.lookback }),
+    ...(window.endpoint !== undefined && { endpoint: window.endpoint }),
+    ...(window.lookback !== undefined && {
+      lookback: window.lookback,
+      ...(window.endpoint !== undefined && { freezeLookback: true as const }),
+    }),
   };
 }
 
@@ -149,7 +160,7 @@ export function windowToConvert(window: {
  */
 export function isOpenForPerson(row: TimeReadingRow): boolean {
   if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) return false;
-  const by = row.choice?.by;
+  const by = choiceForConfirmation(row.choice)?.by;
   if (by !== 'open' && by !== 'none') return false;
   return readingCandidate(row) === undefined;
 }
@@ -186,6 +197,7 @@ export function turnWindowsOf(
         ...(answer.corrected === undefined && { quote: row.quote }),
         ...(answer.corrected !== undefined && { corrected: true }),
         range,
+        ...(answer.endpoint !== undefined && { endpoint: answer.endpoint }),
         ...(lookback !== undefined && { lookback }),
         zone: answer.zone,
         answer: answer.how,
@@ -194,7 +206,7 @@ export function turnWindowsOf(
     }
     const candidate = readingCandidate(row);
     if (candidate === undefined) {
-      const choice = row.choice;
+      const choice = choiceForConfirmation(row.choice);
       const left =
         choice?.by === 'open'
           ? choice.remaining.flatMap((i) => {
@@ -212,23 +224,34 @@ export function turnWindowsOf(
       ...(row.mention !== undefined && { mention: row.mention }),
       quote: row.quote,
       range: candidate.range,
+      ...(candidate.endpoint !== undefined && { endpoint: candidate.endpoint }),
       ...(candidate.window.kind === 'lookback' && { lookback: candidate.window.duration }),
       zone: candidate.zone,
     });
   }
-  if (clock?.window !== undefined) {
+  const control = controlWindowOf(clock);
+  if (control !== undefined) {
     mentions++;
-    windows.push({
-      source: 'control',
-      range: { from: clock.window.from, to: clock.window.to },
-      zone: clock.zone,
-    });
+    windows.push(control);
   }
   return { windows, mentions, ...(open.length > 0 && { open }) };
 }
 
+function controlWindowOf(clock: ClockRow | undefined): TurnWindow | undefined {
+  if (clock?.window === undefined) return undefined;
+  const { from, to, endpoint } = clock.window;
+  return {
+    source: 'control',
+    range: { from, to },
+    ...(endpoint !== undefined && { endpoint }),
+    zone: clock.zone,
+  };
+}
+
 /** The windows of the person's words this turn, with the turn's clock — what the served sentence names. */
 export interface ReaderWindows {
+  /** Existing clock-row metadata, possibly unavailable in a shared record. */
+  readonly display?: unknown;
   readonly now: InstantText;
   /** Each settled mention's window (`answered`, or a `model` reader's), in mention order — never the `control` window. */
   readonly windows: readonly TurnWindow[];
@@ -416,22 +439,18 @@ function pendingZonesOf(
  * `pending`. The `control` window is no reading: it rides `control`, never
  * `windows`.
  */
-export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
+export function readerWindowsOf(
+  ledger: readonly unknown[] | undefined,
+  activeReadings?: readonly TimeReadingRow[],
+): ReaderWindows | undefined {
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
   const turn = clock.turn;
-  const readings = readingsOf(ledger, turn);
+  const readings = activeReadings ?? readingsOf(ledger, turn);
   const answers = answersOf(ledger, turn);
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
-  const control: TurnWindow | undefined =
-    clock.window === undefined
-      ? undefined
-      : {
-          source: 'control',
-          range: { from: clock.window.from, to: clock.window.to },
-          zone: clock.zone,
-        };
+  const control = controlWindowOf(clock);
   if (windows.length === 0 && pending.length === 0 && control === undefined) return undefined;
   const zones = pendingZonesOf(readings, pending);
   const unread = pendingUnreadOf(readings, pending);
@@ -443,6 +462,7 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
   );
   return {
     now: clock.now,
+    ...displayOfTurn(ledger, clock.turn),
     windows,
     ...(control !== undefined && { control }),
     ...(pending.length > 0 && { pending }),

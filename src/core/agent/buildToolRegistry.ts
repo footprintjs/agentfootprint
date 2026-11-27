@@ -193,8 +193,7 @@
 
 import { buildReadSkillTool, buildSkipStepTool } from '../../injection-engine/skillTools.js';
 import { stepsOf, SKIP_STEP_TOOL_NAME } from '../../injection-engine/skillSteps.js';
-import { RESERVED_ARGUMENT } from './findings/types.js';
-import { ownsReservedArgument } from './findings/reserved.js';
+import { assertReservedArgument } from './findings/reservedAtBuild.js';
 import { carriesRules } from '../../tools/declare.js';
 import type { Injection } from '../../injection-engine/types.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
@@ -221,6 +220,8 @@ export interface ToolClaim {
 }
 
 export interface ToolRegistryArtifacts {
+  /** Exact registrations whose tools are contributed only by an active injection. */
+  readonly scopedSkillTools: ReadonlyMap<Injection, readonly Tool[]>;
   /** All tools the LLM sees in the static portion of its tool list
    *  (registry + read_skill + non-autoActivate skill tools). */
   readonly augmentedRegistry: readonly ToolRegistryEntry[];
@@ -275,6 +276,12 @@ export interface ToolRegistryArtifacts {
    * decides, per epoch, in `buildToolsSlot`.
    */
   readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
+  /**
+   * Under `listedScopedTools` only: each scoped tool name → the scoped skills
+   * that declare it. The call gate refuses such a call while none of them is
+   * active. Empty otherwise, and empty for a name an unscoped skill declares too.
+   */
+  readonly listedScopedTools: ReadonlyMap<string, readonly string[]>;
 }
 
 /** The build facts that gate auto-attached tools beyond skills (9.22.0). */
@@ -305,59 +312,13 @@ export interface BuildToolRegistryOptions {
    * one line runs.
    */
   readonly argumentSources?: true;
-}
-
-/**
- * Why the name is reserved, per arm — the clause the refusal gives. The
- * `.findings()` sentence is the one 9.101.0 shipped, byte for byte.
- */
-const RESERVED_BY = {
-  findings:
-    'with .findings() the framework adds that property to every served tool schema so the ' +
-    'model can declare a basis and its standings on it',
-  argumentSources:
-    'with declared sources (argumentSources: true) the framework adds that property to every ' +
-    'tool that declares argument rules (askOrAssume) so the model can say where each argument ' +
-    'value came from',
-} as const;
-
-/**
- * Refuse, at build and by name, a registry tool whose `inputSchema.properties`
- * already carries the reserved `_findings` argument (9.101.0; declared
- * sources, honesty layer 2).
- *
- * The twin of the `SKIP_STEP_TOOL_NAME` refusal one function down, and armed
- * the same way — only when a feature that reserves the name is on: `.findings()`
- * (every registry schema — `findings/reserved.ts · withFindingsArgument`
- * decorates every served tool) or declared sources (every RULED tool — the arm
- * plants `_findings.from` on those only, and their `ask` sentence and answered
- * note name it). The planters leave a schema that already has the property
- * UNTOUCHED (author wins), so a registry tool declaring it would be served
- * with the author's contract under the reserved name and the model's value on
- * that call would run as the author's argument and file no row — accepted and
- * silently wrong, which is why it is refused here instead. Only REGISTRY
- * schemas: a provider- or MCP-ingested schema is met at dispatch, not at
- * build, and there the author's property wins, recorded by the committed
- * schema itself — the dispatch peel (`toolCalls · peelCall`) asks the same
- * `ownsReservedArgument` and leaves that call's value alone, and every
- * sentence that would name `_findings.from` on that tool is served in its
- * unarmed form. Never at `defineTool` — a registry schema is a shared
- * reference `mcpServe` serves verbatim, and the refusal depends on the arm,
- * which `defineTool` cannot know.
- */
-function assertReservedArgument(
-  toolSchemas: readonly LLMToolSchema[],
-  arm: keyof typeof RESERVED_BY,
-): void {
-  for (const schema of toolSchemas) {
-    if (ownsReservedArgument(schema)) {
-      throw new Error(
-        `Agent: tool '${schema.name}' declares the reserved argument '${RESERVED_ARGUMENT}' — ` +
-          `${RESERVED_BY[arm]}, and an author's property of the same name would be served in ` +
-          `its place and swallow the model's declaration. Rename the argument.`,
-      );
-    }
-  }
+  /**
+   * The skill context is `listed` (`skillContext/decide.ts`): a scoped skill's
+   * tools join the static list from the first request, nothing is reported as
+   * held out for skill scope, and `listedScopedTools` names them for the call
+   * gate. Absent — `declared` — and not one line here changes.
+   */
+  readonly listedScopedTools?: true;
 }
 
 /**
@@ -393,10 +354,13 @@ export function buildToolRegistry(
     else held.push(c);
   };
   const skillClaims: { readonly name: string; readonly claim: ToolClaim }[] = [];
+  const scopedSkillTools = new Map<Injection, readonly Tool[]>();
   for (const skill of skills) {
     const meta = skill.metadata as { autoActivate?: string } | undefined;
     const isAutoActivate = meta?.autoActivate === 'currentSkill';
     const toolsFromSkill = skill.inject.tools ?? [];
+    if (isAutoActivate && toolsFromSkill.length && options.listedScopedTools !== true)
+      scopedSkillTools.set(skill, [...toolsFromSkill] as readonly Tool[]);
     for (const tool of toolsFromSkill) {
       const name = tool.schema.name;
       const declared = declaringSkills.get(name);
@@ -433,7 +397,7 @@ export function buildToolRegistry(
       // (`.toolsFromActiveSkill()`, 9.36.0, which stamps the same field on
       // every tool-carrying skill at build). All three write `autoActivate`
       // and this reads it, so there is one gate here, not three.
-      if (isAutoActivate) continue;
+      if (isAutoActivate && options.listedScopedTools !== true) continue;
       skillToolEntries.push({ name, tool });
     }
   }
@@ -599,5 +563,23 @@ export function buildToolRegistry(
     toolSchemas,
     toolDeclaringSkills: declaringSkills,
     toolClaimants: claims,
+    scopedSkillTools,
+    listedScopedTools: options.listedScopedTools === true ? scopedNames(skills) : new Map(),
   };
+}
+
+/** Each tool name every declaring skill of which scoped it → those skills' ids. */
+function scopedNames(skills: readonly Injection[]): ReadonlyMap<string, readonly string[]> {
+  const scoped = new Map<string, string[]>();
+  const unscoped = new Set<string>();
+  for (const skill of skills) {
+    const auto = (skill.metadata as { autoActivate?: string } | undefined)?.autoActivate;
+    for (const tool of skill.inject.tools ?? []) {
+      const name = tool.schema.name;
+      if (auto !== 'currentSkill') unscoped.add(name);
+      else scoped.set(name, [...(scoped.get(name) ?? []), skill.id]);
+    }
+  }
+  for (const name of unscoped) scoped.delete(name);
+  return scoped;
 }

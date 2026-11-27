@@ -1,4 +1,20 @@
 export interface HonestyState {
+  /** Dispatch-owned evidence about this native turn's program execution. */
+  codeExecutionReceipt?: import('../../scripts/executionEvidence.js').CodeExecutionReceipt;
+  /** Evidence from the admitted checkpoint of the immediately previous answer. */
+  previousCodeExecutionReceipt?: import('../../scripts/executionEvidence.js').CompletedCodeExecutionReceipt;
+  /** The accepted prose's method claims checked against the owned turn. */
+  answerExecutionClaims?: import('../../assessment/answer/receipt/observe.js').RecordedExecutionClaimAssessment;
+  /** Admitted offers and attempts for this turn's declared-source check. */
+  sourceConsultation?: import('../../honesty/sourceConsultation.js').SourceConsultationRecord;
+  /** The failed turn was recovered without its private choice identity bank. */
+  sourceConsultationInterrupted?: true;
+  /** A grouped call's committed recall observation, lifted into the outer findings ledger. */
+  retrievalRequest?: import('../../honesty/retrievalRequests.js').RetrievalRequestRow;
+  /** Some result-limit facts could not be retained in this turn's bounded list. */
+  libraryResultLimitsIncomplete?: true;
+  /** Framework-imposed limits on this turn’s tool results, recorded where each limit takes effect. */
+  libraryResultLimits?: readonly import('../../honesty/libraryResultLimits.js').LibraryResultLimit[];
   /** One native protocol correction per human request; never a conversation-derived allowance. */
   sourceDeclarationCorrectionSpent?: true;
   /** Already masked omission observations, pending their actual batch-barrier settlement. */
@@ -44,6 +60,9 @@ export interface HonestyState {
    * `answerStandingLine`.
    */
   answerStandingNames?: Readonly<Record<string, string>>;
+
+  /** The opt-in reason filter omitted this turn's otherwise eligible standing line. */
+  answerStandingLineOmittedByRaiseOn?: true;
   /**
    * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
    * resolved — per call, the declared defaults to FILL, or the sentence the

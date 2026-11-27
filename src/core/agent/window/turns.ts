@@ -21,6 +21,7 @@
  * Testable on its own — see `test/core/window-turns.test.ts`.
  */
 
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { ToolResultPin } from './lastToolResult.js';
 import type { LedgerFactPin } from './ledgerFactPins.js';
@@ -96,6 +97,12 @@ export interface RemovalGuards {
   /** True when the pause is a check-in (human consent) rather than askHuman. */
   readonly pausedCheckIn?: boolean;
   /**
+   * Under the `listed` skill context: the occurrence addresses of the `read_skill` results
+   * that carry a still-active skill's body. A turn holding one refuses with
+   * `'active-skill-body'`. Absent otherwise.
+   */
+  readonly activeSkillBodyOccurrences?: ReadonlySet<string>;
+  /**
    * Candidate LAST-TOOL-RESULT pins (9.57.0), newest first, from
    * `toolResultPinsOf`. An INPUT to `planRemoval`, not to `refusalFor`: the
    * ceiling can only be spent once the keep window is known, so `planRemoval`
@@ -168,6 +175,16 @@ export function refusalFor(turn: Turn, guards: RemovalGuards): WindowRefusalReas
       if (holdsPaused) return guards.pausedCheckIn === true ? 'pending-check-in' : 'paused-tool';
     }
   }
+  const bodies = guards.activeSkillBodyOccurrences;
+  if (
+    bodies !== undefined &&
+    turn.messages.some((message) => {
+      if (message.role !== 'tool') return false;
+      const occurrence = readCallOccurrenceKey(message);
+      return typeof occurrence === 'string' && bodies.has(occurrence);
+    })
+  )
+    return 'active-skill-body';
   for (const msg of turn.messages) {
     for (const call of msg.toolCalls ?? []) {
       if (!guards.answeredCallIds.has(call.id)) return 'unresolved-tool-call';

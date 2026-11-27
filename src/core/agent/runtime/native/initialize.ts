@@ -60,12 +60,14 @@ export function initializeAgent(
       const values = createAgentRunValues({
         window: this.configuration.windowStrategy !== undefined,
         answerLayer: this.configuration.answerLayerOption !== undefined,
+        sourceNotConsulted: this.configuration.answerLayerOption?.sourceNotConsulted === true,
       });
       this.beginIntegrityLedger(values);
       return values;
     },
     options: {
       readTracking: this.configuration.readTracking,
+      writeTracking: this.configuration.writeTracking,
       commitValues: this.configuration.commitValues,
       writeProvenance: this.configuration.writeProvenance,
     },

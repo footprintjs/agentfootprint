@@ -61,6 +61,7 @@ export interface InputsMountDeps {
    * argument rows in the same ONE write.
    */
   readonly time?: {
+    readonly allowProven?: boolean;
     /** The app's `.time({ zone })` — the zone of a form declaring `wallZone: 'app'`. */
     readonly appZone?: ZoneName;
   };

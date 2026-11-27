@@ -2,6 +2,10 @@ import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { ThinkingBlock } from '../../../../thinking/types.js';
 
 export interface ResponseState {
+  /** Host decision at admission. Delivery requires a separately settled reply. */
+  hostEndReason?: 'host-cap';
+  /** The run that accepted the latest provider reply. Local fallbacks clear it. */
+  modelReplyRunId?: string;
   // ── Thinking state (v2.14) ─────────────────────────────────
   /** Provider-specific raw thinking data, set by callLLM after the
    *  LLM response lands. The NormalizeThinking sub-subflow reads this
@@ -21,12 +25,10 @@ export interface ResponseState {
   // merge object members. Replay evidence must cross as one atomic value.
   llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
   /**
-   * The latest response's stop reason — written ONLY by an agent with
-   * native output or an auto native candidate, on every call, and read by
-   * the Route decider: a refusal or truncation stop does not hold the
-   * structured-output format, so that answer fails its attempt by name
-   * (`outputEnforcement.ts · nativeStopFailure`). Cleared on auto's instruction
-   * fallback; absent when no native format candidate was built.
+   * The latest accepted provider stop that matters to delivery. Native output
+   * retains the stop for Route (`nativeStopFailure`), including refusal or
+   * truncation that parses. Other responses record only `max_tokens`. A later
+   * ordinary response or local fallback clears any earlier cutoff.
    */
   llmLatestStopReason?: string;
   /** For a native format candidate: whether this answer used native structured

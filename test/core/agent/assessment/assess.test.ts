@@ -21,12 +21,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
-import { REASONS, reasonEntry } from '../../../../src/core/agent/assessment/reasons.js';
+import {
+  assessmentDataOf,
+  standingFactsOf,
+  standingLineOf,
+} from '../../../../src/core/agent/assessment/compose.js';
 import { MAX_ROW_LIST_ENTRIES } from '../../../../src/core/agent/assessment/sources.js';
-import type {
-  AnswerAssessment,
-  AssessmentReason,
-} from '../../../../src/core/agent/assessment/types.js';
+import type { AnswerAssessment } from '../../../../src/core/agent/assessment/types.js';
 import { absent, coverage } from '../../../../src/index.js';
 
 type State = Record<string, unknown>;
@@ -371,7 +372,7 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     subject: { kind: 'host', id: 'h1' },
     predicate: 'state',
   });
-  const conflict = (witnesses: readonly unknown[], turn?: number) => ({
+  const conflict = (witnesses: unknown, turn?: number) => ({
     kind: 'conflict',
     key: 'host h1 · state',
     witnesses,
@@ -426,7 +427,7 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
         history: repeated,
         findingsLedger: [conflict([reading('old1'), reading('c2')], stamp)],
       });
-      expect(reasonsOf(a)).toEqual([]);
+      expect(reasonsOf(a)).toEqual(stamp === 1 ? [] : ['check-unreachable']);
     }
   });
 
@@ -440,18 +441,115 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     expect(reasonsOf(a)).toEqual([]);
   });
 
-  it.each([
-    { case: 'no readings', witnesses: [] },
-    { case: 'all unnamed', witnesses: [reading(), reading()] },
-    { case: 'one earlier and one unnamed', witnesses: [reading('old1'), reading()] },
-    { case: 'all unresolved', witnesses: [reading('missingA'), reading('missingB')] },
-    { case: 'one earlier and one unresolved', witnesses: [reading('old1'), reading('missingB')] },
-    { case: 'one current and one unresolved', witnesses: [reading('c2'), reading('missingB')] },
-  ])('$case cannot support standing with or without a turn stamp', ({ witnesses }) => {
-    for (const stamp of [undefined, 2]) {
-      const a = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, stamp)] });
-      expect(reasonsOf(a)).toEqual([]);
-      expect(a.standing).toBe('consistent');
+  const mixed = [reading('c2'), reading('missingB')];
+  const legacyCases = [
+    { case: 'current stamp', stamp: 2, witnesses: mixed, uncertain: true },
+    { case: 'unstamped with a current reading', witnesses: mixed, uncertain: true },
+    { case: 'served under a policy', stamp: 2, served: true, witnesses: mixed, uncertain: true },
+    { case: 'raw placeholder list', stamp: 2, witnesses: '[REDACTED]', uncertain: true },
+    {
+      case: 'served placeholder list',
+      stamp: 2,
+      served: true,
+      witnesses: '[REDACTED]',
+      uncertain: true,
+    },
+    { case: 'unreadable list without a turn anchor', witnesses: '[REDACTED]', uncertain: false },
+    {
+      case: 'list past the read bound',
+      stamp: 2,
+      witnesses: Array.from({ length: MAX_ROW_LIST_ENTRIES + 1 }, () => reading('c2')),
+      uncertain: true,
+    },
+    {
+      case: 'served placeholder reading',
+      stamp: 2,
+      served: true,
+      witnesses: [reading('c2'), '[REDACTED]'],
+      uncertain: true,
+    },
+    { case: 'one reading', stamp: 2, witnesses: [reading('missingB')], uncertain: false },
+    { case: 'no readings', stamp: 2, witnesses: [], uncertain: false },
+    { case: 'all unnamed', stamp: 2, witnesses: [reading(), reading()], uncertain: true },
+    {
+      case: 'earlier and unnamed',
+      stamp: 2,
+      witnesses: [reading('old1'), reading()],
+      uncertain: true,
+    },
+    {
+      case: 'two unplaced readings',
+      stamp: 2,
+      witnesses: [reading('missingA'), reading('missingB')],
+      uncertain: true,
+    },
+    {
+      case: 'earlier and unplaced',
+      stamp: 2,
+      witnesses: [reading('old1'), reading('missingB')],
+      uncertain: true,
+    },
+    {
+      case: 'unstamped with no current reading',
+      witnesses: [reading('old1'), reading('missingB')],
+      uncertain: false,
+    },
+  ];
+  it.each(legacyCases)('legacy conflict: $case', ({ stamp, served, witnesses, uncertain }) => {
+    const a = assessAnswer({
+      snapshot: {
+        sharedState: { turnNumber: 2, history, findingsLedger: [conflict(witnesses, stamp)] },
+        ...(served && { recorders: [{ id: 'agentfootprint.redaction' }] }),
+      },
+    });
+    const line = standingLineOf(assessmentDataOf(a), [], false, standingFactsOf(a, new Map()));
+    expect(a.standing).toBe(uncertain ? 'not-sure' : 'consistent');
+    if (!uncertain) {
+      expect(a.reasons).toEqual([]);
+      expect(line).toMatch(/^Consistent/);
+      return;
+    }
+    expect(a.reasons).toEqual([
+      expect.objectContaining({ reason: 'check-unreachable', source: { kind: 'run' } }),
+    ]);
+    expect(line).toBe('Not sure — the record holds a conflict whose readings it cannot place.');
+  });
+
+  it('says both an unplaced conflict and an independently unverified answer check', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict(mixed, 2)],
+      answerValidation: { status: 'unverified' },
+    });
+    expect(reasonsOf(a)).toEqual(['check-unreachable']);
+    expect(standingLineOf(assessmentDataOf(a), [], false, standingFactsOf(a, new Map()))).toBe(
+      'Not sure — the record holds a conflict whose readings it cannot place; ' +
+        "the app's answer checks could not reach a verdict on this answer.",
+    );
+  });
+
+  it('a sparse legacy row cannot supply a conflict or identify its missing witness', () => {
+    const witnesses = [reading('c2')];
+    witnesses.length = 2;
+    const standing = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
+    expect(standing.standing).toBe('not-sure');
+    expect(standing.reasons).toEqual([
+      expect.objectContaining({
+        reason: 'check-unreachable',
+        source: { kind: 'run' },
+      }),
+    ]);
+  });
+
+  it('keeps strict admission when the record has delivery policy or settlement evidence', () => {
+    for (const witnesses of [mixed, '[REDACTED]']) {
+      const base = { turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] };
+      for (const fields of [
+        { middlewareDecisions: [] },
+        { settledToolCalls: [], settledToolCallsComplete: true },
+      ])
+        expect(reasonsOf(run({ ...base, ...fields }))).not.toContain('check-unreachable');
     }
   });
 
@@ -464,15 +562,9 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
           history,
           findingsLedger: [{ ...conflict([], stamp), witnesses }],
         });
-        expect(reasonsOf(a)).toEqual([]);
+        expect(reasonsOf(a)).toEqual(stamp === 2 ? ['check-unreachable'] : []);
       }
     }
-  });
-
-  it('a stamp and a current reading cannot vouch for entries past the list bound', () => {
-    const witnesses = Array.from({ length: MAX_ROW_LIST_ENTRIES + 1 }, () => reading('c2'));
-    const a = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
-    expect(reasonsOf(a)).toEqual([]);
   });
 });
 
@@ -597,67 +689,6 @@ describe('UNIT — caller errors throw; the record is read, never refused', () =
       ],
     };
     expect(assessAnswer(loud as never).standing).toBe('consistent');
-  });
-});
-
-describe('UNIT — the reason table', () => {
-  it('covers the union, once each, and names the class of each', () => {
-    const union: readonly AssessmentReason[] = [
-      'asked',
-      // Honesty layer 2 (the inputs layer, steps 3 and 4).
-      'argument-asked',
-      'argument-assumed',
-      'argument-unverified',
-      // …and step 5 (declared sources).
-      'argument-read',
-      'value-contingent',
-      'declared-absent',
-      'coverage-gap',
-      'empty-undeclared',
-      'call-not-completed',
-      'result-withheld',
-      'work-not-finished',
-      // Honesty layer 3 (the results layer's period verdicts, step 7b).
-      'period-not-held',
-      'period-partly-held',
-      'period-unknown',
-      'period-undeclared',
-      // The time layer's result checks (step T8).
-      'period-differs-from-asked',
-      'period-beyond-retention',
-      'sources-conflict',
-      'value-unsupported',
-      'value-survived-revision',
-      // The time layer (step T7): a time value the library spelled from a reading.
-      'derived-from-reading',
-      // Code in an answer (`code: 'match'`): a shown block matches no submission of the turn.
-      'script-unmatched',
-      'stopped-early',
-      // Honesty layer 4 (the answer layer's procedure witness rows, step 6).
-      'steps-unfinished',
-      'step-skipped',
-      'answer-check-failed',
-      'check-unreachable',
-      'negative-prose-unverified',
-      'claim-exceeds-search',
-      'declaration-overclaimed',
-      // Integrity findings on the record, and a `.claims()` field no tool settled.
-      'invariant-violation',
-      'unsupported-argument',
-      'column-type-mismatch',
-      'missing-column',
-      'unsupported-claim',
-      'claim-unsettled',
-    ];
-    expect([...REASONS.map((r) => r.reason)].sort()).toEqual([...union].sort());
-    expect(REASONS.filter((r) => r.class === 'ask').map((r) => r.reason)).toEqual([
-      'asked',
-      'argument-asked',
-    ]);
-    expect(reasonEntry('work-not-finished').class).toBe('not-sure');
-    expect(reasonEntry('step-skipped').class).toBe('not-sure');
-    expect(Object.isFrozen(REASONS)).toBe(true);
-    expect(() => reasonEntry('nope' as AssessmentReason)).toThrow(/no table entry/);
   });
 });
 

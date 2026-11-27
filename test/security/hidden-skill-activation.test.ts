@@ -256,8 +256,8 @@ describe('the keyword path: user text never surfaces a hidden skill', () => {
       expect(rec.routed).toEqual([]); // no cascade ran
       // The turn entered the next visible entry instead.
       expect(rec.evaluated[0]!.cursorMove).toMatchObject({ to: 'billing', by: 'entry' });
-      expect(rec.evaluated[0]!.skippedDetails).toContainEqual(
-        expect.objectContaining({ id: 'vip', reason: 'hidden' }),
+      expect(rec.evaluated[0]!.skippedDetails).not.toContainEqual(
+        expect.objectContaining({ id: 'vip' }),
       );
     });
 
@@ -453,7 +453,7 @@ describe('every other activation path refuses a hidden skill', () => {
     });
     await run.agent.run({ message: 'help' });
     expectNeverActivated(run.requests, run.evaluated);
-    expect(run.toolResults.some((r) => r.includes('permission denied'))).toBe(true);
+    expect(run.toolResults.some((r) => r.includes('expected an offered skill id'))).toBe(true);
   });
 
   it('a cursor restored from a conversation the caller may no longer read is dropped', async () => {

@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
-import { causalChain, type CausalNode, type CommitBundle } from 'foottrace';
+import { causalChain, commitValueAt, type CausalNode, type CommitBundle } from 'foottrace';
 import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
@@ -130,6 +130,33 @@ describe('llmEdgeWeigher — unit', () => {
     expect(text).toContain('zebra quartz');
     expect(stepOutputText(fixture.commitLog, lastIdxOf, fixture.llmId, 10)!.length).toBe(10);
     expect(stepOutputText(fixture.commitLog, lastIdxOf, 'nope#9', 2000)).toBeUndefined();
+  });
+
+  it('keeps request-recording bookkeeping out of the text scored as model output', async () => {
+    const consumer = {
+      runId: 'run-salted-fixture',
+      consumer: 'call',
+      historyPositions: [{ occurrence: 'salted-tool-occurrence', element: 1 }],
+    };
+    const chart = flowChart('model call', async (scope) => {
+      scope.$setValue('receipt', { digest: 'fixture' });
+      scope.$setValue('sourceLinkServedRows', [
+        { kind: 'served', version: 1, consumer: 'call', served: [] },
+      ]);
+      scope.$setValue('sourceLinkConsumer', consumer);
+      scope.$setValue('answer', ANSWER);
+    }).build();
+    const executor = new FlowChartExecutor(chart);
+    await executor.run({});
+    const log = executor.getSnapshot().commitLog as CommitBundle[];
+    const commit = log.find((bundle) => bundle.trace.some(({ path }) => path === 'answer'))!;
+    const indexes = new Map(log.map((bundle, index) => [bundle.runtimeStageId, index]));
+    expect(commitValueAt(log, indexes.get(commit.runtimeStageId)!, 'sourceLinkConsumer')).toEqual(
+      consumer,
+    );
+    expect(stepOutputText(log, indexes, commit.runtimeStageId, 2000)).toBe(
+      `answer=${JSON.stringify(ANSWER)}`,
+    );
   });
 
   it('rankedParents is empty for unknown / unprimed ids', async () => {

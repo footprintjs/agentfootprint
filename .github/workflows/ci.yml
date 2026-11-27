@@ -27,9 +27,9 @@ concurrency:
 # github-actions manager proposes new pins.
 jobs:
   file-size:
-    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    uses: footprintjs/ci/.github/workflows/file-size.yml@0238fa6781697bd110a8ac3feea1fb58ddcc960b
     with:
-      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+      tool_sha: 0238fa6781697bd110a8ac3feea1fb58ddcc960b
 
   # Release hold, pull-request mode (footprintjs/ci docs/HOLD.md): while an open
   # issue or pull request carries the label `hold-release`, a pull request that
@@ -62,6 +62,26 @@ jobs:
       tool_sha: b14f372d4c26e9f3059068b250544aa320b834aa
       mode: pull-request
 
+  # WHAT A PULL REQUEST RUNS, AND WHAT WAITS FOR MAIN. An ordinary pull request
+  # runs the test suite (`test-shard`) on Node 24 only and skips coverage. The
+  # suite on Node 22 and coverage run on every push to main, on the release pull
+  # request (`release/next`, whose run publish.yml's `verdict` reads as the
+  # release gate) and on a dependency pull request (`renovate/*`, where a
+  # Node-specific break is most likely). `test-package` still runs on both Node
+  # versions on every pull request: the Release workflow's own fallback (`build`,
+  # used for a release candidate and whenever `verdict` declines) runs the suite
+  # itself but not every `test-package` command, so those must not reach main
+  # untested on Node 22. Why narrow at all: coverage ran the whole suite a second
+  # time and was the slowest thing a pull request waited for (measured 25 Nov
+  # 2026: about 12 minutes with it; the slowest path left is a test shard, about
+  # 9), and the Node 22 shards added four machines. The condition is written out
+  # at each of the three places that use it, because a matrix and a job-level
+  # `if:` cannot read a shared variable; test/docs/ci-test-shards.test.ts refuses
+  # any two that differ. A job that does not run is SKIPPED: `coverage` is, and a
+  # release cannot pass on it, because `verdict` accepts only `success`. The
+  # required check names do not change; GitHub lets a pull request merge when a
+  # required check was skipped by its `if:`.
+  #
   # The test suite, split across machines: `--shard=i/N` hands each machine its
   # share of the test files, so all N together run every file exactly once.
   # Vitest splits by file count, not by time. To change N, edit the `shard` list
@@ -73,7 +93,7 @@ jobs:
       # Every shard finishes, so one run shows every failure.
       fail-fast: false
       matrix:
-        node-version: [22, 24]
+        node-version: ${{ fromJSON((github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')) && '[22, 24]' || '[24]') }}
         shard: [1, 2, 3, 4]
 
     steps:
@@ -104,8 +124,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The candidate receipt reads the PR head, a parent of the tested merge.
+          # The `tested` step below reads the PR head, a parent of the tested merge.
           fetch-depth: 2
+
+      # WHICH COMMIT THE PACKAGE EVIDENCE BELOW IS BOUND TO. This run tests one
+      # tree: for a pull request, the merge of its head into main. When the head
+      # already contains main, that tree IS the head's tree, and the evidence is
+      # bound to the head commit, the name a downstream check knows. When main
+      # has moved since, the two trees differ, and the evidence is bound to the
+      # tested merge commit instead, under that commit's name. It used to fail
+      # the job there, which made every open pull request need a base update
+      # and a full rerun each time anything merged; nothing about the pull
+      # request was wrong. The evidence never claims a tree this run did not
+      # test. First in the job, before any dependency code runs.
+      - name: Name the commit this run tested
+        id: tested
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bound="$(git rev-parse HEAD)"
+          if [ -n "$PR_HEAD" ] && [ "$(git rev-parse "$PR_HEAD^{tree}")" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+            bound="$PR_HEAD"
+          fi
+          echo "commit=$bound" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -137,7 +178,7 @@ jobs:
       - name: Retain original source candidate
         if: matrix.node-version == 24
         env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_HEAD: ${{ steps.tested.outputs.commit }}
         run: |
           mkdir "$RUNNER_TEMP/af-source-candidate"
           npm pack --ignore-scripts --offline --json --pack-destination "$RUNNER_TEMP/af-source-candidate" > "$RUNNER_TEMP/af-source-pack.json"
@@ -146,7 +187,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: matrix.node-version == 24
         with:
-          name: agentfootprint-source-${{ github.event.pull_request.head.sha || github.sha }}
+          name: agentfootprint-source-${{ steps.tested.outputs.commit }}
           path: ${{ runner.temp }}/af-source-candidate/
           if-no-files-found: error
           retention-days: 7
@@ -159,13 +200,13 @@ jobs:
       - name: Four strict native context roots and public producer identities
         id: native_context
         env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_HEAD: ${{ steps.tested.outputs.commit }}
         run: node scripts/check-context-package-strict.mjs "$RUNNER_TEMP/af-strict-context" "$SOURCE_HEAD"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && (steps.native_context.outcome == 'success' || steps.native_context.outcome == 'failure')
         with:
-          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ steps.tested.outputs.commit }}
           path: ${{ runner.temp }}/af-strict-context/
           if-no-files-found: error
           retention-days: 7
@@ -191,7 +232,9 @@ jobs:
   # The required checks `test (22)` and `test (24)`, by those exact names: the
   # ruleset and publish.yml · verdict read them, and the matrix is here only to
   # give those two names. They run no tests. Each passes only when every job it
-  # needs succeeded.
+  # needs succeeded. On an ordinary pull request the suite ran on Node 24 only
+  # (see above `test-shard`), so a green `test (22)` there says the package checks
+  # passed on Node 22, not the suite; a full run puts the Node 22 shards behind it.
   #
   # `if: always()` is what makes a failure count. Without it a failed shard SKIPS
   # this job, and GitHub reports a skipped job as Success, even on a required
@@ -332,7 +375,7 @@ jobs:
         run: git diff --exit-code HEAD -- docs-next/content/docs/api
 
   # Generated files are committed, so they must be regenerated WITH the change
-  # that made them stale: the API mirror, the docs-truth report, the examples
+  # that made them stale: the API mirror, the examples
   # README, the AI-instruction copies. `docs:check` regenerates everything and
   # fails on any diff — the fix is always `npm run docs:regen` + commit.
   generated:
@@ -420,8 +463,33 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+      - id: build
+        run: npm run build
       - run: npm run docs:truth
+      # The full report is derived, not committed (.gitignore says why): it is
+      # written here and attached to the run, with its summary on the run page.
+      # These steps run even when the ratchet above is red, because that is exactly
+      # when the report is wanted; `--report-only` writes it and then gives the
+      # ratchet's own verdict again. They do NOT run after a failed build or in a
+      # cancelled run: a report built from a half-built tree can read "no
+      # regression" under a red job.
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run docs:truth:report
+      - name: Put the report's summary on the run page
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          awk '/^## In plain words/{on=1; print; next} on && /^## /{exit} on' docs/DOCS_TRUTH_REPORT.md > "$RUNNER_TEMP/docs-truth-summary.md"
+          test -s "$RUNNER_TEMP/docs-truth-summary.md"
+          cat "$RUNNER_TEMP/docs-truth-summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-truth-report
+          path: docs/DOCS_TRUTH_REPORT.md
+          if-no-files-found: error
+          # A re-run's report replaces the last attempt's (see coverage-blob below).
+          overwrite: true
+          retention-days: 30
 
   # Coverage gate — runs vitest with v8 coverage, reported in the merged job.
   # No threshold enforcement (per design memo).
@@ -430,6 +498,7 @@ jobs:
   # blob, and `coverage` below merges them. A shard's own log prints only its
   # partial figures; the merged figures are the ones that count.
   coverage-shard:
+    if: github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -467,7 +536,7 @@ jobs:
   # the shards, and `if: always()` plus the first step fail closed exactly as in
   # `test` above: unless every shard succeeded, nothing below that step runs.
   coverage:
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/'))
     needs: coverage-shard
     runs-on: ubuntu-24.04
     timeout-minutes: 15

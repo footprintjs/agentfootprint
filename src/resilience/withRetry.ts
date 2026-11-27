@@ -52,6 +52,12 @@ import type {
 } from '../provider-contract/types.js';
 import { sleep } from '../lib/sleep.js';
 import { throwIfAborted } from '../lib/abort.js';
+import {
+  interventionErrorOf,
+  isProviderInterventionError,
+  providerInterventionOf,
+} from '../provider-contract/intervention.js';
+import { automaticReplayForbidden } from '../provider-contract/replaySafety.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
 import { requestAttempt } from '../provider-contract/requestObserver.js';
@@ -154,6 +160,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // And which thinking each model takes — dropped, the agent could no
     // longer refuse `.thinking()` for a model that cannot think.
     ...(provider.thinkingMode !== undefined && { thinkingMode: provider.thinkingMode }),
+    ...(provider.thinkingBinding !== undefined && { thinkingBinding: provider.thinkingBinding }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const attempts = replayAttempts(req, hooks);
       // t0 for the `recovered` report's totalDurationMs. New
@@ -163,9 +170,11 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       for (let attempt = 1; ; attempt++) {
         const invocation = requestAttempt(attempts.hooks, attempts.request);
         try {
-          const res = await provider.complete(attempts.request, invocation.hooks);
-          reportRecovered(hooks, attempt, startedMs);
-          return attempts.response(res);
+          const raw = await provider.complete(attempts.request, invocation.hooks);
+          invocation.close('response');
+          const res = attempts.response(raw);
+          reportRecovered(hooks, attempt, startedMs, res);
+          return res;
         } catch (err) {
           invocation.close();
           await backOffOrThrow(err, attempt, req, hooks);
@@ -191,7 +200,13 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // retry would re-send (and re-bill) a request nobody is waiting for. The
     // failure is the cancellation itself (lib/abort.ts).
     throwIfAborted(req.signal);
-    if (attempt >= maxAttempts || !shouldRetry(err, attempt)) throw err;
+    if (
+      isProviderInterventionError(err) ||
+      automaticReplayForbidden(err) ||
+      attempt >= maxAttempts ||
+      !shouldRetry(err, attempt)
+    )
+      throw err;
     const scheduled = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
     // The server's word beats our guess — waiting less than it asked only
     // spends an attempt on a refusal already announced. Capped by the same
@@ -232,6 +247,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     ): Promise<{
       iterator: AsyncIterator<LLMChunk>;
       first: IteratorResult<LLMChunk>;
+      settlesDescendants: boolean;
       close(): void;
     }> => {
       const attempts = replayAttempts(req, hooks);
@@ -241,14 +257,28 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
         try {
           const iterator = attempts.iterator(
             innerStream(attempts.request, invocation.hooks)[Symbol.asyncIterator](),
+            invocation.observeChunk,
           );
           const first = await iterator.next();
           // The stream got through: its first step arrived. Reported here —
           // not at the terminal chunk — because this is where retrying ends
           // (a consumer that stops reading at `done: true` would otherwise
           // never see it), and so `recovered` lands before the first token.
-          reportRecovered(hooks, attempt, startedMs);
-          return { iterator, first, close: invocation.close };
+          let response: LLMResponse | undefined;
+          if (attempt > 1 && !first.done) {
+            try {
+              response = Object.getOwnPropertyDescriptor(first.value, 'response')?.value;
+            } catch {
+              // Optional terminal evidence must not change an ordinary stream's behavior.
+            }
+          }
+          reportRecovered(hooks, attempt, startedMs, response);
+          return {
+            iterator,
+            first,
+            settlesDescendants: invocation.observeChunk !== undefined,
+            close: () => invocation.close('no-response'),
+          };
         } catch (err) {
           invocation.close();
           await backOffOrThrow(err, attempt, req, hooks);
@@ -260,7 +290,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       req: LLMRequest,
       hooks?: LLMCallHooks,
     ): AsyncGenerator<LLMChunk, void, undefined> {
-      const { iterator, first, close } = await openStream(req, hooks);
+      const { iterator, first, settlesDescendants, close } = await openStream(req, hooks);
       if (first.done === true) {
         close();
         return;
@@ -274,9 +304,15 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
         // stream, exactly as the old pass-through did.
         yield* { [Symbol.asyncIterator]: () => iterator };
       } finally {
-        close();
         // A consumer that stopped at the first chunk still closes the wire.
-        if (!delegated) await iterator.return?.();
+        // Attempt proof waits for nested settlement; other observers keep the
+        // existing callback lifetime.
+        if (!settlesDescendants) close();
+        try {
+          if (!delegated) await iterator.return?.();
+        } finally {
+          if (settlesDescendants) close();
+        }
       }
     };
   }
@@ -293,13 +329,22 @@ function reportRecovered(
   hooks: LLMCallHooks | undefined,
   attempt: number,
   startedMs: number,
+  response?: LLMResponse,
 ): void {
   if (attempt === 1) return;
-  hooks?.onResilience?.({
-    kind: 'recovered',
-    attempt,
-    totalDurationMs: Date.now() - startedMs,
-  });
+  const intervention = response === undefined ? undefined : providerInterventionOf(response);
+  try {
+    hooks?.onResilience?.({
+      kind: 'recovered',
+      attempt,
+      totalDurationMs: Date.now() - startedMs,
+    });
+  } catch (cause) {
+    // A completed refusal survives a later observer fault, as in native accounting.
+    if (intervention !== undefined && intervention.outcome !== 'masked')
+      throw interventionErrorOf(intervention, cause);
+    throw cause;
+  }
 }
 
 /**

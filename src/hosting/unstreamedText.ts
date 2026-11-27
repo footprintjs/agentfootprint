@@ -18,7 +18,7 @@
  * streamed at all → the whole answer.
  *
  * Two readers ask this one rule, so the two text channels cannot disagree
- * about what a person reads: the AG-UI serializer (`ag-ui/serializer.ts`, at
+ * about what a person reads: the AG-UI serializer (`ag-ui/serializer/translate.ts`, at
  * `turn_end`) and `toSSE({ format: 'text' })` (`stream.ts`). It lives here,
  * not in `ag-ui/`, because `ag-ui/` may import `hosting/` and not the reverse
  * (`scripts/layering.config.cjs`).

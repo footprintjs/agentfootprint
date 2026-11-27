@@ -1,3 +1,4 @@
+import { withdrawProvenWindow } from './provenWindowCheckpoint.js';
 import { startRunRecording } from '../recording/recording.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseKnownSpentAnswer, refuseMissingPlainAnswer } from '../../resumeAnswer.js';
@@ -30,7 +31,11 @@ import {
   restoredIdentityOf,
   sameIdentity,
 } from '../../callerIdentity.js';
-import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
+import { resumeCitationCheckpoint } from '../../citations/checkpoint.js';
+import {
+  addPrivateRecordFields,
+  CITATION_PRIVATE_FIELDS,
+} from '../../../../redaction/privateFields.js';
 import { ResumeIdentityConflictError } from '../../../conversation.js';
 import {
   applyInputResponse,
@@ -105,6 +110,8 @@ export async function resumeLeg(
   // decision passes through the one spend a door watching this pause sees
   // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
   // without reaching it, refused or aborted, used nothing.
+  const citationsEnabled = this.configuration.citationOptions !== undefined;
+  checkpoint = resumeCitationCheckpoint(checkpoint, citationsEnabled);
   const state = resumeStateOf(checkpoint);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
     checkpoint.sharedState,
@@ -144,7 +151,6 @@ export async function resumeLeg(
   // The incoming request is the RESUMING caller's — never the paused one's:
   // a checkpoint carries no request, and a resume without one serves none.
   const resumeRequest = requestOf(options, 'Agent.resume');
-  requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
   if (this.configuration.negativeClaimsConfig !== undefined) {
     const prior = negativeCheckpointOf(checkpoint.sharedState ?? {});
     if (prior === undefined)
@@ -163,6 +169,11 @@ export async function resumeLeg(
     conversationRedaction(),
   ]);
   Object.assign(invocation.value, privateResumeOf(checkpoint));
+  if (citationsEnabled)
+    invocation.value.privateFields = addPrivateRecordFields(
+      invocation.value.privateFields,
+      CITATION_PRIVATE_FIELDS,
+    );
   // A resume's `time` (the time layer) is read or refused before anything
   // moves; it is never applied — the paused turn's clock is kept, and a
   // differing value is recorded by the ToolCalls resume door.
@@ -205,16 +216,17 @@ export async function resumeLeg(
   // dispatch loop asks again where the decision is used — and spends it
   // there, once.
   const gate = pauseDemandsDecision(checkpoint.pauseData);
-  if (gate) {
-    checkDecisionAgainst(
-      checkpoint,
-      gate,
-      input,
-      this.configuration.toolMiddleware.map((link) => link.name),
-      // A request minted under a ledger that can prove is spent only there.
-      this.configuration.decisionLedger ?? processDecisionLedger(),
-    );
-  }
+  const decision =
+    gate === undefined
+      ? undefined
+      : checkDecisionAgainst(
+          checkpoint,
+          gate,
+          input,
+          this.configuration.toolMiddleware.map((link) => link.name),
+          // A request minted under a ledger that can prove is spent only there.
+          this.configuration.decisionLedger ?? processDecisionLedger(),
+        );
   if (gate !== undefined)
     await refuseKnownSpentAnswer(
       this.configuration.decisionLedger ?? processDecisionLedger(),
@@ -223,6 +235,7 @@ export async function resumeLeg(
       options?.signal,
       options?.env?.signal,
     );
+  checkpoint = withdrawProvenWindow(checkpoint, input, decision);
   // Typed data collection is not consent. Validate before changing any run state.
   const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
   let answeredAsk: AnsweredAsk | undefined;

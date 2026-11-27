@@ -1,3 +1,36 @@
+import type { ToolSkillBodyRecord } from '../lib/toolSkillBodyRecord.js';
+
+/** Measured printed output retained when a native code runner clips either stream. */
+export interface ToolOutputCounts {
+  readonly kept: number;
+  readonly total?: number;
+  readonly unit: 'characters';
+}
+
+/** Engine failure kinds available on the framework-only part of a tool result. */
+export type ToolFailureCategory =
+  | 'timeout'
+  | 'rate-limited'
+  | 'server'
+  | 'network'
+  | 'auth'
+  | 'permanent'
+  | 'unknown';
+
+/** An admitted declaration with advice that has passed the result's serving policy. */
+export interface DeclaredToolFailureRecord {
+  readonly origin: 'declared';
+  readonly declaredCategory: ToolFailureCategory;
+  readonly notChecked?: string | { readonly omitted: true };
+  readonly tryInstead?: string | { readonly omitted: true };
+}
+
+/**
+ * The skill graph reads the same detached body record as message history.
+ * Its shape belongs to the neutral leaf, and request assembly strips it.
+ * A surviving span is independent of the recorded source identity.
+ */
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -14,10 +47,24 @@ export interface ToolResultRecord {
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /** A host's after-tool rule withheld or replaced this result. Kept off the provider wire. */
   readonly toolResultDisposition?: 'withheld' | 'rewritten';
+  readonly toolSkillBody?: ToolSkillBodyRecord;
   /**
    * Whether the tool was entered and returned. `returned-unserved` means a
    * framework refusal or cap replaced its return. Host rules are recorded
    * separately by `toolResultDisposition`. Artifact tickets carry the result.
    */
   readonly toolResultExecution?: 'not-entered' | 'threw' | 'returned' | 'returned-unserved';
+  /** Printed output counts from an admitted native return. Kept off the provider wire. */
+  readonly toolOutputCounts?: ToolOutputCounts;
+  /** The engine category of a thrown tool failure, without the error text. */
+  readonly toolFailureCategory?: ToolFailureCategory;
+  readonly toolDeclaredFailure?: DeclaredToolFailureRecord;
+}
+
+/** Recording fields carried with the conversation and stripped before the provider port. */
+export interface MessageRecord extends ToolResultRecord {
+  /** Who supplied the accepted reply, including after an output-policy rewrite.
+   * A mark from a checkpoint is its writer's declaration. Only the run's own
+   * request and usage receipts can establish a provider call or its cost. */
+  readonly replyOrigin?: { readonly kind: 'host' | 'model'; readonly runId: string };
 }

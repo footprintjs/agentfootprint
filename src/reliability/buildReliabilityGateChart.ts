@@ -11,7 +11,7 @@
  * (`test/reliability/gate-chart-7pattern.test.ts`). The live
  * `.reliability()` path is `executeWithReliability`
  * (`core/agent/stages/reliabilityExecution.ts`) driving
- * `singleProviderCall` inline in `core/agent/stages/callLLM.ts` — which
+ * `singleProviderCall` inline in `core/agent/stages/callLLM/executeCall.ts` — which
  * trades this chart's subflow visibility for streaming support. Keep this
  * file honest rather than deleting it: it is the only implementation that
  * honours the `providers` failover list (see MENTAL_MODEL §14 item 3).
@@ -271,7 +271,7 @@ export function buildReliabilityGateChart(config: ReliabilityConfig): FlowChart 
       //
       // NOTE: this chart is currently DEAD — see the file header. The
       // live `.reliability()` path is `executeWithReliability` driving
-      // `singleProviderCall` in `core/agent/stages/callLLM.ts`, which
+      // `singleProviderCall` in `core/agent/stages/callLLM/executeCall.ts`, which
       // passes the same hooks. Wiring the dead site anyway keeps it from
       // being a silent hole if the chart is ever revived.
       // The run's signal rides the request (lib/abort.ts · callUnder).

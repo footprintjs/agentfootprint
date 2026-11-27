@@ -12,6 +12,7 @@ Support: `cacheStrategyFor.ts`, `strategies/`, `applyCachePolicy.ts`,
 ## What it reads / what it writes
 - Reads `activeInjections` (owner: the injection-engine subflow's outputMapper)
   and `iterationsRemaining` (owner: `src/lib/iterationBudget.ts` · `iterationsRemainingOf`).
+- The cache mount receives the post-window history length and injected message positions. The provider request keeps the conversation.
 - Writes cache markers onto the composed request, and cache-usage events.
 
 ## The one law here

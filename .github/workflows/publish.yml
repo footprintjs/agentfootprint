@@ -330,6 +330,7 @@ jobs:
             run_gates "could not list the CI runs of #$NUMBER"
           NEWEST="$(jq -c --arg repo "$REPO" --arg head "$PR_HEAD" '
             [.workflow_runs[] | select(.event == "pull_request" and .head_sha == $head
+              and .head_branch == "release/next"
               and .head_repository.full_name == $repo)] | max_by(.id) // empty' <<<"$RUNS")"
           [ -n "$NEWEST" ] || run_gates "#$NUMBER has no CI run on its head $PR_HEAD"
           RUN="$(jq -r '.id' <<<"$NEWEST")"
@@ -362,9 +363,9 @@ jobs:
   file-size:
     needs: plan
     if: needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc'
-    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    uses: footprintjs/ci/.github/workflows/file-size.yml@0238fa6781697bd110a8ac3feea1fb58ddcc960b
     with:
-      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+      tool_sha: 0238fa6781697bd110a8ac3feea1fb58ddcc960b
       source_sha: ${{ needs.plan.outputs.sha }}
 
   build:
@@ -795,7 +796,7 @@ jobs:
 
       - run: npm run build
 
-      # Every generated file (API mirror, docs-truth report, examples README,
+      # Every generated file (API mirror, examples README,
       # AI-instruction copies), so the release PR carries docs that match the
       # version it names.
       - name: Regenerate docs for the new version

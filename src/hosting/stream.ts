@@ -94,6 +94,14 @@ export interface ToSSEOptions {
    * default framing only) and with `format: 'text'` (which writes no frames).
    */
   readonly framing?: SseFraming<AgentfootprintEvent>;
+  /**
+   * Start one invocation on this event source, once iteration begins and the
+   * subscription is ready. Both formats end when its promise settles and all
+   * admitted events have drained. Capture the promise to read the outcome or
+   * rejection. A pause ends this stream, so open another stream for `resume()`.
+   * A composition's text stream writes the transcript of admitted served tokens.
+   */
+  readonly start?: () => PromiseLike<unknown>;
 }
 
 /**
@@ -165,15 +173,18 @@ export async function* toSSE<TIn, TOut>(
   const format = options.format ?? 'full';
   const heartbeatMs = options.heartbeatMs ?? 0;
   const framing = framingOf(options);
+  const start = options.start;
 
-  // Both formats use native turn ownership. Only text reads real event values.
+  // A composition's bound transcript reads the served record.
   const native = runnerLive(runner);
   const ownsTurn = native?.turn !== undefined;
+  const transcript = start !== undefined && format === 'text' && !ownsTurn;
 
-  // Bounded queue: events drained as the consumer iterates.
+  // Events wait in arrival order until the consumer reads them.
   const queue: AgentfootprintEvent[] = [];
   let waiter: { resolve: () => void } | null = null;
   let done = false;
+  let accepting = start === undefined;
 
   const wakeup = (): void => {
     if (waiter) {
@@ -195,10 +206,11 @@ export async function* toSSE<TIn, TOut>(
   // same `turn_end` event, paired by the stage that ended the turn. A runner
   // that is not a RunnerBase has no redaction and no live taps: its events
   // are the record and the reply at once.
-  const live = format === 'text' ? native : undefined;
+  const live = format === 'text' && !transcript ? native : undefined;
   const replies = new Map<string, string[]>();
   const answers = new Map<string, string | undefined>();
   const offReplies = live?.onRealEvent((event) => {
+    if (!accepting) return;
     if (event.type === 'agentfootprint.agent.turn_end') {
       answers.set(event.meta?.runtimeStageId ?? '', unrefusedAnswerOf(event));
       return;
@@ -246,9 +258,11 @@ export async function* toSSE<TIn, TOut>(
   let closesOnPause = false;
   const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
+    if (!accepting) return;
     const mounted = ownsTurn && event.meta?.mountedTurn === true;
     // These boundaries establish scope even when the output filter drops them.
     if (
+      !transcript &&
       (ownsTurn || format === 'text') &&
       !mounted &&
       event.type === 'agentfootprint.agent.turn_start'
@@ -257,34 +271,41 @@ export async function* toSSE<TIn, TOut>(
       if (path.length === 0) rootTurnOpen = true;
       else if (!ownsTurn) innerTurns.push(path);
     }
-    if (event.type === 'agentfootprint.pause.resume' && ownsTurn && !rootTurnOpen) {
-      // A stream opened on resume closes again if that leg pauses.
-      closesOnPause = true;
-    }
     const turnEnd = event.type === 'agentfootprint.agent.turn_end';
     const rootEnd = turnEnd && event.meta?.rootTurn === true;
-    // Completion follows the run boundary even when no output is admitted.
-    const fatal = event.type === 'agentfootprint.error.fatal';
-    const terminal =
-      fatal ||
-      (ownsTurn ? rootEnd : turnEnd) ||
-      (closesOnPause && event.type === 'agentfootprint.pause.request');
-    if (terminal) {
-      done = true;
-      wakeup();
+    if (start === undefined) {
+      if (event.type === 'agentfootprint.pause.resume' && ownsTurn && !rootTurnOpen) {
+        // A stream opened on resume closes again if that leg pauses.
+        closesOnPause = true;
+      }
+      const terminal =
+        event.type === 'agentfootprint.error.fatal' ||
+        (ownsTurn ? rootEnd : turnEnd) ||
+        (closesOnPause && event.type === 'agentfootprint.pause.request');
+      // The output filter can omit a terminal event without keeping the stream open.
+      if (terminal) {
+        done = true;
+        wakeup();
+      }
     }
     // Consume paired values before applying either output filter.
-    const reply =
-      live !== undefined && event.type === 'agentfootprint.stream.token'
-        ? replyFor(event)
-        : undefined;
-    const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd, mounted) : undefined;
+    let reply: string | undefined;
+    if (event.type === 'agentfootprint.stream.token') {
+      if (live !== undefined) reply = replyFor(event);
+      else if (transcript) reply = event.payload?.content;
+    }
+    const answer =
+      format === 'text' && !transcript && turnEnd ? answerFor(event, rootEnd, mounted) : undefined;
     if (filter && !filter(event)) return;
     // Mounted call boundaries leave the root answer's streamed prefix intact.
     if (format === 'text' && mounted) return;
+    if (transcript && typeof reply !== 'string') return;
     queue.push(
       reply !== undefined
-        ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        ? ({
+            type: transcript ? 'agentfootprint.stream.token' : event.type,
+            payload: { content: reply },
+          } as unknown as AgentfootprintEvent)
         : format === 'text' && turnEnd
         ? ({
             type: event.type,
@@ -294,25 +315,47 @@ export async function* toSSE<TIn, TOut>(
     );
     wakeup();
   };
-  const offRecord: Unsubscribe = runner.on('*', listener);
-  const unsub = (): void => {
-    offRecord();
-    offReplies?.();
-  };
-
+  let offRecord: Unsubscribe | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
-  if (heartbeatMs > 0) {
-    heartbeat = setInterval(() => {
-      queue.push({ type: '__heartbeat' } as never);
-      wakeup();
-    }, heartbeatMs);
-  }
+  const release = (): void => {
+    if (heartbeat !== undefined) clearInterval(heartbeat);
+    replies.clear();
+    answers.clear();
+    try {
+      offRecord?.();
+    } finally {
+      offReplies?.();
+    }
+  };
+  const finish = (): void => {
+    if (done) return;
+    accepting = false;
+    done = true;
+    wakeup();
+    try {
+      release();
+    } catch {
+      // A foreign unsubscribe cannot reopen a settled invocation.
+    }
+  };
 
   /** Frames written to THIS stream so far — the {@link SseFramePosition} of the next one. */
   let written = 0;
   /** 'text': what this stream wrote since the last `llm_start`; `undefined` = nothing. */
   let streamed: string | undefined;
   try {
+    offRecord = runner.on('*', listener);
+    if (heartbeatMs > 0) {
+      heartbeat = setInterval(() => {
+        if (!accepting) return;
+        queue.push({ type: '__heartbeat' } as never);
+        wakeup();
+      }, heartbeatMs);
+    }
+    if (start !== undefined) {
+      accepting = true;
+      observeSettlement(start, finish);
+    }
     while (!done || queue.length > 0) {
       while (queue.length > 0) {
         // queue.length > 0 guards the shift; result is defined.
@@ -348,9 +391,29 @@ export async function* toSSE<TIn, TOut>(
       });
     }
   } finally {
-    unsub();
-    if (heartbeat) clearInterval(heartbeat);
+    if (start === undefined) {
+      release();
+    } else {
+      finish();
+      // An early reader exit may still have admitted events it will never read.
+      queue.length = 0;
+    }
   }
+}
+
+/** Observe either outcome without reading its value or replacing the caller's promise. */
+function observeSettlement(start: () => PromiseLike<unknown>, finish: () => void): void {
+  try {
+    const pending = start();
+    const then = pending?.then;
+    if (typeof then === 'function') {
+      void then.call(pending, finish, finish);
+      return;
+    }
+  } catch {
+    // A synchronous failure stops the stream without producing a frame.
+  }
+  finish();
 }
 
 /**

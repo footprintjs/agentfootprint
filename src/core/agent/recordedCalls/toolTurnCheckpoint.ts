@@ -5,11 +5,14 @@ import {
   type EnteredToolCall,
   type ToolEntryProof,
 } from '../honesty/enteredToolCalls.js';
+import { copyLibraryResultLimit, type LibraryResultLimit } from '../honesty/libraryResultLimits.js';
 import { isRecord } from './record.js';
 import { readToolSettlements, type RecordedToolSettlement } from './settlement.js';
 
 /** Content-free proof kept only for a retry of the failed human request. */
 export interface ToolTurnEvidence {
+  readonly libraryResultLimits?: readonly LibraryResultLimit[];
+  readonly libraryResultLimitsIncomplete?: true;
   readonly entries?: ToolEntryProof;
   readonly settlements?: {
     readonly rows: readonly RecordedToolSettlement[];
@@ -47,6 +50,18 @@ function settlementsOf(value: unknown, complete: unknown): ToolTurnEvidence['set
   return { rows: result.rows, complete };
 }
 
+function copyResultLimits(value: unknown): readonly LibraryResultLimit[] | undefined {
+  const list = readOwnList(value, MAX_ENTERED_TOOL_CALLS);
+  if (list === undefined || list.unread !== 0) return undefined;
+  const rows: LibraryResultLimit[] = [];
+  for (const item of list.entries) {
+    const row = copyLibraryResultLimit(item);
+    if (row === undefined) return undefined;
+    rows.push(row);
+  }
+  return rows;
+}
+
 /** Take a detached, bounded copy from the failing executor's committed state. */
 export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefined {
   if (!isRecord(state)) return undefined;
@@ -58,8 +73,23 @@ export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefin
     own(state, 'settledToolCalls'),
     own(state, 'settledToolCallsComplete'),
   );
-  if (entries === undefined && settlements === undefined) return undefined;
-  return { ...(entries && { entries }), ...(settlements && { settlements }) };
+  const libraryResultLimits = copyResultLimits(own(state, 'libraryResultLimits'));
+  const incomplete =
+    own(state, 'libraryResultLimitsIncomplete') === true ||
+    ('libraryResultLimits' in state && libraryResultLimits === undefined);
+  if (
+    !incomplete &&
+    entries === undefined &&
+    settlements === undefined &&
+    libraryResultLimits === undefined
+  )
+    return undefined;
+  return {
+    ...(entries && { entries }),
+    ...(settlements && { settlements }),
+    ...(libraryResultLimits && { libraryResultLimits }),
+    ...(incomplete && { libraryResultLimitsIncomplete: true }),
+  };
 }
 
 /** Admit and detach present request proof before a fresh runtime can use it. */
@@ -82,11 +112,23 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
   const settlements = isRecord(settlement)
     ? settlementsOf(own(settlement, 'rows'), own(settlement, 'complete'))
     : undefined;
+  const libraryResultLimits = copyResultLimits(own(evidence, 'libraryResultLimits'));
+  const incomplete = own(evidence, 'libraryResultLimitsIncomplete') === true;
   if (
-    (entries === undefined && settlements === undefined) ||
+    (!incomplete &&
+      entries === undefined &&
+      settlements === undefined &&
+      libraryResultLimits === undefined) ||
+    ('libraryResultLimitsIncomplete' in evidence && !incomplete) ||
+    ('libraryResultLimits' in evidence && libraryResultLimits === undefined) ||
     ('entries' in evidence && entries === undefined) ||
     ('settlements' in evidence && settlements === undefined)
   )
     return invalid();
-  return { ...(entries && { entries }), ...(settlements && { settlements }) };
+  return {
+    ...(entries && { entries }),
+    ...(settlements && { settlements }),
+    ...(libraryResultLimits && { libraryResultLimits }),
+    ...(incomplete && { libraryResultLimitsIncomplete: true }),
+  };
 }

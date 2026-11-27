@@ -1,3 +1,5 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
@@ -11,7 +13,7 @@ import { boundArgsOf } from '../access/bindings.js';
 import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
-import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../contracts/callCells.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -23,6 +25,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
@@ -132,7 +135,7 @@ export function buildResumeCheckIn(
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
-    let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeEnvelope: ExecutedToolResultEnvelope | undefined;
     let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
@@ -237,7 +240,8 @@ export function buildResumeCheckIn(
         scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let decisionResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
-      const decisionToolChars = decisionResultStr.length;
+      const servedToolText = decisionResultStr;
+      const decisionToolChars = servedToolText.length;
       if (deps.negativeClaimsArmed === true)
         decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
       // How the call settled — read by the step and by the message's `outcome`.
@@ -267,31 +271,43 @@ export function buildResumeCheckIn(
         links.emitTransitionConflict(scope, iteration, decisionTransition);
       }
       // The batch settlement (9.113.0) — the ask path's twin.
+      const resultReplaced =
+        resumedHalt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, decisionPlaced.modelResult);
       const decisionSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: decisionResultStr,
-            ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
-            toolCallId,
-            toolName,
-            ...occurrence,
-            ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
-            ...toolResultExecutionField(
-              deps.answerLayer,
-              scriptSeen.toolResultExecution,
-              !stepToolRan ||
-                resumedHalt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, decisionPlaced.modelResult),
-            ),
-            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
-            ...innerCallsFieldOf(scope, toolCallId, iteration),
-            // A decline ran nothing → 'refused'; read by the check-in trail.
-            ...outcomeField(decisionSettled),
-            ...reportedStatusField(decisionSettled),
-          },
+          admitDeclaredToolFailure(
+            scope,
+            {
+              role: 'tool',
+              content: decisionResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
+              toolCallId,
+              toolName,
+              ...occurrence,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+              ...toolResultExecutionField(
+                deps.answerLayer,
+                scriptSeen.toolResultExecution,
+                !stepToolRan || resultReplaced,
+                { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
+              ),
+              ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+              ...toolFailureCategoryField(
+                scriptSeen,
+                decisionSettled,
+                resultReplaced || toolResultDisposition !== undefined,
+              ),
+              ...innerCallsFieldOf(scope, toolCallId, iteration),
+              // A decline ran nothing → 'refused'; read by the check-in trail.
+              ...outcomeField(decisionSettled),
+              ...reportedStatusField(decisionSettled),
+            },
+            resumeEnvelope?.declaredFailure,
+          ),
         ],
         { toolName, toolCallId, ...occurrence },
       );
@@ -327,6 +343,15 @@ export function buildResumeCheckIn(
         entered: toolRan,
         seen: scriptSeen,
       });
+      recordServedLimits(
+        scope,
+        { toolName, toolCallId, ...occurrence },
+        scriptSeen.toolResultExecution === 'returned' && stepToolRan && !resumedHalt && !sourceHalt,
+        toolResultDisposition,
+        decisionCapped.cut,
+        scriptSeen,
+        servedToolText,
+      );
       links.emitToolEnd(
         scope,
         toolName,

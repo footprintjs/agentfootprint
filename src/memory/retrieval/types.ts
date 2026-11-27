@@ -64,8 +64,8 @@ export interface RetrievedCandidate {
   readonly rank: number;
   /** Did this candidate's text reach the prompt? */
   readonly admitted: boolean;
-  /** Present exactly when `admitted` is false. */
-  readonly reason?: RetrievalRejectReason;
+  /** A rejected candidate records its ranking, budget, or decay reason. */
+  readonly reason?: RetrievalRejectReason | 'decayed';
   /** Source document, when the indexed value carried one in its metadata. */
   readonly docUri?: string;
   /** Page number, when the loader knew one (PDFs). */
@@ -94,6 +94,16 @@ export interface RetrievedCandidate {
   readonly promptPosition?: number;
 }
 
+export type RetrievalRecording = 'ids-only';
+
+export interface RetrievalChunkRange {
+  readonly id: string;
+  readonly start: number;
+  readonly end: number;
+  readonly score?: number;
+  readonly rank?: number;
+}
+
 /**
  * Everything one retrieval knows about itself. Written to the memory
  * subflow's scope by `loadRelevant`, refined by `pickByBudget` and
@@ -101,6 +111,10 @@ export interface RetrievedCandidate {
  * it lands in the root commit log where a slice can reach it.
  */
 export interface RetrievalEvidence {
+  readonly recording?: RetrievalRecording;
+  /** Ordered UTF-16 ranges into the formatted system message, in IDs-only mode. */
+  readonly promptRanges?: readonly RetrievalChunkRange[];
+
   /** The retriever's id (`defineRAG({ id })`). Stamped by the read mount. */
   readonly memoryId?: string;
   /**
@@ -180,11 +194,11 @@ export interface RetrievalEvidence {
   readonly candidatesComplete: boolean;
   /** Present exactly when `candidates` is undefined. */
   readonly candidatesOmittedReason?: string;
+  /** Repeated store IDs prevent per-candidate attribution. */
+  readonly candidateIdsAmbiguous?: true;
   /**
-   * The store returned nothing at all for this namespace. Distinct from
-   * "everything scored below threshold" (`consideredCount > 0`), and the
-   * distinction is the whole diagnosis: an empty namespace almost always
-   * means the corpus was indexed somewhere else.
+   * The completed scoped search returned no entries. A legacy field name:
+   * this does not establish whether the underlying corpus contains data.
    */
   readonly corpusEmpty: boolean;
   /** The namespace that was searched, as a plain string, for the diagnosis above. */

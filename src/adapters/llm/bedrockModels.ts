@@ -1,5 +1,5 @@
 /** Explicit Converse caching facts, verified 2026-10-19 against AWS's model table.
- * Unknown model IDs, custom aliases and ARNs are intentionally unsupported.
+ * Unknown models and undeclared application inference profiles remain unsupported.
  * https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
  * Only this table owns model support; never infer it from a family prefix.
  * Profiles were checked against model-card Programmatic access lists. Rows
@@ -7,6 +7,8 @@
  * not promise endpoint/region/account availability (some base IDs require a
  * profile at runtime). Nova's published minimum is literally '1K'.
  */
+import { bedrockModelArn } from './bedrockModelArn.js';
+
 export interface BedrockCacheFacts {
   readonly minimumTokens: number | '1K';
   readonly maxBreakpoints: number;
@@ -76,15 +78,46 @@ export const BEDROCK_CACHE_MODELS: Readonly<Record<string, BedrockCacheFacts>> =
   'amazon.nova-micro-v1:0': nova(['us', 'eu']),
 });
 
-/** Match one exact foundation ID or a documented geography profile for it. */
-export function bedrockCacheFacts(model: string): BedrockCacheFacts | undefined {
-  if (Object.prototype.hasOwnProperty.call(BEDROCK_CACHE_MODELS, model))
-    return BEDROCK_CACHE_MODELS[model];
+function foundationFacts(model: string): BedrockCacheFacts | undefined {
+  return Object.prototype.hasOwnProperty.call(BEDROCK_CACHE_MODELS, model)
+    ? BEDROCK_CACHE_MODELS[model]
+    : undefined;
+}
+
+function profileFacts(model: string): BedrockCacheFacts | undefined {
   const separator = model.indexOf('.');
   if (separator < 0) return undefined;
-  const profile = model.slice(0, separator);
-  const base = model.slice(separator + 1);
-  if (!Object.prototype.hasOwnProperty.call(BEDROCK_CACHE_MODELS, base)) return undefined;
-  const facts = BEDROCK_CACHE_MODELS[base];
-  return facts.profiles.includes(profile) ? facts : undefined;
+  const facts = foundationFacts(model.slice(separator + 1));
+  return facts?.profiles.includes(model.slice(0, separator)) ? facts : undefined;
+}
+
+/** Match an exact foundation ID or a verified system profile ID or ARN. */
+export function bedrockCacheFacts(model: string): BedrockCacheFacts | undefined {
+  const builtin = foundationFacts(model) ?? profileFacts(model);
+  if (builtin !== undefined || !model.startsWith('arn:')) return builtin;
+  const resource = bedrockModelArn(model);
+  return resource?.kind === 'inference-profile' ? profileFacts(resource.id) : undefined;
+}
+
+const PROFILE_ID = /^[a-zA-Z0-9:.-]{1,64}$/;
+
+/** Copy trusted, exact application-profile routes without resolving chains or
+ * changing the submitted model identity. Built-in facts remain authoritative.
+ */
+export function bedrockCacheFactResolver(
+  declarations?: Readonly<Record<string, string>>,
+): (model: string) => BedrockCacheFacts | undefined {
+  if (declarations === undefined) return bedrockCacheFacts;
+  const profiles = new Map<string, BedrockCacheFacts>();
+  for (const [route, descriptor] of Object.entries(
+    Object.getOwnPropertyDescriptors(declarations),
+  )) {
+    const validRoute = route.startsWith('arn:')
+      ? bedrockModelArn(route)?.kind === 'application-inference-profile'
+      : PROFILE_ID.test(route) && route === route.trim();
+    if (!validRoute || typeof descriptor.value !== 'string') continue;
+    const facts = bedrockCacheFacts(descriptor.value);
+    if (facts !== undefined) profiles.set(route, facts);
+  }
+  return (model) => bedrockCacheFacts(model) ?? profiles.get(model);
 }

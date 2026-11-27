@@ -20,10 +20,29 @@
  * surface here once.
  */
 
-import type { CombinedRecorder, FlowRunFailedEvent } from 'footprintjs';
+import type { CombinedRecorder, FlowRunFailedEvent, EmitEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 import { humanizeLLMError } from '../../lib/humanizeLLMError.js';
+import { isDeferredPayloadSummary, type DeferredPayloadSummary } from './deferredPayload.js';
+import { EmitBridge } from './EmitBridge.js';
+
+interface FailureProjection {
+  readonly message: string;
+  readonly runtimeStageId?: string;
+  readonly subflowPath?: readonly string[];
+  readonly stage: string;
+}
+
+function projectFailure(event: FlowRunFailedEvent): FailureProjection {
+  const context = event.traversalContext;
+  return {
+    message: event.structuredError.message,
+    runtimeStageId: context?.runtimeStageId,
+    subflowPath: context?.subflowPath === undefined ? undefined : [...context.subflowPath],
+    stage: context?.stageName ?? '__root__',
+  };
+}
 
 export interface ErrorBridgeOptions {
   readonly dispatcher: EventDispatcher;
@@ -39,18 +58,53 @@ export class ErrorBridge implements CombinedRecorder {
   private readonly dispatcher: EventDispatcher;
   private readonly getRunContext: () => RunContext;
   private readonly fallback: ErrorBridgeOptions['fallback'];
+  private projectedFailure?: FailureProjection;
+  private readonly admittedError: EmitBridge;
 
   constructor(options: ErrorBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id ?? 'agentfootprint.error-bridge';
     this.getRunContext = options.getRunContext;
     this.fallback = options.fallback;
+    // An admitted response may end with a clean native break. It has no
+    // onRunFailed event, so forward its served terminal notification here,
+    // under the emitting stage's actual identity and native observer order.
+    this.admittedError = new EmitBridge({
+      id: `${this.id}.admitted-response`,
+      prefix: 'agentfootprint.error.fatal',
+      dispatcher: options.dispatcher,
+      getRunContext: options.getRunContext,
+    });
   }
 
-  onRunFailed(event: FlowRunFailedEvent): void {
-    const ctx = event.traversalContext;
+  onEmit(event: EmitEvent | DeferredPayloadSummary): void {
+    this.admittedError.onEmit(event);
+  }
+
+  clear(): void {
+    this.projectedFailure = undefined;
+  }
+
+  /**
+   * Keep the small served projection at the native failure origin. The deferred
+   * hook still publishes in queue order, even if a foreign raw error made the
+   * engine's whole event uncopyable.
+   */
+  preserveFailureForDeferredCapture(): CombinedRecorder {
+    return {
+      id: `${this.id}.source`,
+      onRunFailed: (event) => {
+        this.projectedFailure = projectFailure(event);
+      },
+    };
+  }
+
+  onRunFailed(event: FlowRunFailedEvent | DeferredPayloadSummary): void {
+    const failure = isDeferredPayloadSummary(event) ? this.projectedFailure : projectFailure(event);
+    this.clear();
+    if (failure === undefined) return;
     const meta = buildEventMeta(
-      { runtimeStageId: ctx?.runtimeStageId, subflowPath: ctx?.subflowPath },
+      { runtimeStageId: failure.runtimeStageId, subflowPath: failure.subflowPath },
       this.getRunContext(),
     );
     // Dispatch unconditionally (no hasListenersFor guard): failures are
@@ -65,8 +119,8 @@ export class ErrorBridge implements CombinedRecorder {
     this.dispatcher.dispatch({
       type: 'agentfootprint.error.fatal',
       payload: {
-        error: humanizeLLMError({ message: event.structuredError.message }, this.fallback),
-        stage: ctx?.stageName ?? '__root__',
+        error: humanizeLLMError({ message: failure.message }, this.fallback),
+        stage: failure.stage,
         scope: 'run',
       },
       meta,

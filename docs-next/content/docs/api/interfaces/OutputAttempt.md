@@ -75,7 +75,7 @@ The ReAct iteration that produced the answer.
 
 ### outcome
 
-> `readonly` **outcome**: `"retried"` \| `"passed"` \| `"exhausted"`
+> `readonly` **outcome**: `"passed"` \| `"retried"` \| `"exhausted"`
 
 Defined in: [src/core/agent/outputEnforcement.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/outputEnforcement.ts#L72)
 

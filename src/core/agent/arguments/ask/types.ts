@@ -64,7 +64,7 @@ export interface AskField {
 /** One call's values from a bound window — and whether they read a WIDER window (no form held it exactly). */
 export interface WindowFill {
   readonly values: Readonly<Record<string, unknown>>;
-  readonly wider?: 'reads-more' | 'tool-trims';
+  readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
 }
 
 /** The time half of a window field — the typed ask's `format`, its labels, and the mention asked about. */
@@ -167,6 +167,8 @@ export type AskContextObject = Readonly<Record<string, unknown>>;
 
 /** Under `.time()`: the turn's clock and the app's zone — what a period answer is judged against. */
 export interface AskTime {
+  /** Original clock-row display metadata, never an interpretation zone. */
+  readonly display?: unknown;
   readonly now: InstantText;
   readonly appZone?: ZoneName;
   /** The turn's clock zone — a window answered with no zone of its own is written in it. */

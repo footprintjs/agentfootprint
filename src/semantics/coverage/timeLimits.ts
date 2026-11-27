@@ -25,6 +25,7 @@
 import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
 import { beyondRetentionLine } from '../../time/retentionRefusals.js';
 import { bindPresentation, type BoundPresentation } from '../../time/present.js';
+import { displayPresentationOf } from '../../time/display.js';
 import type { TimeLimitLines } from './answer.js';
 import {
   timeLimitFactsOf,
@@ -106,7 +107,7 @@ export function renderTimeLimits(
   audience: TimeLimitsAudience = 'person',
 ): TimeLimitLines | undefined {
   if (facts === undefined) return undefined;
-  const presentation = bindPresentation({ zone: facts.zone });
+  const presentation = bindPresentation({ zone: facts.zone, ...displayPresentationOf(facts) });
   const period: string[] = [];
   const held: string[] = [];
   for (const row of facts.period) {

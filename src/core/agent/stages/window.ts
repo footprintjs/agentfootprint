@@ -48,6 +48,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import { activeSkillBodyOccurrences } from '../skillContext/bodies.js';
 import type { LLMMessage, PricingTable } from '../../../provider-contract/types.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -56,12 +57,12 @@ import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import { foldLedger, type LedgerFold } from '../findings/ledger.js';
 import { isResultMessage } from '../findings/offer.js';
 import type { FindingsLedger, Standing } from '../findings/types.js';
+import { commitWindowResultDrops } from '../honesty/settledToolCalls.js';
 import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { toolResultPinsOf } from '../window/lastToolResult.js';
 import { ledgerFactPinsOf, turnStandingOf } from '../window/ledgerFactPins.js';
 import { DEFAULT_KEEP_LAST_TOOL_RESULTS } from '../window/options.js';
 import { removalFacts } from '../window/removal.js';
-import type { WindowStrategy } from '../window/strategy.js';
 import {
   answeredCallIds,
   planRemoval,
@@ -76,7 +77,8 @@ import type {
   WindowObservations,
   WindowRecord,
   WindowRefusalReason,
-} from '../window/types.js';
+  WindowStrategy,
+} from '../window/index.js';
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
@@ -109,6 +111,12 @@ export interface WindowStageDeps {
    * object it always did.
    */
   readonly keepLastToolResults?: number | false;
+  /**
+   * Under the `listed` skill context only: each skill's registered body, by
+   * id. A `read_skill` result whose text is the body of a skill still active
+   * this turn refuses to leave (`'active-skill-body'`): it is the only copy.
+   */
+  readonly skillBodies?: ReadonlyMap<string, string>;
   /**
    * The findings ledger is armed on this agent (9.102.0) — `.findings()` was
    * called. The ONE gate under which this stage may read
@@ -323,8 +331,19 @@ export function buildWindowStage(
         ? ledgerFactPinsOf(turns, history, standingOf, currentRequestIndex)
         : [];
 
+    const bodyOccurrences =
+      deps.skillBodies === undefined
+        ? undefined
+        : activeSkillBodyOccurrences(history, deps.skillBodies, [
+            ...((scope.activatedInjectionIds as readonly string[] | undefined) ?? []),
+            ...((scope.activeInjections as readonly { id: string }[] | undefined) ?? []).map(
+              (active) => active.id,
+            ),
+          ]);
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
+      ...(bodyOccurrences !== undefined &&
+        bodyOccurrences.size > 0 && { activeSkillBodyOccurrences: bodyOccurrences }),
       ...(currentRequestIndex >= 0 && { currentRequestIndex }),
       ...(pausedToolCallId !== undefined && { pausedToolCallId }),
       ...(scope.pausedCheckIn === true && { pausedCheckIn: true }),
@@ -385,6 +404,7 @@ export function buildWindowStage(
         result.rebase.keptTailCount,
         result.rebase.insertedAtMs,
       );
+      commitWindowResultDrops(scope, result.window, strategy.name);
       scope.history = result.window;
     }
 

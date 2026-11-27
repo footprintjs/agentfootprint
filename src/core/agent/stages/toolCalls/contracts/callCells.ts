@@ -1,3 +1,5 @@
+import type { DeclaredDispatch } from 'footprintjs/declared-attempts';
+import type { PendingDatasetLimits } from '../../../honesty/libraryResultLimits.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
   ReadToolResultEnvelope,
@@ -8,13 +10,27 @@ import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
 import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
 import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import type { InnerCallHalt } from '../../../innerCallOuter.js';
+import type { ToolFailureDeclaration } from '../../../../../semantics/toolFailure.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
+
+/** A declaration measured at the native return, before result admission. */
+export interface MeasuredToolFailure extends ToolFailureDeclaration {
+  readonly dispatch?: DeclaredDispatch;
+  readonly startedAt: number;
+  readonly durationMs: number;
+}
+
+/** A tool return admitted by the invocation and kept off the provider wire. */
+export type ExecutedToolResultEnvelope = ReadToolResultEnvelope & {
+  readonly outputCounts?: LLMMessage['toolOutputCounts'];
+  readonly declaredFailure?: MeasuredToolFailure;
+};
 
 export interface CallResultCell {
   result: unknown;
   error: boolean | undefined;
-  toolEnvelope: ReadToolResultEnvelope | undefined;
+  toolEnvelope: ExecutedToolResultEnvelope | undefined;
   toolStatus: ToolResultStatus | undefined;
   /** The status word of a result that is an envelope but for an unknown
    *  status (`semantics/toolEffects.ts` · `unknownStatusOf`), cleaned —
@@ -27,11 +43,12 @@ export interface CallArguments {
   chainedArgs: ToolArgs;
 }
 
-export interface CallExecution {
+export interface CallExecution extends PendingDatasetLimits {
   resultFinalizer?: NativeResultFinalizer;
   denied: boolean;
   executed: boolean;
   toolResultExecution?: LLMMessage['toolResultExecution'];
+  toolFailureCategory?: LLMMessage['toolFailureCategory'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;
@@ -66,4 +83,5 @@ export interface CallDelivery {
   resultStr: string;
   modelResultCapped: boolean;
   toolResultDisposition?: LLMMessage['toolResultDisposition'];
+  toolSkillBody?: LLMMessage['toolSkillBody'];
 }

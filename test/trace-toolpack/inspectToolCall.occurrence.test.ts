@@ -59,10 +59,12 @@ function rewrite(label: string, key?: readonly number[]) {
 function inspect(
   history: readonly object[],
   events: readonly AgentfootprintEvent[] | undefined,
-  middlewareDecisions: readonly object[] = [],
+  middlewareDecisions: readonly unknown[] = [],
   showWithheldResults = false,
+  servedUnderPolicy = false,
 ) {
   const snapshot = {
+    ...(servedUnderPolicy && { recorders: [{ id: 'agentfootprint.redaction' }] }),
     commitLog: [
       {
         idx: 0,
@@ -158,5 +160,67 @@ describe('inspect_tool_call from keyed saved recordings', () => {
     expect(out).toContain('result: ⚠ the recording cannot identify a unique result');
     expect(out).toContain('outcome: ⚠ unknown');
     expect(out).not.toContain('one items');
+  });
+
+  it('names the final after-tool changer from this occurrence only', async () => {
+    const after = (label: string, key: readonly number[]) => ({
+      ...rewrite(label, key),
+      moment: 'after-tool',
+      after: 'public summary',
+    });
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [after('foreign', first), after('inner', second), after('outer', second)],
+      true,
+    );
+    expect(out).toContain('rewritten by: "outer-rewrite"');
+    expect(out).not.toContain('rewritten by: "inner-rewrite"');
+    expect(out).not.toContain('foreign-rewrite');
+  });
+
+  it.each([undefined, '[REDACTED]', ' \t'])(
+    'does not substitute an earlier name for an unavailable final changer (%s)',
+    async (middleware) => {
+      const rows = [
+        { ...rewrite('inner', second), moment: 'after-tool' },
+        { ...rewrite('outer', second), moment: 'after-tool', middleware },
+      ];
+      const out = await inspect(
+        [proposal('one', second), result('one', second)],
+        [start('4', second), end('4', 0, second)],
+        rows,
+        true,
+        middleware !== undefined,
+      );
+      expect(out).not.toContain('rewritten by:');
+    },
+  );
+
+  it.each([
+    ['null row', null],
+    ['opaque row', '[REDACTED]'],
+    ['absent final key', { ...rewrite('unplaced'), moment: 'after-tool' }],
+    ['malformed final key', { ...rewrite('unplaced', [1]), moment: 'after-tool' }],
+  ])('an unavailable %s cannot leave an earlier trace owner', async (_, row) => {
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [{ ...rewrite('inner', second), moment: 'after-tool' }, row],
+      true,
+    );
+    expect(out).toContain('result: "one items"');
+    expect(out).not.toContain('rewritten by:');
+  });
+
+  it('a later bound trace owner survives an earlier null decision', async () => {
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [null, { ...rewrite('final', second), moment: 'after-tool' }],
+      true,
+    );
+    expect(out).toContain('rewritten by: "final-rewrite"');
+    expect(out).toContain('result: "one items"');
   });
 });

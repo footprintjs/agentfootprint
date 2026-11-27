@@ -32,11 +32,12 @@ import {
   computeArtifactDigest,
   decodeArtifactData,
   type EncodedPayload,
-  encodeArtifactData,
+  envelopeOfSnapshot,
 } from './payload.js';
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -153,11 +154,15 @@ const ARTIFACT_METADATA_COLUMNS = [
   // older one by `ensureSchema` — never required of a file, so an older
   // runtime still opens a file this one wrote (it simply does not read it).
   'time_axis',
+  'naive_count',
 ] as const;
 const ARTIFACT_PAYLOAD_COLUMNS = ['payload_shape', 'payload'] as const;
 const ARTIFACT_COLUMNS = ['scope_ns', ...ARTIFACT_METADATA_COLUMNS, ...ARTIFACT_PAYLOAD_COLUMNS];
 /** Columns added after schema version 1 shipped — added in place, never required. */
-const ADDED_COLUMNS: readonly string[] = ['time_axis'];
+const ADDED_COLUMNS: Readonly<Record<string, string>> = {
+  time_axis: 'TEXT',
+  naive_count: 'INTEGER',
+};
 
 interface ArtifactMetadataRow {
   readonly ref: string;
@@ -172,6 +177,7 @@ interface ArtifactMetadataRow {
   readonly created_at: number;
   readonly last_accessed_at: number;
   readonly time_axis: string | null;
+  readonly naive_count: number | null;
 }
 
 interface ArtifactRow extends ArtifactMetadataRow {
@@ -296,6 +302,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     ...(row.parent_refs !== null && {
       parentRefs: JSON.parse(row.parent_refs) as ArtifactRef[],
     }),
+    ...(row.naive_count !== null && { naiveCount: row.naive_count }),
     ...(row.time_axis !== null && { timeAxis: JSON.parse(row.time_axis) as DatasetTimeAxis }),
   });
 
@@ -303,12 +310,13 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
   // sqliteSessions law about not needing two error handlers.
   return {
     journalMode,
+    ...scopeBudgetMember(retention),
 
     async put(scope, input): Promise<ArtifactPutResult> {
       open('store an artifact');
       const ns = identityNamespace(scope);
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         (parent) => liveRow(ns, parent, readMetadataRow) !== undefined,
         retention,
@@ -331,7 +339,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       const plan = planRetention(rows, meta.bytes, retention, at);
       if (plan.refusal !== undefined) throw new InvalidArtifactError(plan.refusal);
       for (const swept of plan.swept) remove.run(ns, swept.ref);
-      const payload = encodeArtifactData(input.data);
+      const envelope = envelopeOfSnapshot(payload);
       insert.run(
         ns,
         meta.ref,
@@ -346,8 +354,9 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
         meta.createdAt,
         at,
         meta.timeAxis !== undefined ? JSON.stringify(meta.timeAxis) : null,
-        payload.shape,
-        payload.value,
+        meta.naiveCount ?? null,
+        envelope.shape,
+        envelope.value,
       );
       return { meta, swept: plan.swept };
     },
@@ -468,7 +477,7 @@ function ensureSchema(db: SqliteArtifactsDatabaseLike, file: string): void {
       `media_type TEXT NOT NULL, bytes INTEGER NOT NULL, label TEXT, digest TEXT, ` +
       `expires_at INTEGER, origin TEXT, parent_refs TEXT, created_at INTEGER NOT NULL, ` +
       `last_accessed_at INTEGER NOT NULL, payload_shape TEXT NOT NULL, payload TEXT NOT NULL, ` +
-      `time_axis TEXT, ` +
+      `time_axis TEXT, naive_count INTEGER, ` +
       `PRIMARY KEY (scope_ns, ref)) STRICT`,
   );
   db.exec(
@@ -479,7 +488,7 @@ function ensureSchema(db: SqliteArtifactsDatabaseLike, file: string): void {
     db.prepare(`PRAGMA table_info('${ARTIFACTS_TABLE}')`).all() as { name?: unknown }[]
   ).map((c) => String(c.name));
   const missing = ARTIFACT_COLUMNS.filter(
-    (name) => !columns.includes(name) && !ADDED_COLUMNS.includes(name),
+    (name) => !columns.includes(name) && !(name in ADDED_COLUMNS),
   );
   if (missing.length > 0) {
     throw new UnreadableArtifactStoreError(
@@ -490,9 +499,9 @@ function ensureSchema(db: SqliteArtifactsDatabaseLike, file: string): void {
     );
   }
 
-  for (const added of ADDED_COLUMNS) {
+  for (const [added, type] of Object.entries(ADDED_COLUMNS)) {
     if (!columns.includes(added)) {
-      db.exec(`ALTER TABLE ${ARTIFACTS_TABLE} ADD COLUMN ${added} TEXT`);
+      db.exec(`ALTER TABLE ${ARTIFACTS_TABLE} ADD COLUMN ${added} ${type}`);
     }
   }
 

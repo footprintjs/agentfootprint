@@ -27,17 +27,18 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `convert.ts` + [`convert/`](convert/README.md) | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds); `convertForTool` — the ONE answer to "can this tool read this window, and how" (a fact it breaks, else exact, else wider, else `multi-day`, else `no-form-holds`) that the fill, the time ask and the served line all ask; and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
 | `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a mention the person settled in the time ask, `answered`; a `model` reader's reading waiting for confirmation; the clock's `control` window — a `rule` reading the person has not answered settles nothing) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, a window no form can read (`no-form-holds`), or a skipped wall time) |
 | `windows.ts` | the turn's windows read from the record (`turnWindowsOf`, `pendingQuotesOf`, `readerWindowsOf` and their shapes); the one owner of "a time the person wrote that still waits on them" (`isOpenForPerson`: a reading to confirm, a zone to name, or words not read); the one input every door converts a window from (`windowToConvert`, with `offeredLookback`) — the record half of `bind.ts`, split out BY FILE because the Tools mount's synchronous `inputMapper` and the evidence gate's lineage read it; imports only the leaves and `rows.ts`; `bind.ts` re-exports every name |
-| `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
+| `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form whose `maxRange` holds the range — runs as sent; beside a confirmed window the model's look-back is redrawn too); `coverAtDispatch` — a confirmed look-back in a length-only form is `covered`: lengthened to still reach the window's start from the dispatch moment, or not run |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
 | `check.ts` | the result checks (§ 9.2, § 9.4, § 9.6, step T8): `periodTimeCheck` — what one call READ (the result's declared `queried`, read back with the tool's step; else a widened fill's `sent`; else a look-back shifted by its drift; else the asked range) against what it ASKED (for a window the model chose, the person's window): `differs { missing, extra }`, `shifted`, `beyondRetention`, `partlyBeyondRetention`; a closed end read as open (1 ms) is no difference, and a look-back read moved LATER within the tool's step (§ 7.4's first row only — never earlier, never a bounds window, never with a recorded drift) is the asked range; `rangeDifference`; `clocksDiffer` over the wall-clock sources (a declared axis zone — never a period's offset) |
 | `checkRecord.ts` | the record half of the result checks: the row's shapes (`PeriodDiffers`, `ReadSource`, `SourceClock`, `ClocksDiffer`), the checkpoint door's tests (`isPeriodDiffers`, `isShifted`) and the two clock reads (`distinctSources`, `clocksDiffer`) — split out BY FILE because `coverage/period.ts` · `periodRowIsWellFormed` is on every agent's graph; `check.ts` re-exports every name |
 | `rows.ts` | the layer's nine ledger rows and the checkpoint door's test for each (`timeRowIsWellFormed`): `clock` (one per turn, filed by seed), `clock-on-resume` (a resume's differing `time`, recorded not applied), `call` (one per dispatched call, `dispatchedAt`, and `drift` when a look-back drifted), `time-reading` (one per mention the armed reader found, or one `mentions: 0` row; `rowsBuild.ts` · `rowsBuild.ts` · `timeReadingRows` builds them, `readingsOf` reads a turn's back), `call-window` (one per call to a tool whose period declares forms, filed by the inputs layer — `rowsBuild.ts` · `callWindowRow`, read back by `callWindowOfCall`), `time-answer` (one per mention the person settled in the time ask — the window, its zone, `how: 'confirmed' | 'edited'`; filed by the batch ask — `timeAnswerRow`, read back by `answersOf`), `time-derived` (one per judged answer that stands, filed by the Route decider when the evidence gate found values the library itself spelled from a reading — `timeDerivedRow`, step T7), `source-clock` (one per call and zone, filed by ToolCalls when a call mints a dataset whose declared axis names a zone — `sourceClockRow`, read back by `sourceClocksOf`, step T8); `clockOf` reads the latest turn's clock, `callRowOfCall` one call's `call` row |
 | `reply.ts`, `replyForm.ts`, `replyRecord.ts` | one pure correction facade; the saved range/text association reader (`timeReplyPairs`, public on `agentfootprint/time` for a host); bounded decision/rule evidence in the existing time ledger, with no raw correction mirror |
 | `rowsBuild.ts` | the BUILDERS of the first five rows (`clockRow`, `callRow`, `clockOnResumeRow`, `timeReadingRows`, `callWindowRow`) — split from `rows.ts` because `timeReadingRows` runs the resolver; never re-exported by `rows.ts` (the three later rows' builders are plain object literals and stay in `rows.ts`) |
-| `forms.ts` | every spelling of a time the answer may write, split by WHO produced it (§ 9.5, step T7): `timeFormsOf({ text })` — the spellings of a date or clock time the person or the app wrote (`8 Am` → `8:00` `08:00` `8:00am`; `2026-10-09` → `2026` `10` `9`; never a slash date or a duration), all `said`; `timeFormsOf({ window })` — a recorded window's `said` parts at the grain they were written (a confirmed `rule` reading's written parts, re-resolved from the recorded parses and clock, never the reader; every part of a window typed in the ask or set in a UI) and its `derived` spellings (an implied year, the abbreviation in effect, offsets, UTC and epoch, the end-of-grain minute, a look-back's duration, the window's length — as said and as read to the end of its grain, `20-minute` and `21-minute` for "6:25 to 6:45", whole-token spellings only; every part of a `model` reading, and of a PROPOSAL the time ask offers that the person has not answered); `timeFormsOf({ clock })` — the turn's clock at the minute it is served (G16), in the person's zone (UTC under an unknown zone), all `derived` — never another minute or its seconds; `timeFormsOf({ held })` — a source's held span as the served time line names it (take 3: a `period` row's `held`), each declared end's wall spellings in the person's zone (`9:22`, `09:22`, `9:22am`, `09:22:44`) and in UTC, the zone, its abbreviation and offset, all `derived`; `turnFormsWindowsOf` reads the latest turn's windows off the ledger. The evidence gate asks it and keeps no time table of its own |
+| `forms.ts` | every spelling of a time the answer may write, split by WHO produced it (§ 9.5, step T7): `timeFormsOf({ text })` — the spellings of a date or clock time the person or the app wrote (`8 Am` → `8:00` `08:00` `8:00am`; `2026-10-09` → `2026` `10` `9`; never a slash date or a duration), all `said`; `timeFormsOf({ window })` — a recorded window's `said` parts at the grain they were written (a confirmed `rule` reading's written parts, re-resolved from the recorded parses and clock, never the reader; every part of a window typed in the ask or set in a UI) and its `derived` spellings (an implied year, the abbreviation in effect, offsets, UTC and epoch, the end-of-grain minute of a historical recording, a look-back's duration, and the window's length (`20-minute` for a new exact range from 6:25 to 6:45), whole-token spellings only; every part of a `model` reading, and of a PROPOSAL the time ask offers that the person has not answered); `timeFormsOf({ clock })` — the turn's clock at the minute it is served (G16), in the person's zone (UTC under an unknown zone), all `derived` — never another minute or its seconds; `timeFormsOf({ held })` — a source's held span as the served time line names it (take 3: a `period` row's `held`), each declared end's wall spellings in the person's zone (`9:22`, `09:22`, `9:22am`, `09:22:44`) and in UTC, the zone, its abbreviation and offset, all `derived`; `turnFormsWindowsOf` reads the latest turn's windows off the ledger. The evidence gate asks it and keeps no time table of its own |
 | `textForms.ts` | the text rule of `forms.ts` (`timeFormsOfText` — the `said` spellings of the dates and clock times written in text) and the spelling parts both halves share — split out BY FILE because the evidence gate's exempt corpus runs on every gated agent; `forms.ts` (the window half, which re-resolves a reading) loads only under `.time()`, through `agent/stages/timeLineage.ts` |
 | `present.ts` | time for a PERSON: `presentInstant`, `presentSpan` (two inclusive ends, as declared), `presentRange` (a half-open range with the end AS SAID — `[08:00, 08:41)` at minute grain shows `08:40`); locale-neutral with no locale, the zone always named, each end's offset when a span crosses a DST change; with a `locale` (the reader's) through `Intl` in that language, the zone's short name |
 | `ask.ts` | the one time ask (§ 6): `TimeFormat` (`instant` · `time-range` · `zone`), `checkTimeAnswer` — the ONE judge of a time field's answer (strict instants with an offset, `from` before `to`, an IANA zone, under a known zone no wall time the clocks skip, and — handed a tool's facts and the clock — inside its `direction`, `retention` and `maxRange`) — refusals as codes with facts; the catalog's keys (`TIME_ASK_MESSAGE_KEYS`), `readTimeAskMessages` (the app's overrides), `refusalReason` (the re-ask's reason) |
+| [`provenForms/`](provenForms/README.md) | the checked offline receipt and the finite, opt-in allowlist for a fresh native look-back |
 | `readingAsk.ts` | `timeAskOf` — the field an `open` reading needs (the candidates as labelled choices, a zone asked as `format: 'zone'`, every reading offered to confirm with its zone named); split from `ask.ts` because its labels render through `present.ts` |
 
 `tools/inputRequest.ts` asks `ask.ts`: a field's `format` is judged at definition (each choice, each
@@ -64,11 +65,11 @@ prints both); the results layer (`results/subflow.ts` · `checkPeriods`, handed 
 (`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls/evidence/sourceClock.ts` files a
 `source-clock` row when a dataset it mints declares an axis zone;
 `Agent.run` / `Agent.resume` read the run's `time` through `clock.ts` (refusing a run with no zone
-before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `clock` row;
+before the turn starts); `stages/timeLayer.ts` · `stampClock` files the turn's `clock` row;
 `stages/timeLayer.ts` files each `call` row and, first thing in a resumed leg (either pause
 shape: the `resume` door, or `execute` re-run after the argument ask's `interrupt()`),
 `clock-on-resume`;
-`stages/seed.ts` · `readTimeWords` reads the person's message through the armed reader, right
+`stages/timeLayer.ts` · `readTimeWords` reads the person's message through the armed reader, right
 after the clock, and files the `time-reading` rows.
 `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` routes time rows to `rows.ts`.
 `tools/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
@@ -122,7 +123,7 @@ served time line) — a value found only there files a `time-derived` row and fo
 timeFormsOf({ text: 'what connected 8 Am to 8:40 AM PST' }).said;
 // ['8:00', '08:00', '8:00am', '8:40', '08:40', '8:40am']
 const { said, derived } = timeFormsOf({ window: confirmedFieldWindow });
-said.includes('08:40') && derived.includes('08:41') && derived.includes('PDT'); // true
+said.includes('08:40') && !derived.includes('08:41') && derived.includes('PDT'); // true
 ```
 
 **The clock law: a declared, recorded input, never a hidden read.** `.time()` arms it. The zone is
@@ -268,14 +269,56 @@ re-sent as the asked range in the tool's first absolute form when the library wr
 model's look-back, or one with no absolute form, runs as sent. The `call` row records
 `drift: { byMs, outcome }`.
 
-**The edge law: `resolve.ts` owns where a window ends.** A point or a range end runs to the end
-of its grain, noted `end-of-grain` ("to 8:40" → `08:41`, a day → the next midnight, a lone "9
-AM" → `[09:00, 10:00)`) — except a range END said as an o'clock hour, a boundary on the clock
-face that ends AT that instant ("8 AM to 9 AM" → `[08:00, 09:00)`, no note). Whether an end was
-widened is asked of `resolveRecord.ts` · `widenedGrain`, never read off `grain`: the said end is
-`to − 1 grain` only then. The confirmation label asks `resolveRecord.ts` · `shownGrain` — the
-widened grain, or a look-back's own grain (its `[now − L, now + 1 ms)` is shown ending AT now,
-"last 40 minutes" → `8:00 – 8:40 AM`).
+**The edge law: `resolve.ts` owns where a window ends.** A timestamp range ends at its
+confirmed upper instant. “8:00 to 8:40” uses `[08:00, 08:40)`. A control window can pass
+`end: 'inclusive'` to include the endpoint itself and `precision: 'minute'` when its ISO
+input pads the confirmed minute with seconds. The clock or time-answer row stores the cutoff,
+policy and precision together. Standalone times and whole calendar periods still use their grain.
+Written into a tool's INCLUSIVE ISO end, a cutoff is the last instant inside on its grid — one
+second before a whole-second cutoff, one millisecond before a millisecond one — and is read back
+on the grid it was written at (never nanoseconds: tool parsers refuse them). An inclusive control
+point therefore lands ON a grid second the tool reads whole: that fill is recorded as wider
+(`sent`, `differs.extra`), not as exact.
+Saved historical rows retain their stored bounds.
+
+**Confirmed look-backs use absolute bounds.** The accepted window keeps the run's recorded
+`time.now`. A tool with both duration and absolute forms receives the absolute range
+regardless of form order. The existing period evidence distinguishes the requested bounds from a
+wider or narrower read.
+
+**A length-only source gets the covering look-back, measured at dispatch.** When no absolute
+form holds a confirmed window — a look-back, or a closed past range with a recorded endpoint;
+the tool declares only a length, or its absolute form's own `maxRange` is too small — the
+widening law applies: read MORE and say so. A length is counted back by the SOURCE from its own clock when it is handed the call,
+so the same length sent after a confirmation click would start later and lose the oldest part
+of the window. The fill therefore holds the window's own length (`convert/covering.ts` ·
+`sourceClockLookback`; the `call-window` row says `coversAtDispatch`, never `frozenLookback`),
+and at dispatch the library replaces it with the smallest length in the form's units that still
+reaches the window's start from that moment (`drift.ts` · `coverAtDispatch`): a two-hour look-back
+handed over 61 seconds late is sent as `122m`. The `call` row records `drift: { outcome:
+'covered', form, sent }` on every such call, the result check reads `sent` (a result's declared
+`queried` still wins), and the note tells the model the value that ran, that it reads wider, and
+that the source's clock decided the exact bounds. Nothing is shortened to fit: a window still
+running at dispatch (a look-back ends at now) and a length past the form's `maxRange` do not run,
+and the model reads why. The final arguments must still hold the library's own look-back and no
+other period argument (`frozenDispatch.ts` · `coveringDispatchMatches`): a value a middleware
+wrote is never replaced. Declaring bounds stays the exact answer; this is the honest one for a
+source that cannot take them.
+
+**The model's own look-back is the model's own window.** Beside a confirmed look-back, a call
+that sends a length naming the SAME window is the library's fill (frozen bounds, or the covering
+look-back above). A call whose forms all name one OTHER window — a longer look-back, or that
+look-back and matching bounds — is recorded `model-chosen` beside the person's, exactly as a
+different absolute range is: a drill-down, a baseline and a comparison are normal work, and the
+standing reads "not sure". Beside ANY confirmed window (one with a recorded endpoint: a
+look-back, a timestamp range, a UI control) it keeps the INTERVAL it named on the frozen clock:
+when the clock moved past the tool's step and an absolute form's `maxRange` holds the interval,
+the look-back is re-sent as those bounds (`drift: { outcome: 'redrawn' }` — the spelling
+changes, never the window); otherwise it runs as sent and past the step is recorded `shifted`.
+The same cap now guards the redraw of the library's own fill. Only a call whose own forms name
+different windows does not run (`no-form-holds`): which one the tool would read is unknown. In this repository, the native clock and dispatch checks call
+`rulerTool({ period })` from `test/time/fixtures/rulerTool.ts` through ordinary `Agent.run` and
+`resume`.
 
 ```ts
 resolveMention([{ rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 9, meridiem: 'am' } }] }], clock, rule)
@@ -465,10 +508,14 @@ routing and admission must prevent incompatible downgrade before adoption.
 
 ## Not covered yet
 
-- The covering look-back the time ask fills is spelled at the turn's `now`; the person answers
-  later, so on a tool with no absolute form it runs after the clock moved on and is recorded
-  `shifted` (the result check then reads the front it missed) — it is not re-spelled from the
-  dispatch clock. A start and end the person gave argument by argument are judged together, but
+- A confirmed look-back, or a confirmed timestamp range that ended before the clock's `now`, on
+  a tool with no absolute form is re-spelled from the dispatch clock (`coversAtDispatch`, above).
+  A window written as a RANGE that ends exactly at `now` (a UI control's `to: now`, an edited
+  answer) is still an exact look-back for a look-back form, in declared order: within the tool's
+  step it runs as sent, past it the drift law redraws or records `shifted`. A whole
+  calendar period (`yesterday`), which keeps its grain and records no endpoint, is not yet: its
+  covering look-back is spelled at the turn's `now`; the person answers later, so it runs after
+  the clock moved on and is recorded `shifted` (the result check then reads the front it missed). A start and end the person gave argument by argument are judged together, but
   their call's `call-window` row stays `not-filled` (`ctx.time.asked` is absent there). A turn with
   no time words does not carry the last window yet (`time-carried`, § 5.6).
 - The result checks (T8) read what the record holds and nothing else: a call whose tool declares

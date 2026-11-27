@@ -59,6 +59,8 @@
     ]],
     [15, [
       [["receipt"], "object"],
+      [["sourceLinkServedRows"], "array", 1],
+      [["sourceLinkConsumer"], "object"],
       [["llmLatestToolCalls"], "array", 1]
     ]],
     [19, [
@@ -70,6 +72,7 @@
       [["messagesInjections"], "array", 3]
     ]],
     [34, [
+      [["sourceLinkServedRows"], "array", 2],
       [["llmLatestToolCalls"], "array", 0]
     ]],
     [37, [

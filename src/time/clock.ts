@@ -42,8 +42,13 @@
  */
 
 import { instantOf, type InstantText } from './instant.js';
-import { isTimeRange, type TimeRange } from './range.js';
+import {
+  readControlWindow,
+  type ControlWindowInput,
+  type RecordedWindow,
+} from './windowEndpoint.js';
 import { isZoneName, type ZoneName } from './zone.js';
+import type { TimeDisplay } from './display.js';
 import { readerIssue, type TimeReader } from './reader.js';
 import { readPolicy, type TimePolicy } from './resolveRecord.js';
 import { readTimeAskMessages, type TimeAskMessages } from './ask.js';
@@ -98,9 +103,10 @@ export interface RunTime {
   readonly zone?: string;
   /**
    * A window set in a UI — a brushed chart range, a range picker — as a
-   * half-open `{ from, to }` of instants. Recorded with `source: 'control'`.
+   * range of instants. The end is exclusive unless `end: 'inclusive'` is supplied.
+   * Optional `precision` keeps the displayed precision even when the ISO spelling is padded.
    */
-  readonly window?: TimeRange;
+  readonly window?: ControlWindowInput;
 }
 
 /** The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11). */
@@ -134,13 +140,19 @@ export interface TimeOptions {
    * the label on a reading to confirm. A key you leave out keeps the default.
    */
   readonly messages?: Partial<TimeAskMessages>;
+  /**
+   * Let a benchmark-qualified, standalone look-back use the library's reading
+   * without a separate confirmation. The default is false. Unproved readings
+   * still follow the usual time question.
+   */
+  readonly skipProvenConfirmation?: boolean;
 }
 
 /** {@link RunTime} as read: every value checked and kept as written, a `Date` spelled in UTC. */
 export interface ReadRunTime {
   readonly now?: InstantText;
   readonly zone?: ZoneName;
-  readonly window?: TimeRange;
+  readonly window?: RecordedWindow;
 }
 
 /** {@link TimeOptions} as read — the policy's defaults filled in when a reader is armed. */
@@ -150,15 +162,18 @@ export interface ReadTimeOptions {
   readonly policy?: TimePolicy;
   /** The app's catalog overrides — every key one the catalog has. */
   readonly messages?: Partial<TimeAskMessages>;
+  readonly skipProvenConfirmation?: true;
 }
 
 /** What a turn's clock is before seed knows the turn's start. */
 export interface ClockDraft {
+  /** Optional presentation metadata; never part of the interpretation clock. */
+  readonly display?: TimeDisplay;
   readonly now?: InstantText;
   readonly zone: ZoneName;
   /** `'unknown'`: neither the run nor the builder named a zone — `zone` is the UTC spelling. */
   readonly zoneSource: 'run' | 'builder' | 'unknown';
-  readonly window?: TimeRange;
+  readonly window?: RecordedWindow;
 }
 
 /** A read answer: the value, or a problem named in words. */
@@ -167,7 +182,13 @@ export type Read<T> = { readonly value: T } | { readonly problem: string };
 // ─── Reading the two inputs ──────────────────────────────────────────────
 
 const RUN_KEYS: readonly string[] = ['now', 'zone', 'window'];
-const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy', 'messages'];
+const OPTION_KEYS: readonly string[] = [
+  'zone',
+  'reader',
+  'policy',
+  'messages',
+  'skipProvenConfirmation',
+];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -241,18 +262,18 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
     if ('problem' in read) return { problem: `time.${read.problem}` };
     zone = read.value;
   }
-  if (value.window !== undefined && !isTimeRange(value.window)) {
+  const window = readControlWindow(value.window);
+  if (value.window !== undefined && window === undefined) {
     return {
       problem:
-        'time.window must be { from, to } — two ISO 8601 instants with a zone, from before to',
+        'time.window needs ISO 8601 from and to with offsets, a valid end policy and matching precision',
     };
   }
-  const window = value.window as TimeRange | undefined;
   return {
     value: {
       ...(now !== undefined && { now }),
       ...(zone !== undefined && { zone }),
-      ...(window !== undefined && { window: { from: window.from, to: window.to } }),
+      ...(window !== undefined && { window }),
     },
   };
 }
@@ -264,12 +285,15 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
 export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
   if (value === undefined) return { value: {} };
   if (!isPlainObject(value)) {
-    return { problem: 'options must be an object — { zone?, reader?, policy?, messages? }' };
+    return {
+      problem:
+        'options must be an object — { zone?, reader?, policy?, messages?, skipProvenConfirmation? }',
+    };
   }
   const extra = unknownKeys(value, OPTION_KEYS);
   if (extra.length > 0) {
     return {
-      problem: `options take { zone?, reader?, policy?, messages? } — unknown key ${extra
+      problem: `options take { zone?, reader?, policy?, messages?, skipProvenConfirmation? } — unknown key ${extra
         .map((k) => `'${k}'`)
         .join(', ')}`,
     };
@@ -286,7 +310,14 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
     if ('problem' in read) return read;
     messages = read.value;
   }
+  const skipProvenConfirmation = value.skipProvenConfirmation;
+  if (skipProvenConfirmation !== undefined && typeof skipProvenConfirmation !== 'boolean') {
+    return { problem: 'skipProvenConfirmation must be a boolean' };
+  }
   if (value.reader === undefined) {
+    if (skipProvenConfirmation === true) {
+      return { problem: 'skipProvenConfirmation requires a time reader' };
+    }
     // A policy with no reader has nothing to choose among — it would look
     // configured and do nothing.
     if (value.policy !== undefined) {
@@ -305,6 +336,7 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
       ...(zone !== undefined && { zone }),
       reader: value.reader as TimeReader,
       policy,
+      ...(skipProvenConfirmation === true && { skipProvenConfirmation }),
       ...(messages !== undefined && { messages }),
     },
   };
@@ -359,7 +391,7 @@ export interface ClockChange {
   readonly kept: {
     readonly now: InstantText;
     readonly zone: ZoneName;
-    readonly window?: TimeRange;
+    readonly window?: RecordedWindow;
   };
 }
 
@@ -377,7 +409,7 @@ export interface ClockChange {
  */
 export function clockChange(
   passed: ReadRunTime,
-  kept: { readonly now: InstantText; readonly zone: ZoneName; readonly window?: TimeRange },
+  kept: { readonly now: InstantText; readonly zone: ZoneName; readonly window?: RecordedWindow },
 ): ClockChange | undefined {
   const nowDiffers = passed.now !== undefined && passed.now !== kept.now;
   const zoneDiffers = passed.zone !== undefined && passed.zone !== kept.zone;
@@ -385,7 +417,11 @@ export function clockChange(
     passed.window !== undefined &&
     (kept.window === undefined ||
       passed.window.from !== kept.window.from ||
-      passed.window.to !== kept.window.to);
+      passed.window.to !== kept.window.to ||
+      (kept.window.endpoint !== undefined &&
+        (passed.window.endpoint?.cutoff !== kept.window.endpoint.cutoff ||
+          passed.window.endpoint?.end !== kept.window.endpoint.end ||
+          passed.window.endpoint?.precision !== kept.window.endpoint.precision)));
   if (!nowDiffers && !zoneDiffers && !windowDiffers) return undefined;
   return {
     passed,

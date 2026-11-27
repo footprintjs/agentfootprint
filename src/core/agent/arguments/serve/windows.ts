@@ -18,7 +18,8 @@ import {
 import type { ReaderWindows } from '../../../../time/bind.js';
 import { windowToConvert } from '../../../../time/windows.js';
 import type { ZoneName } from '../../../../time/zone.js';
-import { presentRange } from '../../../../time/present.js';
+import { presentRange, presentSpan } from '../../../../time/present.js';
+import { displayPresentationOf } from '../../../../time/display.js';
 import { printedValue } from './values.js';
 import { UNKNOWN_ZONE_CLAUSE } from './clock.js';
 import { refusalReason } from './refusals.js';
@@ -83,9 +84,19 @@ function whoseWindow(w: ServedWindows['windows'][number]): string {
  * A window for a person, in its zone, to the minute with its end AS SAID — the last minute inside
  * the half-open range (`time/present.ts` · `presentRange`); the ISO interval if it cannot be.
  */
-function presentedWindow(w: ServedWindows['windows'][number]): string {
+function presentedWindow(w: ServedWindows['windows'][number], display?: ServedWindows): string {
+  const { endpoint } = w;
   try {
-    return presentRange(w.range, { zone: w.zone }, 'minute');
+    if (endpoint !== undefined) {
+      const range = presentSpan(
+        w.range.from,
+        endpoint.cutoff,
+        { zone: w.zone, ...displayPresentationOf(display) },
+        'exact',
+      );
+      return `${range} (end ${endpoint.end === 'exclusive' ? 'excluded' : 'included'})`;
+    }
+    return presentRange(w.range, { zone: w.zone, ...displayPresentationOf(display) }, 'minute');
   } catch {
     return `${w.range.from}/${w.range.to}`;
   }
@@ -114,7 +125,13 @@ function toolValues(
       ? `${argument} (hidden by the tool's view)`
       : `${argument} ${printedArgument(value)}`,
   );
-  const wider = 'sent' in conversion ? ' (a wider read than the words named)' : '';
+  const wider =
+    'sent' in conversion
+      ? ' (a wider read than the words named)'
+      : conversion.coversAtDispatch === true
+      ? " (a length counted back from the tool's own clock; the library lengthens it when the " +
+        'call is handed over, so it still reaches the start of the window)'
+      : '';
   return `${pt.name} ${values.join(', ')}${wider}`;
 }
 
@@ -126,7 +143,9 @@ function settledSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
     const values = tools.flatMap((pt) => toolValues(pt, w, windows) ?? []);
     if (values.length === 0) continue;
     const subject = w.corrected === true ? 'The corrected window' : `“${w.quote}”`;
-    clauses.push(`${subject} is ${presentedWindow(w)}, ${whoseWindow(w)} — ${values.join('; ')}`);
+    clauses.push(
+      `${subject} is ${presentedWindow(w, windows)}, ${whoseWindow(w)} — ${values.join('; ')}`,
+    );
   }
   if (clauses.length === 0) return undefined;
   const these = clauses.length === 1 ? 'that window' : 'those windows';
@@ -153,6 +172,7 @@ function controlSentence(tools: readonly PeriodTool[], windows: ServedWindows): 
   const unknown = windows.zoneUnknown === true ? ` (${UNKNOWN_ZONE_CLAUSE})` : '';
   const named = `The window the person set in the app's time control is ${presentedWindow(
     w,
+    windows,
   )}${unknown}`;
   if (values.length === 0) return `${named}. An answer built on it states that window.`;
   return (

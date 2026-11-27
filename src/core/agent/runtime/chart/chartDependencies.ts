@@ -1,3 +1,6 @@
+import { canQualifyProvenWindow } from '../provenWindow.js';
+import { hostWriters } from '../../hostEnd/projection.js';
+import { chooseHostTurn } from '../../hostEnd/settle.js';
 import type { NativeMappingBinding } from 'footprintjs';
 import { componentEvidence } from '../../componentObservers.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../../../../cache/CacheGateDecider.js';
@@ -57,6 +60,9 @@ export function chartDependencies(
   this: Pick<AgentContext, 'configuration' | 'native' | 'revisionWithholdsTools'>,
   environment: ChartDependenciesEnvironment,
 ) {
+  const writers = this.configuration.hostEndedTurns
+    ? hostWriters(this.configuration.memories)
+    : undefined;
   return {
     memories: this.configuration.memories,
     // Evidence bridge (#5): closure hand-off to the CAUSAL write mounts.
@@ -66,6 +72,17 @@ export function chartDependencies(
     }),
     systemPromptCachePolicy: environment.systemPromptCachePolicy,
     maxIterations: environment.maxIterations,
+    ...(writers && {
+      chooseHostTurn: (
+        scope: import('footprintjs').TypedScope<import('../../types.js').AgentState>,
+      ) =>
+        chooseHostTurn(
+          scope,
+          this.native.runExecution().forScope(scope),
+          this.configuration,
+          writers,
+        ),
+    }),
     seed: environment.seed,
     callLLM: environment.callLLM,
     routeDecider: environment.terminalRouteDecider,
@@ -123,6 +140,7 @@ export function chartDependencies(
     // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
     // so the three can never disagree about whether the ledger is armed.
     ...(this.configuration.findingsOptions !== undefined && { hasFindingsLedger: true }),
+    ...(this.configuration.citationOptions !== undefined && { hasCitations: true as const }),
     // The inputs layer (honesty layer 2): `sf-inputs` between the LLM call
     // and Route, in both builders through one helper; absent → untouched.
     // With a before-tool chain, the final branch's "Assumed" block also reads
@@ -145,6 +163,7 @@ export function chartDependencies(
         // turn's one window, bound to the person's window, or recorded as the model's.
         ...(this.configuration.timeOptions !== undefined && {
           time: {
+            allowProven: canQualifyProvenWindow(this.configuration),
             ...(this.configuration.timeOptions.zone !== undefined && {
               appZone: this.configuration.timeOptions.zone,
             }),
@@ -193,13 +212,30 @@ export function chartDependencies(
       answerLayer: {
         reads: answerFoldReads({
           tools: environment.canCallTools,
+          retrieval: this.configuration.memories.length > 0,
+          resultLimits:
+            this.configuration.maxToolResultChars !== undefined ||
+            this.configuration.artifactStore !== undefined ||
+            environment.windowStage !== undefined,
           evidenceGate: this.configuration.evidenceGate !== undefined,
           answerValidation: this.configuration.answerValidationConfig !== undefined,
+          citations: this.configuration.citationOptions !== undefined,
           inputs: environment.inputsArmed,
           toolMiddleware: this.configuration.toolMiddleware.length > 0,
+          sourceNotConsulted: this.configuration.answerLayerOption.sourceNotConsulted === true,
         }),
-        ...(this.configuration.answerLayerOption.standingLine !== undefined && {
-          standingLine: this.configuration.answerLayerOption.standingLine,
+        ...this.configuration.answerLayerOption,
+        ...(this.configuration.citationOptions !== undefined && {
+          retainedCitationsFor: (scope: object) => {
+            const { value } = this.native.runExecution().forScope(scope);
+            const retained = value.retainedCitations;
+            delete value.retainedCitations;
+            return retained;
+          },
+        }),
+        ...(this.configuration.answerLayerOption.sourceNotConsulted === true && {
+          omissionCheckFor: (scope: object) =>
+            this.native.runExecution().forScope(scope).value.sourceConsultation?.checksOmission,
         }),
         ...(this.configuration.answerValidationConfig !== undefined && {
           validated: true as const,
@@ -219,6 +255,9 @@ export function chartDependencies(
     // The declared ontology (9.106.0): the grouped chart carries the run
     // constant across the sf-llm-call boundary, under the arm.
     ...(this.configuration.ontology !== undefined && { hasOntology: true }),
+    ...(this.configuration.answerLayerOption?.sourceNotConsulted === true && {
+      sourceNotConsulted: true as const,
+    }),
     // `.limitsTravelWithTheAnswer()` — value-conditional, the
     // `resolvedModel` precedent: absent from the deps object entirely for an
     // agent that did not ask, so both builders mount the final-branch stage
@@ -243,6 +282,7 @@ export function chartDependencies(
     // The Tools mount hands the slot the turn's windows — the reader's (step T6b) and the
     // app's control window (G14) — under `.time()`.
     ...(this.configuration.timeOptions !== undefined && { timeWindows: true as const }),
+    ...(canQualifyProvenWindow(this.configuration) && { stateProvenWindow: true as const }),
     ...(environment.inputsArmed &&
       this.configuration.timeOptions !== undefined && { timeLimits: true as const }),
     ...(this.configuration.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
@@ -250,6 +290,7 @@ export function chartDependencies(
       negativeRecheckStage: negativeRecheckStage as (scope: never) => void,
     }),
     ...(environment.governsOutput && { releaseOutputTokens: true as const }),
+    ...(this.configuration.hostEndedTurns && { hostEndedTurns: true as const }),
     ...(this.configuration.evidenceGate?.posture === 'rails' && { evidenceRails: true as const }),
     // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
     // above, decided once beside the Route decider that routes to it so the

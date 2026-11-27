@@ -7,11 +7,18 @@ import {
 } from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
+import { assumedLinesFor } from '../../core/agent/arguments/serve.js';
 import { foldState } from '../../core/agent/assessment/assess.js';
 import {
-  dispatchProofWitness,
+  assessmentDataFrom,
+  assumedValuesSourceOf,
+  reasonUsesToolWords,
+  recordedStandingLinesOf,
+  rewrittenBehind,
   settledSiblingWitness,
+  standingFactsOf,
   standingNamesFrom,
+  unreachableWitnessGroups,
 } from '../../core/agent/assessment/compose.js';
 import { unplacedEvidenceKind } from '../../core/agent/assessment/sources.js';
 import type {
@@ -29,12 +36,20 @@ import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.j
 
 /** Reasons whose standing line needs the committed rows for its details. */
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
+  'result-cut',
+  'placed-unread',
+  'times-without-zone',
   'argument-assumed',
   'value-contingent',
   'check-unreachable',
   'call-not-completed',
   'work-not-finished',
+  'result-dropped-from-window',
+  'memory-retrieval-timeout',
+  'memory-retrieval-excluded',
+  'source-not-consulted',
   'step-skipped',
+  'ungrounded-entity',
 ]);
 
 /** The recorded display names, or null if the record cannot supply them in full. */
@@ -69,6 +84,8 @@ export function recordedStandingWitnesses(
     undefined,
     undefined,
     view.events,
+    undefined,
+    view.checkOmission,
   );
   if (assessed.keptOut !== undefined) return undefined;
   const complete = reasons.every(
@@ -77,6 +94,47 @@ export function recordedStandingWitnesses(
       assessed.reasons.some((r) => r.reason === reason && r.witness.length > 0),
   );
   return complete ? assessed : undefined;
+}
+
+/**
+ * Standing-line candidates rebuilt from the record. The exact match below
+ * selects the wording held by this recorded answer.
+ *
+ * The line opens with the owner's plain words ("Not sure — ", "Known — "),
+ * which a model can write too, so an opening proves nothing. The record does:
+ * `turn_end.answerAssessment` exists only on a run whose answer layer folded
+ * the standing, and the line is ONE function of that projection
+ * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
+ * assumed, of the rows `assumedValuesSourceOf` reads and the fold's rewrite
+ * witness. The account claims only the exact line in its appended position.
+ *
+ * The fold supplies the witnesses and `turn_end.standingLineNames` supplies names.
+ * The account leaves the line unclaimed when required committed state or the
+ * complete recorded display names are unavailable.
+ */
+export function appendedStandingLine(end: ViewEvent, view: RecordingView): readonly string[] {
+  // An omitted or unreadable display decision leaves the original answer intact.
+  if (
+    keptOut(end, 'standingLineOmittedByRaiseOn') ||
+    Object.hasOwn(end.payload, 'standingLineOmittedByRaiseOn')
+  )
+    return [];
+  const data = assessmentDataFrom(end.payload.answerAssessment);
+  if (data === undefined) return [];
+  const displayNames = recordedStandingNames(end, view);
+  if (displayNames === null) return [];
+  const needsWitnesses = data.reasons.some((reason) => WITNESSED_REASONS.has(reason));
+  const plain =
+    displayNames === undefined && !needsWitnesses ? recordedStandingLinesOf(data, [], false) : [];
+  if (plain.length > 0 && !data.reasons.some(reasonUsesToolWords)) return plain;
+  const assessed = recordedStandingWitnesses(view, data.reasons);
+  const { state } = view;
+  if (assessed === undefined || state === undefined) return plain;
+  const source = assumedValuesSourceOf(assessed, state);
+  const assumed =
+    source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
+  const facts = standingFactsOf(assessed, displayNames ?? new Map(), view.stateAsRecorded);
+  return recordedStandingLinesOf(data, assumed, rewrittenBehind(assessed), facts);
 }
 
 /** The account's standing fact: the owner's word, or "not recorded" when no committed state is. */
@@ -102,7 +160,13 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
   'call-not-completed': 'howSure.reason.callNotCompleted',
   'result-withheld': 'howSure.reason.resultWithheld',
+  'result-cut': 'howSure.reason.resultCut',
+  'placed-unread': 'howSure.reason.placedUnread',
+  'times-without-zone': 'howSure.reason.timesWithoutZone',
+  'result-dropped-from-window': 'howSure.reason.resultDroppedFromWindow',
   'work-not-finished': 'howSure.reason.workNotFinished',
+  'memory-retrieval-timeout': 'howSure.reason.memoryRetrievalTimeout',
+  'memory-retrieval-excluded': 'howSure.reason.memoryRetrievalExcluded',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
   'period-unknown': 'howSure.reason.periodUnknown',
@@ -115,13 +179,16 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'derived-from-reading': 'howSure.reason.derivedFromReading',
   'script-unmatched': 'howSure.reason.scriptUnmatched',
   'stopped-early': 'howSure.reason.stoppedEarly',
+  'answer-output-limit': 'howSure.reason.answerOutputLimit',
   'steps-unfinished': 'howSure.reason.stepsUnfinished',
   'step-skipped': 'howSure.reason.stepSkipped',
   'negative-prose-unverified': 'howSure.reason.negativeProseUnverified',
   'invariant-violation': 'howSure.reason.invariantViolation',
   'unsupported-argument': 'howSure.reason.unsupportedArgument',
+  'source-not-consulted': 'howSure.reason.sourceNotConsulted',
   'column-type-mismatch': 'howSure.reason.columnTypeMismatch',
   'missing-column': 'howSure.reason.missingColumn',
+  'ungrounded-entity': 'howSure.reason.claimUnsettled',
   'unsupported-claim': 'howSure.reason.unsupportedClaim',
   'claim-unsettled': 'howSure.reason.claimUnsettled',
   'claim-exceeds-search': 'howSure.reason.claimExceedsSearch',
@@ -140,6 +207,7 @@ const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'declared-absent',
   'empty-undeclared',
   'work-not-finished',
+  'result-dropped-from-window',
   'step-skipped',
   'period-not-held',
   'period-partly-held',
@@ -297,12 +365,21 @@ export function standingLines(
     undefined,
     declarationAddresses,
     ctx.view.events,
+    undefined,
+    ctx.view.checkOmission,
   );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
     return noStanding(ctx, 'howSure.standing.noAnswer');
   }
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
+  const { conflict, dispatch, validator, libraryLimits } = unreachableWitnessGroups(
+    a.reasons.find(({ reason }) => reason === 'check-unreachable')?.witness ?? [],
+  );
+  const accompanyingReasons =
+    conflict.length === 0 && libraryLimits.length === 0
+      ? 0
+      : [conflict, libraryLimits, dispatch, validator].filter((rows) => rows.length > 0).length - 1;
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
   let resolve: ReturnType<typeof historyCallResolver> | undefined;
@@ -331,29 +408,43 @@ export function standingLines(
     case 'ask':
       lines.push(
         ctx.say(a.standing === 'ask' ? 'howSure.standing.ask' : 'howSure.standing.notSure', {
-          ...(a.standing === 'not-sure' && { vars: { n: n(a.reasons.length) } }),
+          ...(a.standing === 'not-sure' && {
+            vars: { n: n(a.reasons.length + accompanyingReasons) },
+          }),
           ...recordedAt(reasonPointers),
         }),
         ...a.reasons.flatMap((r) => {
           if (r.reason === 'call-not-completed') return callOutcomeLines(ctx, r);
           const unplaced = r.source.kind === 'calls' ? r.source.unplaced ?? [] : [];
           const count = COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length;
+          let template: TemplateId = REASON_LINES[r.reason];
+          if (r.reason === 'check-unreachable') {
+            if (conflict.length > 0 || libraryLimits.length > 0) {
+              const causes = [
+                ['howSure.reason.conflictReadingsUnplaced', conflict],
+                ['howSure.reason.libraryLimitsIncomplete', libraryLimits],
+                ['howSure.reason.dispatchProofUnavailable', dispatch],
+                ['howSure.reason.checkUnreachable', validator],
+              ] as const;
+              return causes.flatMap(([id, witnesses]) =>
+                witnesses.length === 0
+                  ? []
+                  : [ctx.say(id, { ...recordedAt(pointersOf(witnesses)), item: true })],
+              );
+            }
+            if (dispatch.length > 0) template = 'howSure.reason.dispatchProofUnavailable';
+          }
           const line =
             unplaced.length > 0 && count === 0
               ? []
               : [
-                  ctx.say(
-                    r.reason === 'check-unreachable' && r.witness.some(dispatchProofWitness)
-                      ? 'howSure.reason.dispatchProofUnavailable'
-                      : REASON_LINES[r.reason],
-                    {
-                      ...(COUNTED.has(r.reason) && {
-                        vars: { n: n(count) },
-                      }),
-                      ...recordedAt(pointersOf(r.witness)),
-                      item: true,
-                    },
-                  ),
+                  ctx.say(template, {
+                    ...(COUNTED.has(r.reason) && {
+                      vars: { n: n(count) },
+                    }),
+                    ...recordedAt(pointersOf(r.witness)),
+                    item: true,
+                  }),
                 ];
           if (unplaced.length === 0) return line;
           resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));

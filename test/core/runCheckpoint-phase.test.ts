@@ -123,7 +123,7 @@ describe('failure phase is OBSERVED, not guessed (8.14.0)', () => {
       .build();
 
     await expect(agent.run({ message: 'go' })).resolves.toBe(
-      'FINAL\n\n---\n\nNot sure — calls failed.',
+      'FINAL\n\n---\n\nNot sure — calls failed with a network error.',
     );
   });
 

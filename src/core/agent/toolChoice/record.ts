@@ -5,7 +5,7 @@
  *          recordFindings`, `middleware/ledger.ts · recordDecisions`).
  * Role:    core/ layer leaf. Two call sites, one writer: the tools slot
  *          files the `pick` / `pick-error` row before the model call
- *          (`slots/buildToolsSlot.ts · composeStage`), `stages/callLLM.ts`
+ *          (`slots/buildToolsSlot.ts · composeStage`), `stages/callLLM/acceptResponse.ts`
  *          files the `outcome` row after the reply. Both go through
  *          `recordToolChoice`, so the key is appended one way and the
  *          matching event fires once per row.
@@ -24,6 +24,7 @@
  * itself and passes nothing.
  */
 
+import type { LLMResponse } from '../../../provider-contract/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type {
   ToolChoiceEntry,
@@ -51,6 +52,30 @@ export function recordToolChoice(
 ): void {
   scope.toolChoices = [...(prior ?? []), row];
   emitRow(scope, row);
+}
+
+/**
+ * The slot records the classifier's pick before the call. The accepted reply
+ * supplies the other reading, in tool call order after forced output is removed.
+ * A miss is a call outside the narrowed list. An iteration with no pick attempt
+ * gets no outcome row.
+ */
+export function recordToolChoiceOutcome(
+  scope: ToolChoiceScope,
+  response: Pick<LLMResponse, 'toolCalls'>,
+  iteration: number,
+): void {
+  const rows = scope.toolChoices;
+  if (pickAttemptedFor(rows, iteration)) {
+    recordToolChoice(
+      scope,
+      outcomeRowFor(
+        pickRowFor(rows, iteration),
+        response.toolCalls.map((call) => call.name),
+        iteration,
+      ),
+    );
+  }
 }
 
 function emitRow(scope: ToolChoiceScope, row: ToolChoiceEntry): void {

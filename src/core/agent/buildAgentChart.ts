@@ -52,16 +52,14 @@ import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
-import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryWrites } from './memoryWrites.js';
+import { mountHostTurn } from './hostEnd/chart.js';
+import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
-import { readerWindowsOf } from '../../time/windows.js';
-import { clockOf } from '../../time/rows.js';
-import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
+import { systemPromptInput } from './runtime/slots/systemPromptInput.js';
 import {
   breakFinalStage,
   breakFinalWithValidationStage,
@@ -69,7 +67,7 @@ import {
   finalBranchOutput,
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
-import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
@@ -77,6 +75,7 @@ import {
   startFinalBranch,
 } from './honesty/mounts.js';
 
+import { timeClockArg, timeLimitsArg, timeWindowsArg } from './chartTimeInputs.js';
 import type { AgentState } from './types.js';
 import { memberRunArg } from '../memberRun.js';
 import type { AgentChartDeps } from './chartContract.js';
@@ -85,45 +84,6 @@ export type { AgentChartDeps } from './chartContract.js';
 /**
  * Build the agent's complete FlowChart from the supplied deps.
  */
-/** The Tools mount's `timeWindows` arg — the turn's windows (the reader's, the control's), or no key at all. */
-export function timeWindowsArg(ledger: unknown): {
-  timeWindows?: ReturnType<typeof readerWindowsOf>;
-} {
-  const windows = readerWindowsOf(ledger as readonly unknown[] | undefined);
-  return windows === undefined ? {} : { timeWindows: windows };
-}
-
-/**
- * The Tools mount's `timeClock` arg — the turn's run clock for the served
- * line's first sentence (G16, `agent/arguments/serve/clock.ts` · `clockSentence`),
- * or no key when the turn has no clock. Under an unknown zone (G15) the zone
- * is the UTC spelling, marked `zoneUnknown`.
- */
-export function timeClockArg(ledger: unknown): {
-  timeClock?: { now: string; zone: string; zoneUnknown?: true };
-} {
-  const clock = clockOf(ledger as readonly unknown[] | undefined);
-  if (clock === undefined) return {};
-  return {
-    timeClock: {
-      now: clock.now,
-      zone: clock.zone,
-      ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
-    },
-  };
-}
-
-/**
- * The Tools mount's `timeLimits` arg — the turn's result-check FACTS for the
- * model (unrendered: the slot's served line renders them, under the arm), or
- * no key.
- */
-export function timeLimitsArg(ledger: unknown): { timeLimits?: TimeLimitFacts } {
-  const rows = ledger as readonly unknown[] | undefined;
-  const facts = timeLimitFactsOf(rows, clockOf(rows)?.turn, 'model');
-  return facts === undefined ? {} : { timeLimits: facts };
-}
-
 export function buildAgentChart(deps: AgentChartDeps): FlowChart {
   // ReAct loop semantics. 'classic' caches the static slots (engineer
   // system-prompt + tools only on the first turn); 'dynamic' (default)
@@ -154,25 +114,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     prepareFinalFor(deps),
     deps.structureRecorders,
   );
-  for (const m of deps.memories) {
-    if (m.write) {
-      finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
-        pipeline: {
-          read: unwrapMemoryFlowChart(m.read) as never,
-          write: unwrapMemoryFlowChart(m.write) as never,
-        },
-        identityKey: 'runIdentity',
-        turnNumberKey: 'turnNumber',
-        contextTokensKey: 'contextTokensRemaining',
-        newMessagesKey: 'newMessages',
-        writeSubflowId: `sf-memory-write-${m.id}`,
-        ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
-        ...(m.type === 'causal' &&
-          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
-      });
-    }
-  }
+  finalBranchBuilder = mountAgentMemoryWrites(finalBranchBuilder, deps);
   const finalBranchChart = finalBranchBuilder
     .addFunction(
       'BreakFinal',
@@ -197,28 +139,8 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     description: reactMode === 'classic' ? 'Agent: Classic ReAct loop' : 'Agent: ReAct loop',
   });
 
-  // Memory READ subflows — mounted between Initialize and InjectionEngine
-  // for TURN_START timing (default). Each memory writes to its own
-  // scope key (`memoryInjection_${id}`) so multiple `.memory()`
-  // registrations layer without colliding.
-  for (const m of deps.memories) {
-    builder = mountMemoryRead(builder, {
-      pipeline: {
-        read: unwrapMemoryFlowChart(m.read) as never,
-        ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-      },
-      identityKey: 'runIdentity',
-      turnNumberKey: 'turnNumber',
-      contextTokensKey: 'contextTokensRemaining',
-      injectionKey: memoryInjectionKey(m.id),
-      // The retrieval record, lifted into ROOT state so a backward slice
-      // can reach the passage instead of stopping at this mount.
-      evidenceKey: retrievalEvidenceKey(m.id),
-      readSubflowId: `sf-memory-read-${m.id}`,
-      // A corpus reads under its OWN namespace, not the run's identity.
-      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-    });
-  }
+  builder = mountHostTurn(builder, deps);
+  builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — ONE stage, two possible occupants, same id
   // (recorded structures stay stable). RouteTurn is the SG-C cascade
@@ -486,21 +408,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // no cursor for `.tag()`); it lands on the mount's FIRST bundle.
     .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
       tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
-      inputMapper: (parent) => ({
-        userMessage: parent.userMessage as string | undefined,
-        iteration: parent.iteration as number | undefined,
-        // `.configure()`'s per-run system prompt, as seed committed it. The
-        // key is spread in ONLY when a resolver actually produced one, so an
-        // unconfigured agent seeds this subflow with the same keys as ever.
-        ...(parent.resolvedInstructions !== undefined && {
-          instructions: parent.resolvedInstructions as string,
-        }),
-        activeInjections: withMemoryRecall(
-          parent.activeInjections as readonly ActiveInjection[] | undefined,
-          parent,
-          memoryIds,
-        ),
-      }),
+      inputMapper: (parent) => systemPromptInput(parent, memoryIds, parent.servedSystemSkillBodies),
       outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
       arrayMerge: ArrayMergeMode.Replace,
     })
@@ -534,7 +442,8 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // The reader's settled windows (step T6b) and the app's control window,
         // under `.time()` only and value-conditional: a turn with none crosses no
         // key. See `AgentChartDeps.timeWindows`.
-        ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
+        ...(deps.timeWindows === true &&
+          timeWindowsArg(parent.findingsLedger, parent, deps.stateProvenWindow === true)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
         // The role-hidden skill ids the Injection Engine resolved THIS iteration
         // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the
@@ -636,29 +545,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // Findings uses stable tool definitions and late request-only DATA, so
     // its changing ledger does not disable prefix cache markers.
     .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        // decideCacheMarkers inputs
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-        }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
-        // names a position in the request's message array, so it has to be
-        // computed against that array — post-window, post-delivery — and not
-        // against a count of injections, which is what it used to be and why
-        // the marker pointed at the wrong message.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        // CacheGate inputs (read-only: skillHistory is updated in the main
-        // loop above, so it is NOT mapped back out)
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
+      inputMapper: (parent) => cacheMountInput(parent, deps),
       outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
       arrayMerge: ArrayMergeMode.Replace,
     })

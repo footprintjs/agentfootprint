@@ -152,6 +152,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.memory.detached': 'structure',
   'agentfootprint.memory.retrieved': 'shape',
   'agentfootprint.memory.strategy_applied': 'fields',
+  'agentfootprint.memory.write_outcome': 'structure',
   'agentfootprint.memory.written': 'fields',
   // middleware.*
   'agentfootprint.middleware.decision': 'shape',
@@ -369,6 +370,7 @@ const CANARY_PAYLOAD: {
     kind: 'dataset/rows',
     mediaType: 'application/json',
     bytes: 512,
+    naiveCount: 0,
     label: leaf(c, 'label'),
     digest: 'sha-256:00ff',
     expiresAt: 1_700_000_000_000,
@@ -671,6 +673,59 @@ const CANARY_PAYLOAD: {
     temperature: 0,
     providerRequestRef: 'req-00ff',
     brain: { via: 'skill', skillId: 'refunds' },
+    contextChange: {
+      check: 'compared',
+      refused: true,
+      binding: 'bound',
+      by: 'app',
+      appStatement: 'failed',
+      changes: [
+        {
+          slot: 'system-prompt',
+          change: 'added',
+          source: 'skill',
+          id: 'refunds',
+          cause: 'read-skill-result-middleware',
+          tool: 'orders_search',
+          party: { channel: 'skill', id: 'refunds' },
+          position: 2,
+          role: 'tool',
+        },
+      ],
+      omittedChanges: 1,
+    },
+    // The skill-context decision (`core/agent/skillContext/decide.ts`): names, strategies and the
+    // table author's fixed labels only, so no leaf is content. `DeepRequired` asks for every field,
+    // so `rule` and `voucher` are both filled here; a real record has `rule` only when `by` is
+    // `'rule'` and `voucher` only when it is `'fixed'`.
+    skillContext: {
+      tools: {
+        strategy: 'listed',
+        by: 'rule',
+        rule: 0,
+        label: 'The model binds its reasoning to the context it was written under',
+        reads: ['binding'],
+        voucher: 'app',
+      },
+      body: {
+        strategy: 'tool-result',
+        by: 'rule',
+        rule: 0,
+        label: 'With every skill tool listed, a body loaded by read_skill travels in its result',
+        reads: ['tools'],
+        voucher: 'app',
+        measurement: {
+          script: 'skill-body-measure-20261125/measure.mjs',
+          run: '2026-11-25T22-14-20-690Z',
+        },
+      },
+      binding: {
+        binding: 'bound',
+        by: 'provider',
+        provider: 'anthropic',
+        model: 'claude-haiku-5-5',
+      },
+    },
   }),
   'agentfootprint.stream.tool_progress': (c) => ({
     toolCallId: 'call-1',

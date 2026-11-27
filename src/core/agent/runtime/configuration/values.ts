@@ -2,6 +2,7 @@ import type { AgentConfiguration } from './types.js';
 
 /** Construction-only mutable storage; readers receive the readonly contract. */
 export class AgentConfigurationValues implements AgentConfiguration {
+  hostEndedTurns = false;
   declare provider: AgentConfiguration['provider'];
   declare model: AgentConfiguration['model'];
   declare temperature?: AgentConfiguration['temperature'];
@@ -23,6 +24,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare skillGraphSupersededEntries?: AgentConfiguration['skillGraphSupersededEntries'];
   declare skillGraphIsTree: AgentConfiguration['skillGraphIsTree'];
   declare skillBrains?: AgentConfiguration['skillBrains'];
+  declare skillContext?: AgentConfiguration['skillContext'];
   declare evidenceGate?: AgentConfiguration['evidenceGate'];
   limitsTravelWithTheAnswerValue: AgentConfiguration['limitsTravelWithTheAnswerValue'] = false;
   declare scriptTravel?: AgentConfiguration['scriptTravel'];
@@ -51,11 +53,13 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare messageMiddleware: AgentConfiguration['messageMiddleware'];
   declare aroundTurnPort: AgentConfiguration['aroundTurnPort'];
   declare readTracking: AgentConfiguration['readTracking'];
+  declare writeTracking: AgentConfiguration['writeTracking'];
   declare commitValues: AgentConfiguration['commitValues'];
   declare writeProvenance: AgentConfiguration['writeProvenance'];
   declare credentialProvider?: AgentConfiguration['credentialProvider'];
   declare artifactStore?: AgentConfiguration['artifactStore'];
   declare sourceEvidenceConfig?: AgentConfiguration['sourceEvidenceConfig'];
+  declare citationOptions?: AgentConfiguration['citationOptions'];
   declare artifactPlacement?: AgentConfiguration['artifactPlacement'];
   declare artifactRecordings?: AgentConfiguration['artifactRecordings'];
   declare repeatedCallNudge?: AgentConfiguration['repeatedCallNudge'];
@@ -80,6 +84,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare reliabilityConfig?: AgentConfiguration['reliabilityConfig'];
   declare thinkingHandler?: AgentConfiguration['thinkingHandler'];
   declare thinkingBudget?: AgentConfiguration['thinkingBudget'];
+  declare liveThinkingWithHeldDrafts?: AgentConfiguration['liveThinkingWithHeldDrafts'];
   declare structureRecorders?: AgentConfiguration['structureRecorders'];
   declare agentGroupTranslator?: AgentConfiguration['agentGroupTranslator'];
   declare reactMode: AgentConfiguration['reactMode'];

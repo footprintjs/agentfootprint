@@ -1,11 +1,48 @@
 import type { AssessmentReason } from './types.js';
 
+/** Common pure vocabulary, shared by declaration stages without sibling-stage imports. */
+export const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
+  'not-held': 'period-not-held',
+  'partly-held': 'period-partly-held',
+  unknown: 'period-unknown',
+  undeclared: 'period-undeclared',
+};
+export const PERIOD_QUALIFIERS = {
+  differs: 'period-differs-from-asked',
+  beyondRetention: 'period-beyond-retention',
+} as const satisfies Readonly<Record<string, AssessmentReason>>;
+const periodReasons = new Set<AssessmentReason>([
+  ...Object.values(PERIOD_REASONS),
+  ...Object.values(PERIOD_QUALIFIERS),
+]);
+export const isPeriodDeclarationReason = (reason: AssessmentReason): boolean =>
+  periodReasons.has(reason);
+
+/** Declaration witnesses, including a period's joined argument; all other evidence stays native. */
+export function isDeclarationWitness(
+  holder: string,
+  kind: unknown,
+  reason: AssessmentReason,
+): boolean {
+  if (holder === 'coverageDeclared')
+    return (
+      (kind === 'ledger' || kind === 'absence') &&
+      (reason === 'coverage-gap' || reason === 'declared-absent')
+    );
+  return (
+    holder === 'findingsLedger' &&
+    (kind === 'period' || kind === 'argument') &&
+    isPeriodDeclarationReason(reason)
+  );
+}
+
 export type ReasonWitnessKind = 'ordinary' | 'argument' | 'answer' | 'period' | 'retention-refusal';
 type ReasonClass = 'input' | 'result' | 'settlement' | 'turn';
 
 const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   asked: 'turn',
   'argument-asked': 'turn',
+  'source-not-consulted': 'turn',
   'argument-assumed': 'input',
   'argument-unverified': 'input',
   'argument-read': 'input',
@@ -13,6 +50,12 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'unsupported-argument': 'input',
   'call-not-completed': 'settlement',
   'result-withheld': 'settlement',
+  'result-cut': 'result',
+  'placed-unread': 'result',
+  'times-without-zone': 'result',
+  'result-dropped-from-window': 'turn',
+  'memory-retrieval-timeout': 'turn',
+  'memory-retrieval-excluded': 'turn',
   'work-not-finished': 'result',
   'coverage-gap': 'result',
   'declared-absent': 'result',
@@ -26,11 +69,13 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'sources-conflict': 'result',
   'column-type-mismatch': 'result',
   'missing-column': 'result',
+  'ungrounded-entity': 'turn',
   'value-unsupported': 'turn',
   'value-survived-revision': 'turn',
   'derived-from-reading': 'turn',
   'script-unmatched': 'turn',
   'stopped-early': 'turn',
+  'answer-output-limit': 'turn',
   'steps-unfinished': 'turn',
   'step-skipped': 'turn',
   'negative-prose-unverified': 'turn',

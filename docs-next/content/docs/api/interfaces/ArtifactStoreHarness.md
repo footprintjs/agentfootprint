@@ -21,7 +21,7 @@ directory, an embedded database and a bucket at once.
 
 > `readonly` `optional` **declared?**: `Partial`\<`Record`\<[`ArtifactStoreCaseName`](/docs/api/type-aliases/ArtifactStoreCaseName), `string`\>\>
 
-Defined in: [src/artifacts/conformance/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L135)
+Defined in: [src/artifacts/conformance/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L136)
 
 Cases this store cannot satisfy, BY NAME, each with the reason.
 
@@ -81,13 +81,14 @@ DECLARE the cases below by name.
 
 > `optional` **boundedStore**(`maxBytesPerScope`): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| `Promise`\<[`ArtifactStore`](/docs/api/interfaces/ArtifactStore)\>
 
-Defined in: [src/artifacts/conformance/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L121)
+Defined in: [src/artifacts/conformance/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/conformance/types.ts#L122)
 
 A fresh, empty store whose per-scope byte budget is `maxBytesPerScope`.
 
 The ceiling law needs a ceiling small enough to hit in a test, and a
-budget is configuration rather than a verb — there is no way to ask for it
-through the port. A store with no configurable ceiling declares the case.
+budget is configuration: a store may STATE its budget (the optional
+`scopeBudget`), but no store can be told to adopt one through the port. A
+store with no configurable ceiling declares the case.
 
 #### Parameters
 

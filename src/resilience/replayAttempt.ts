@@ -1,10 +1,16 @@
 /** Carry only a leaf-approved replay retirement across one call's attempts. */
+import { carryCitationResponse } from '../provider-contract/citationResponse.js';
 import type {
   LLMCallHooks,
   LLMChunk,
   LLMRequest,
   LLMResponse,
 } from '../provider-contract/types.js';
+import {
+  captureProviderChunk,
+  captureProviderResponse,
+} from '../provider-contract/responseAdmission.js';
+import { isTerminalIntervention } from '../provider-contract/intervention.js';
 import type { ThinkingReplayOmission } from '../thinking/replay.js';
 import { retireReplayHistory } from '../thinking/replayHistory.js';
 
@@ -18,7 +24,9 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
   let current = request;
   const reported = new Map<string, ThinkingReplayOmission>();
 
-  function response(answer: LLMResponse): LLMResponse {
+  function response(rawAnswer: LLMResponse): LLMResponse {
+    const answer = captureProviderResponse(rawAnswer);
+    if (isTerminalIntervention(answer)) return answer;
     if (reported.size === 0 && !answer.replayOmissions?.length) return answer;
     const total = new Map(reported);
     const existing = answer.replayOmissions ?? [];
@@ -29,19 +37,24 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
       omissions.every((item, index) => omissionKey(item) === omissionKey(existing[index]))
     )
       return answer;
-    return { ...answer, replayOmissions: omissions };
+    return carryCitationResponse(answer, { ...answer, replayOmissions: omissions });
   }
 
   function chunk(item: LLMChunk): LLMChunk {
-    if (!item.done || item.response === undefined) return item;
-    const answer = response(item.response);
-    return answer === item.response ? item : { ...item, response: answer };
+    const captured = captureProviderChunk(item);
+    if (captured !== item) return captured;
+    if (!item.done) return item;
+    const original = item.response;
+    if (original === undefined) return item;
+    const answer = response(original);
+    return answer === original ? item : { ...item, response: answer };
   }
 
   function result(item: IteratorResult<LLMChunk>): IteratorResult<LLMChunk> {
     if (item.done) return item;
-    const value = chunk(item.value);
-    return value === item.value ? item : { ...item, value };
+    const original = item.value;
+    const value = chunk(original);
+    return { done: false, value };
   }
 
   return {
@@ -55,16 +68,26 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
     response,
     chunk,
     /** Preserve the underlying iterator's cancellation/throw protocol. */
-    iterator(inner: AsyncIterator<LLMChunk>): AsyncIterator<LLMChunk> {
+    iterator(
+      inner: AsyncIterator<LLMChunk>,
+      observeChunk?: (chunk: LLMChunk) => void,
+    ): AsyncIterator<LLMChunk> {
       const close = inner.return?.bind(inner);
       const raise = inner.throw?.bind(inner);
+      const observe =
+        observeChunk === undefined
+          ? result
+          : (item: IteratorResult<LLMChunk>) => {
+              if (!item.done) observeChunk(item.value);
+              return result(item);
+            };
       return {
-        next: async (...args) => result(await inner.next(...args)),
+        next: async (...args) => observe(await inner.next(...args)),
         ...(close && {
-          return: async (...args: Parameters<typeof close>) => result(await close(...args)),
+          return: async (...args: Parameters<typeof close>) => observe(await close(...args)),
         }),
         ...(raise && {
-          throw: async (...args: Parameters<typeof raise>) => result(await raise(...args)),
+          throw: async (...args: Parameters<typeof raise>) => observe(await raise(...args)),
         }),
       };
     },

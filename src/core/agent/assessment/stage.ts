@@ -49,8 +49,13 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
 import { retainedStateValue } from '../../../redaction/runRedaction.js';
+import type { AnswerLayerArm } from './answerLayerOptions.js';
+import { isLibraryLimit } from './results/library-did/stage.js';
+import { isRetrievalReason } from './results/retrieval/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
+import { citationRecordForWarning } from './answer/citations/record.js';
+import { isExecutionClaimWitness } from './answer/receipt/record.js';
 import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
@@ -58,21 +63,16 @@ import {
   standingFactsOf,
   standingDisplayNames,
   standingLineOf,
-  standingLineSaid,
+  standingLineDisposition,
   type StandingAssumedValue,
-  type StandingLineWhen,
 } from './compose.js';
 
 /** What the mount hands the stage — build-time facts, never scope. */
-export interface AnswerStageDeps {
+export interface AnswerStageDeps extends AnswerLayerArm {
+  readonly retainedCitations?: import('../citations/accepted.js').RetainedCitationReport;
+  readonly checkOmission?: import('../honesty/sourceOmission.js').OmissionCheck;
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
-  /**
-   * `.answerLayer({ standingLine })` — compose the line for the person, in
-   * the answers its mode says it for (`compose.ts` · `standingLineSaid`;
-   * `standingLine: true` is `'always'`). Absent → no line.
-   */
-  readonly standingLine?: StandingLineWhen;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
   /**
@@ -96,6 +96,14 @@ function committedRecordOf(
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const key of reads) {
+    // An absent optional report contributes no reason and must leave no read in the record.
+    if (
+      (key === 'llmLatestStopReason' ||
+        key === 'sourceConsultation' ||
+        key === 'answerExecutionClaims') &&
+      !(key in scope)
+    )
+      continue;
     const value = scope.$getValue(key);
     if (value !== undefined) record[key] = value;
   }
@@ -137,8 +145,23 @@ export async function assessAnswerStage(
   ) {
     return;
   }
-  const assessed = assessLive({ sharedState: record }, undefined, (history) =>
-    retainedStateValue(scope, 'history', history),
+  const citations = record.answerCitations;
+  if (deps.retainedCitations !== undefined) {
+    // The writer retains the report before private mapper inputs can mask
+    // unrelated equal values in its public offsets or citation slots.
+    record.answerCitations = deps.retainedCitations.record;
+  } else if (citations !== undefined) {
+    record.answerCitations = citationRecordForWarning(
+      citations,
+      retainedStateValue(scope, 'answerCitations', citations),
+    );
+  }
+  const assessed = assessLive(
+    { sharedState: record },
+    undefined,
+    (history) => retainedStateValue(scope, 'history', history),
+    (key, value) => retainedStateValue(scope, key, value),
+    deps.checkOmission,
   );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);
@@ -150,9 +173,11 @@ export async function assessAnswerStage(
     ...assessmentDataOf(assessed),
   });
   // The line's mode decides whether THIS answer gets one — the data above went out either way.
-  if (deps.standingLine === undefined || !standingLineSaid(deps.standingLine, assessed.standing)) {
-    return;
+  const display = standingLineDisposition(deps.standingLine, assessed, deps.standingLineRaiseOn);
+  if (display === 'omitted-by-raise-on' || 'answerStandingLineOmittedByRaiseOn' in scope) {
+    scope.answerStandingLineOmittedByRaiseOn = display === 'omitted-by-raise-on' ? true : undefined;
   }
+  if (display !== 'show') return;
   const data = assessmentDataOf(assessed);
   const assumed = await assumedValuesOf(assessed, record);
   // The app's words for the calls the reasons rest on — only tools that declare them.
@@ -165,18 +190,26 @@ export async function assessAnswerStage(
     assumed,
     rewrittenBehind(assessed),
     displayNames.size > 0 ||
+      assessed.reasons.some(
+        ({ detail, witness }) => detail !== undefined || witness.some(isExecutionClaimWitness),
+      ) ||
       data.reasons.some(
         (reason) =>
+          isLibraryLimit(reason) ||
+          isRetrievalReason(reason) ||
           reason === 'check-unreachable' ||
           reason === 'call-not-completed' ||
           reason === 'work-not-finished' ||
+          reason === 'result-dropped-from-window' ||
           reason === 'value-contingent' ||
           reason === 'step-skipped',
       )
-      ? standingFactsOf(assessed, displayNames, record)
+      ? standingFactsOf(assessed, displayNames, record, () =>
+          retainedStateValue(scope, 'settledToolCalls', record.settledToolCalls),
+        )
       : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a
-  // reader rebuilds the very line (`answer-account/account.ts` · `appendedStandingLine`).
+  // reader rebuilds the very line (`answer-account/facts/standing.ts` · `appendedStandingLine`).
   if (displayNames.size > 0) scope.answerStandingNames = Object.fromEntries(displayNames);
 }

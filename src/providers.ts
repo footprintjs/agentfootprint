@@ -43,6 +43,14 @@ export {
   UnsupportedNativeOutputError,
 } from './provider-contract/nativeOutputSchema.js';
 export { UnsafeThinkingReplayError } from './thinking/replay.js';
+export { ContextChangedError, type ContextChange } from './thinking/contextChange.js';
+export { thinkingBindingOf, type ThinkingBinding } from './provider-contract/thinkingBinding.js';
+export {
+  ProviderBlockedError,
+  ProviderInterventionUnknownError,
+  ProviderGuardrailLimitError,
+  type ProviderIntervention,
+} from './provider-contract/intervention.js';
 export type {
   MessageReplay,
   ReplayPart,
@@ -114,6 +122,8 @@ export {
   bedrock,
   BedrockProvider,
   type BedrockProviderOptions,
+  type BedrockGuardrailOptions,
+  type BedrockGuardrailTrace,
 } from './adapters/llm/BedrockProvider.js';
 
 export {

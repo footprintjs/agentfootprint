@@ -10,6 +10,15 @@
  * trace rows across 11 named cases, plus one returned-tool marker. Every served
  * view and all prior captures are unchanged.
  *
+ * The served history writer adds one value-free row and a native set/append
+ * trace entry at each proved call. Its own sidecar pins the exact ranges, verb
+ * and placement. The prior record and occurrence sidecar remain byte-for-byte.
+ * Use AF_TOOLS_REFERENCE=update-served-rows with explicit scenario names in
+ * AF_TOOLS_REFERENCE_CASES to capture only this sidecar.
+ * The source-link producer adds an exact consumer record at those same calls.
+ * Its owner and occurrence positions are checked against the native history
+ * before the historical comparisons, whose references stay unchanged.
+ *
  * Migration14: native component ownership has a named expected record baseline
  * for28scenarios; three retain direct historical equality. Old JSON is preserved.
  * The explicit delta includes seed identity/transport/owner writes and matching
@@ -172,7 +181,7 @@
  * came off before the judge.
  *
  * `agent-findings` REGENERATED ALONE for step 3 (the answer turn served from
- * the ledger — `findings/serve.ts`, joined by `callLLM · buildCallLLMStage`
+ * the ledger — `findings/serve.ts`, joined by `callLLM/prepareCall.ts · prepareCall`
  * and recomposed by `servedView · viewOf`); none of the 15 moved (run on the
  * step-3 tree first: 16/16 green, then the one scenario under
  * `AF_TOOLS_REFERENCE=update -t agent-findings` with the 15 copied aside and
@@ -597,8 +606,10 @@
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
  * normalisation: the values that differ between two runs of the same
  * configuration (run ids, salted digests, clocks) are replaced by a marker.
- * Nothing else is dropped, so a new key, a reordered list or a changed verb
- * anywhere in the log fails here by name.
+ * The Messages record migration is reversed only for its own writes so the
+ * historical files and hashes stay pinned. The native append law is checked
+ * separately by message-injection-growth.test.ts. Every other recorded key,
+ * list order and write verb still compares here by name.
  *
  * Deliberately NOT here: a multi-turn `buildAgentMessageApiChart` run. Its
  * tools slot accumulated across turns until 9.92.0 (`['weather','weather']` on
@@ -613,7 +624,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { legacyMessageInjectionLog } from '../../helpers/legacyMessageInjectionLog.js';
 import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import { removeVerifiedSourceLinkConsumers } from './source-link-consumer-reference.js';
 import {
   occurrenceAdditions,
   occurrenceReferenceText,
@@ -621,10 +634,21 @@ import {
   type OccurrenceAddition,
 } from '../../helpers/occurrenceReference.js';
 import {
+  servedRowAdditions,
+  servedRowReferenceText,
+  withServedRowAdditions,
+  withoutServedRows,
+  type ServedRowAddition,
+} from './served-row-reference.js';
+import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
 } from './native-cohort-metadata.js';
-import { standingEvidenceCases, withStandingEvidence } from './standing-evidence-reference.js';
+import {
+  standingEvidenceCases,
+  withStandingEvidence,
+  withoutExecutionReceipt,
+} from './standing-evidence-reference.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -646,6 +670,7 @@ import { skillScopedTools, staticTools } from '../../../src/tool-providers/index
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import { defineOntology } from '../../../src/ontology/index.js';
 import type {
+  LLMMessage,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
@@ -1630,18 +1655,59 @@ function normalise(value: unknown, key?: string): unknown {
   return value;
 }
 
+type HistoricalCommit = { overwrite: Record<string, unknown>; trace: unknown[] };
+
+/** The contingent findings fixture has one native answer witness added since its archived capture. */
+function removeContingentAnswerWitness(
+  snapshot: Snapshot,
+  projectedLog: readonly HistoricalCommit[],
+): void {
+  const key = 'sourceLinkRows';
+  const commitIndex = 50;
+  const traceIndex = 4;
+  const row = {
+    kind: 'source-link',
+    version: 1,
+    linkBasis: 'match',
+    check: 'value-found',
+    consumer: 'call-llm#58',
+    output: { key: 'llmLatestContent', checkedIn: 'written', span: [21, 26] },
+    input: { key: 'history', element: 4 },
+  };
+  const commit = snapshot.commitLog[commitIndex]!;
+  const projected = projectedLog[commitIndex]!;
+  expect(commit).toMatchObject({ stageId: 'sf-route', runtimeStageId: 'sf-route#59' });
+  expect(commit.trace[traceIndex]).toEqual({ path: key, verb: 'set' });
+  expect(commit.trace.filter(({ path }) => path === key)).toHaveLength(1);
+  expect(commit.overwrite[key]).toEqual([row]);
+  expect(commit.updates).not.toHaveProperty(key);
+  expect(snapshot.commitLog[commitIndex - 1]?.runtimeStageId).toBe(row.consumer);
+  expect((commit.overwrite.llmLatestContent as string).slice(21, 26)).toBe('fc2/9');
+  expect(projected.overwrite[key]).toEqual([row]);
+  expect(projected.trace[traceIndex]).toEqual({ path: key, verb: 'set' });
+  delete projected.overwrite[key];
+  projected.trace.splice(traceIndex, 1);
+}
+
 /** What a scenario is judged by: the whole log, and the served view of every epoch. */
-function projection(snapshot: Snapshot): unknown {
-  const epochs = epochLocations(snapshot).map((l) => l.epoch);
-  return normalizeCallOccurrences(
+function projection(snapshot: Snapshot, scenario?: string): unknown {
+  const epochs = epochLocations(snapshot);
+  const record = normalizeCallOccurrences(
     normalise({
-      commitLog: JSON.parse(JSON.stringify(snapshot.commitLog)),
-      served: epochs.map((epoch) => ({
+      commitLog: JSON.parse(
+        JSON.stringify(legacyMessageInjectionLog(snapshot.commitLog, snapshot.initialState)),
+      ),
+      served: epochs.map(({ epoch }) => ({
         epoch,
         view: JSON.parse(JSON.stringify(servedAt(snapshot, epoch) ?? null)),
       })),
     }),
   );
+  const prior = record as { commitLog: HistoricalCommit[] };
+  removeVerifiedSourceLinkConsumers(snapshot, prior.commitLog, epochs);
+  if (scenario === 'agent-findings-contingent')
+    removeContingentAnswerWitness(snapshot, prior.commitLog);
+  return prior;
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
@@ -1653,6 +1719,7 @@ const DEFAULT_STANDING = JSON.parse(
 };
 const OCCURRENCE_REFERENCE_DIR = new URL('call-occurrence/', REFERENCE_DIR);
 const OCCURRENCE_REFERENCE = new URL('additions.json', OCCURRENCE_REFERENCE_DIR);
+const SERVED_ROW_REFERENCE = new URL('served-row-writer/served-row-additions.json', REFERENCE_DIR);
 const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
 const V15_NATIVE_CAPTURES = new Map(
   (
@@ -1732,6 +1799,7 @@ const referencePath = (name: string): URL => {
   );
 };
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
+const UPDATE_SERVED_ROWS = process.env.AF_TOOLS_REFERENCE === 'update-served-rows';
 const UPDATE_CASES = new Set(
   (process.env.AF_TOOLS_REFERENCE_CASES ?? '').split(',').filter(Boolean),
 );
@@ -1745,7 +1813,7 @@ describe('byte-identity — exact whole-record contract for native component own
       const { snapshot } = off;
       const additions = V15_NATIVE_CAPTURES.get(name);
       if (additions) assertNativeReadWindowMetadata(snapshot, additions);
-      const observed = projection(snapshot);
+      const observed = projection(snapshot, name);
       const path = referencePath(name);
       expect(existsSync(path), `no reference for ${name}`).toBe(true);
       const reference: unknown = JSON.parse(readFileSync(path, 'utf8'));
@@ -1753,11 +1821,27 @@ describe('byte-identity — exact whole-record contract for native component own
         ? readFileSync(OCCURRENCE_REFERENCE, 'utf8')
         : '{}';
       const prior = JSON.parse(captured) as Record<string, OccurrenceAddition[]>;
+      const servedRows = JSON.parse(
+        existsSync(SERVED_ROW_REFERENCE) ? readFileSync(SERVED_ROW_REFERENCE, 'utf8') : '{}',
+      ) as Record<string, ServedRowAddition[]>;
+      if ((UPDATE || UPDATE_SERVED_ROWS) && !UPDATE_CASES.has(name))
+        throw new Error(
+          `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
+        );
+      if (UPDATE_SERVED_ROWS) {
+        const additions = servedRowAdditions(observed);
+        const expected = withStandingEvidence(
+          withOccurrenceAdditions(reference, prior[name] ?? []),
+          name,
+        );
+        expect(observed).toEqual(withServedRowAdditions(expected, additions));
+        if (additions.length === 0) delete servedRows[name];
+        else servedRows[name] = additions;
+        writeFileSync(SERVED_ROW_REFERENCE, servedRowReferenceText(servedRows));
+        return;
+      }
+      const servedAdditions = servedRows[name] ?? [];
       if (UPDATE) {
-        if (!UPDATE_CASES.has(name))
-          throw new Error(
-            `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
-          );
         // Entry and settlement addresses are owned by the standing-evidence overlay.
         const additions = occurrenceAdditions(observed).filter(
           ([path]) =>
@@ -1767,9 +1851,8 @@ describe('byte-identity — exact whole-record contract for native component own
               (path[3] === 'enteredToolCalls' || path[3] === 'settledToolCalls')
             ),
         );
-        expect(observed).toEqual(
-          withStandingEvidence(withOccurrenceAdditions(reference, additions), name),
-        );
+        const expected = withStandingEvidence(withOccurrenceAdditions(reference, additions), name);
+        expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
         if (additions.length === 0) return;
         const digest = (value: string) => createHash('sha256').update(value).digest('hex');
         mkdirSync(OCCURRENCE_REFERENCE_DIR, { recursive: true });
@@ -1784,16 +1867,20 @@ describe('byte-identity — exact whole-record contract for native component own
         withOccurrenceAdditions(reference, prior[name] ?? []),
         name,
       );
-      expect(observed).toEqual(expected);
+      expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
 
       const current = await drive(Agent.create);
       if (additions) assertNativeReadWindowMetadata(current.snapshot, additions);
-      const currentProjection = projection(current.snapshot);
+      const currentProjection = projection(current.snapshot, name);
       const fingerprint = DEFAULT_STANDING.projections[name];
       if (fingerprint === undefined) {
         expect(currentProjection).toEqual(expected);
       } else {
-        const currentText = `${JSON.stringify(currentProjection, null, 2)}\n`;
+        const currentText = `${JSON.stringify(
+          withoutExecutionReceipt(withoutServedRows(currentProjection), name),
+          null,
+          2,
+        )}\n`;
         expect(createHash('sha256').update(currentText).digest('hex')).toBe(fingerprint);
       }
 

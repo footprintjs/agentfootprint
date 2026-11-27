@@ -114,16 +114,11 @@ import {
   readMetadataEntry,
   type NotFoundMeaning,
 } from './objectStore.js';
-import {
-  canonicalPayloadBytes,
-  computeArtifactDigest,
-  decodeCanonicalPayload,
-  payloadShapeOf,
-  type PayloadShape,
-} from './payload.js';
+import { computeArtifactDigest, decodeCanonicalPayload, type PayloadShape } from './payload.js';
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -434,24 +429,28 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   };
 
   return {
+    ...scopeBudgetMember(retention),
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         async (parent) => (await liveHead(scope, parent)) !== undefined,
         retention,
         at,
       );
-      const bytes = canonicalPayloadBytes(input.data);
-      const shape = payloadShapeOf(input.data);
-      const metaValue = encodeArtifactMetaValue(meta, shape, S3_METADATA_BUDGET, 's3Artifacts');
+      const metaValue = encodeArtifactMetaValue(
+        meta,
+        payload.shape,
+        S3_METADATA_BUDGET,
+        's3Artifacts',
+      );
       const swept = await applyRetention(scope, meta.bytes, at);
       await send(
         'PutObject',
         new commands.Put({
           Bucket: bucket,
           Key: keyFor(scope, meta.ref),
-          Body: bytes,
+          Body: payload.bytes,
           ContentType: meta.mediaType,
           Metadata: { [ARTIFACT_META_KEY]: metaValue },
         }),
@@ -586,12 +585,10 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   };
 
   /**
-   * The retention pass, run at put. Returns what it swept.
-   *
-   * With no budget dials there is nothing to plan, so nothing is listed: a
-   * put stays exactly one PutObject. Expiry still binds — it is enforced at
-   * read, where it cannot be missed, and reclaimed in bulk by the lifecycle
-   * rule in this file's header.
+   * The retention pass, run at put. Returns what it swept. With no budget
+   * dials there is nothing to plan, so nothing is listed: a put stays one
+   * PutObject. Expiry still binds — it is enforced at read, where it cannot be
+   * missed, and reclaimed in bulk by the lifecycle rule in this file's header.
    */
   async function applyRetention(
     scope: ArtifactScope,

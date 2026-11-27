@@ -5,7 +5,7 @@ the committed `OntologyRecord`) · `define.ts` (`defineOntology`, the one
 validator and freezer; `ontologyHash`, the fingerprint through the receipt's
 own canonical JSON).
 Lens: `serve.ts` (`ontologyPiece` — the one composer of what the model is
-served, called by the wire `core/agent/stages/callLLM.ts · buildCallLLMStage`
+served, called by the wire `core/agent/stages/callLLM/prepareCall.ts · prepareCall`
 and by the rebuild `time-travel/servedView.ts · viewOf`) ·
 `instruction.ts` (`ONTOLOGY_INSTRUCTION`, the always-on ask
 `AgentBuilder.ontology` registers). Trace: nothing here records — `seed`
@@ -347,7 +347,7 @@ of scope.
   the model SAY where a need would be met.
 - **Byte-identical without it.** An agent that never calls `.ontology()`
   has no key, no piece, no instruction, no event, no bridge — every read of
-  the key is gated on the arm (`callLLM.ts · CallLLMStageDeps`, the `ontology` dep),
+  the key is gated on the arm (`callLLM/types.ts · CallLLMStageDeps`, the `ontology` dep),
   and the grouped chart crosses the key into `sf-llm-call` only under it.
   Pinned by the byte-identity references and
   `test/core/agent/ontology.test.ts`.

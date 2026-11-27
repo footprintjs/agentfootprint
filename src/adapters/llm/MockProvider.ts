@@ -21,6 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
+import { markNativeToolExecution } from '../../provider-contract/nativeToolExecution.js';
 import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
 import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
@@ -172,6 +173,7 @@ export class MockProvider implements LLMProvider {
     this.chunkDelayMs = options.chunkDelayMs ?? 30;
     this.stopReason = options.stopReason ?? 'stop';
     this.usageOverride = options.usage;
+    if (new.target === MockProvider && options.respond === undefined) markNativeToolExecution(this);
   }
 
   /**
@@ -259,6 +261,7 @@ export class MockProvider implements LLMProvider {
         }),
       },
       stopReason: partial.stopReason ?? (toolCalls.length > 0 ? 'tool_use' : this.stopReason),
+      ...(partial.intervention !== undefined && { intervention: partial.intervention }),
       // Mock has no wire, so its honest manifest is an ECHO of the request's
       // tools — the healthy adapter's shape (body mirrors IR), unless a test
       // scripted a divergent manifest to stand in for a drifting adapter.

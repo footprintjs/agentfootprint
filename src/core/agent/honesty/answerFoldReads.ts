@@ -2,16 +2,23 @@
 export type AnswerFoldKey =
   | 'history'
   | 'turnNumber'
+  | 'iteration'
   | 'pausedToolCallId'
   | 'findingsLedger'
   | 'coverageDeclared'
   | 'enteredToolCalls'
   | 'enteredToolCallsComplete'
   | 'settledToolCalls'
+  | 'libraryResultLimitsIncomplete'
+  | 'libraryResultLimits'
   | 'settledToolCallsComplete'
+  | 'sourceConsultation'
   | 'stoppedEarly'
+  | 'llmLatestStopReason'
   | 'unsupportedValues'
   | 'answerValidation'
+  | 'answerCitations'
+  | 'answerExecutionClaims'
   | 'argumentAsk'
   | 'middlewareDecisions';
 
@@ -29,9 +36,14 @@ export type AnswerFoldKey =
  *   `stoppedEarly` — the Route decider writes it on EVERY agent
  *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
  *   whenever the model asked for calls, whether or not this agent registered
- *   a tool that could answer them;
+ *   a tool that could answer them. The call stage can commit `llmLatestStopReason`
+ *   when the provider reports a cutoff or served a native format. The stage
+ *   skips that read when the key is absent, as it does with the terminal
+ *   `answerExecutionClaims` report;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
  *   coverage), bounded per-turn entry and settlement facts, and their completeness;
+ * - a tool result cap, artifact store or window: bounded result-limit receipts
+ *   and their completeness, including any receipts recovered for the same request;
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
@@ -51,17 +63,24 @@ export type AnswerFoldKey =
  */
 export function answerFoldReads(arms: {
   readonly tools: boolean;
+  readonly resultLimits?: boolean;
+  readonly retrieval?: boolean;
   readonly evidenceGate: boolean;
   readonly answerValidation: boolean;
+  readonly citations?: boolean;
   readonly inputs: boolean;
   readonly toolMiddleware: boolean;
+  readonly sourceNotConsulted?: boolean;
 }): readonly AnswerFoldKey[] {
   return [
     'history',
     'turnNumber',
+    ...(arms.retrieval ? (['iteration'] as const) : []),
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',
+    'llmLatestStopReason',
+    'answerExecutionClaims',
     ...(arms.tools
       ? ([
           'coverageDeclared',
@@ -71,8 +90,13 @@ export function answerFoldReads(arms: {
           'settledToolCallsComplete',
         ] as const)
       : []),
+    ...(arms.tools && arms.resultLimits
+      ? (['libraryResultLimits', 'libraryResultLimitsIncomplete'] as const)
+      : []),
+    ...(arms.sourceNotConsulted === true ? (['sourceConsultation'] as const) : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
+    ...(arms.citations ? (['answerCitations'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),
     ...(arms.toolMiddleware && (arms.tools || arms.inputs)
       ? (['middlewareDecisions'] as const)

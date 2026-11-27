@@ -4,6 +4,8 @@ import type { ArgumentRowRead } from './argumentRows.js';
 import { fire, type Gathered } from './gathered.js';
 import { statePointer } from './pointer.js';
 import type { AssessmentPointer, AssessmentReason } from './types.js';
+import { PERIOD_REASONS, PERIOD_QUALIFIERS } from './reasonClasses.js';
+export { PERIOD_REASONS } from './reasonClasses.js';
 
 /** One `period` row of this turn — one judged call. */
 export interface PeriodRowRead {
@@ -62,14 +64,6 @@ export function periodRows(
   return rows;
 }
 
-/** The reason each period verdict fires — `covered` fires none. */
-export const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
-  'not-held': 'period-not-held',
-  'partly-held': 'period-partly-held',
-  unknown: 'period-unknown',
-  undeclared: 'period-undeclared',
-};
-
 /**
  * Layer 3, the results layer's verdicts: each period row of this turn — the
  * store did not hold the period the read asked for (`not-held`), held only
@@ -113,11 +107,11 @@ export function readPeriodVerdicts(
     // read is not what was asked (TQ8 — `extra` alone too), or the window was
     // older than the source keeps.
     if (row.differs) {
-      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
+      fireJoined(PERIOD_QUALIFIERS.differs, statePointer('findingsLedger', row.index, 'differs'));
     }
     if (row.beyondRetention) {
       fireJoined(
-        'period-beyond-retention',
+        PERIOD_QUALIFIERS.beyondRetention,
         statePointer('findingsLedger', row.index, 'beyondRetention'),
       );
     }

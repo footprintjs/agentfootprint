@@ -7,6 +7,23 @@ import {
 } from '../../core/agent/recordedCalls.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
+import { readNotDispatched } from '../../semantics/toolRan.js';
+
+type SettledMarker = NonNullable<LLMMessage['notDispatched']>;
+export type ToolCallSettlement = SettledMarker | 'malformed';
+
+/** Keep an unreadable marker distinct from an absent one when choosing the record to read. */
+export function settlementMarkerOf(value: unknown): ToolCallSettlement | undefined {
+  switch (readNotDispatched(value)) {
+    case 'settled':
+      return value as SettledMarker;
+    case 'malformed':
+      return 'malformed';
+    case 'absent':
+      return undefined;
+  }
+}
 
 type Start = Extract<AgentfootprintEvent, { type: 'agentfootprint.stream.tool_start' }>;
 export type ToolEndEvent = Extract<AgentfootprintEvent, { type: 'agentfootprint.stream.tool_end' }>;
@@ -23,6 +40,16 @@ type Decision = Extract<
 >;
 
 export type ToolBracketEvent = Start | ToolEndEvent;
+
+/** An unplaced decision can still explain why this call's used arguments are unknown. */
+export function unboundDecisionFor(row: unknown, toolCallId: string): boolean {
+  return (
+    row !== null &&
+    typeof row === 'object' &&
+    Object.getOwnPropertyDescriptor(row, 'toolCallId')?.value === toolCallId &&
+    readCallOccurrenceKey(row) == null
+  );
+}
 
 /** One committed middleware decision. */
 export interface ToolMiddlewareDecisionRow {

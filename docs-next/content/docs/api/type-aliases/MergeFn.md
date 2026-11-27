@@ -6,7 +6,7 @@ title: MergeFn
 
 > **MergeFn** = (`branchResults`) => `string`
 
-Defined in: [src/core-flow/Parallel.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L94)
+Defined in: [src/core-flow/Parallel/types.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel/types.ts#L58)
 
 ## Parameters
 

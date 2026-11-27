@@ -40,7 +40,7 @@
  * `'last-tool-result'` pin (`lastToolResult.ts` · `toolResultPinsOf`) is not
  * moved off a tool's real result onto the sentence, the drop notice and
  * `WindowRecord.droppedObservations` do not report a result that never
- * existed, and the closure check (`../stages/callLLM.ts`) does not count the
+ * existed, and the closure check (`../stages/callLLM/prepareCall.ts`) does not count the
  * sentence as a re-fetched ground.
  */
 

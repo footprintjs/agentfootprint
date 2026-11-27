@@ -4,7 +4,7 @@ title: TimeReaderStamp
 
 # Interface: TimeReaderStamp
 
-Defined in: [src/time/rows/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L74)
+Defined in: [src/time/rows/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L90)
 
 The reader a reading came from, as recorded.
 
@@ -14,7 +14,7 @@ The reader a reading came from, as recorded.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/time/rows/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L75)
+Defined in: [src/time/rows/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L91)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/time/rows/types.ts:75](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: `"model"` \| `"rule"`
 
-Defined in: [src/time/rows/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L77)
+Defined in: [src/time/rows/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L93)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/time/rows/types.ts:77](https://github.com/footprintjs/agentfoot
 
 > `readonly` **locale**: `string`
 
-Defined in: [src/time/rows/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L78)
+Defined in: [src/time/rows/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L94)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/time/rows/types.ts:78](https://github.com/footprintjs/agentfoot
 
 > `readonly` **version**: `string`
 
-Defined in: [src/time/rows/types.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L76)
+Defined in: [src/time/rows/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L92)

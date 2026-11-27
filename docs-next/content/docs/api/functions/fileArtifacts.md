@@ -6,7 +6,7 @@ title: fileArtifacts
 
 > **fileArtifacts**(`options`): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/artifacts/fileArtifacts.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/fileArtifacts.ts#L126)
+Defined in: [src/artifacts/fileArtifacts.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/fileArtifacts.ts#L127)
 
 A directory-backed artifact store — durable across restarts, legible to a
 human, one file per artifact.

@@ -49,10 +49,11 @@
 
 import { RedactionRule } from 'footprintjs/advanced';
 import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
+import type { LogAddress } from 'foottrace';
+import type { SourceLinkPolicy } from 'foottrace/cause';
 
 import type { RunContext, TurnEventMeta } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
-import type { EventMeta } from '../events/types.js';
 import { conversationRedaction } from './conversation.js';
 import { namesAnything } from './policy.js';
 import {
@@ -61,11 +62,12 @@ import {
   UNKNOWN_COVERAGE,
   type RedactionCoverage,
 } from './coverage.js';
-import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
+import { eventServing, REFUSING_SERVING, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
 import { createRunEventRelay } from './runEventRelay.js';
+import { retiredRule, ruleShowsPath, sourceLinkPolicyOfRule } from './sourceLinkPolicy.js';
+import { prepareNativeEmit } from './toolEndCapture.js';
 import {
-  carryPrivateRuleNames,
   createPrivateRun,
   PrivateFieldsUnavailableError,
   type PrivateRun,
@@ -74,6 +76,7 @@ import {
 import type { PrivateRecordFields } from './privateFields.js';
 export { PRIVATE_FIELDS_KEY } from './privateFields.js';
 export { PrivateFieldsUnavailableError } from './privateRun.js';
+export { retiredRule } from './sourceLinkPolicy.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
 export interface RunRedaction {
@@ -81,6 +84,8 @@ export interface RunRedaction {
   readonly policy: RedactionPolicy | undefined;
   /** Caller policy plus private selectors for the one native rule; never caller coverage. */
   readonly recordPolicy: RedactionPolicy | undefined;
+  /** The native authorizing rule, only for the exact root record it served. */
+  sourceLinkPolicy(address: LogAddress): SourceLinkPolicy | undefined;
   /** Aggregate admitted private names on this exact native rule, for raw checkpoints. */
   privateFields(): PrivateRecordFields | undefined;
   /** What this run's events are served as. */
@@ -90,7 +95,11 @@ export interface RunRedaction {
   /** Native attachments that mark a served record and retire its live rule. */
   readonly recorders: readonly CombinedRecorder[];
   /** Tie an already-created native scope to this exact run and its rule. */
-  bindScope(scope: unknown, context: Parameters<ScopeFactory>[0]): void;
+  bindScope(
+    scope: unknown,
+    context: Parameters<ScopeFactory>[0],
+    clonesObserverEmits?: boolean,
+  ): void;
   /** Enable mounted-turn marks for an owning Agent's execution leg. */
   trackMountedTurns(): void;
   /** The ownership metadata shared by a served event and its real-value twin. */
@@ -140,6 +149,7 @@ interface ScopeServing {
   readonly run: ScopeRun;
   readonly stageId: string;
   readonly privateBinding?: ScopePrivateBinding;
+  readonly clonesObserverEmits?: boolean;
 }
 
 interface NativePrivateRule {
@@ -148,6 +158,7 @@ interface NativePrivateRule {
 }
 interface ScopePrivateBinding {
   canStore(): boolean;
+  permitsPath(path: readonly string[]): boolean | undefined;
   fields(): PrivateRecordFields | undefined;
   store(scope: SetValueScope, selections: readonly PrivateSelection[]): void;
 }
@@ -159,6 +170,7 @@ function scopePrivateBinding(
 ): ScopePrivateBinding {
   return {
     canStore: () => privateRun.canStore(bound.rule, bound.active),
+    permitsPath: (path) => (bound.active ? ruleShowsPath(bound.rule, path) : undefined),
     fields: () => privateRun.fields(bound.rule),
     store: (scope, selections) => privateRun.store(scope, bound.rule, bound.active, selections),
   };
@@ -222,6 +234,7 @@ export function createRunRedaction(args: {
   let nativeBinding:
     | { readonly rule: NativePrivateRule; readonly port: ScopePrivateBinding }
     | undefined;
+  let rootRule: { readonly logRunId: string; readonly binding: NativePrivateRule } | undefined;
   const serving = servingOf(decided, policy, privateRun);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
@@ -254,7 +267,7 @@ export function createRunRedaction(args: {
       else queue.push(written);
     },
   };
-  const bindScope = (scope: unknown, context: Parameters<ScopeFactory>[0]): void => {
+  const bindScope: RunRedaction['bindScope'] = (scope, context, clonesObserverEmits): void => {
     const own = context?.getRedactionRule?.();
     if (own !== undefined) {
       if (nativeBinding?.rule.rule !== own) {
@@ -264,6 +277,9 @@ export function createRunRedaction(args: {
       }
       privateRun.bind(own);
       decided.rule = own;
+      const position = context?.captureEmitPosition?.();
+      if (position?.drillPath.length === 0)
+        rootRule = { logRunId: position.logRunId, binding: nativeBinding!.rule };
     }
     if (scope !== null && typeof scope === 'object') {
       scopeRuns.set(scope, {
@@ -271,6 +287,7 @@ export function createRunRedaction(args: {
         serving: {
           run,
           stageId: context?.runtimeStageId ?? '',
+          clonesObserverEmits,
           ...(own !== undefined &&
             nativeBinding !== undefined && { privateBinding: nativeBinding.port }),
         },
@@ -293,6 +310,12 @@ export function createRunRedaction(args: {
     get recordPolicy() {
       return privateRun.recordPolicy(decided.rule);
     },
+    sourceLinkPolicy(address) {
+      if (rootRule?.logRunId !== address.logRunId || address.drillPath.length !== 0)
+        return undefined;
+      const rule = rootRule.binding.rule;
+      return sourceLinkPolicyOfRule(address, retiredRule(rule, privateRun.recordPolicy(rule)));
+    },
     privateFields: () => privateRun.fields(decided.rule),
     serving,
     coverage,
@@ -309,27 +332,6 @@ export function createRunRedaction(args: {
       return written;
     },
   };
-}
-
-/**
- * A settled run's rule as its serving keeps it: the policy and the marks —
- * names only — and nothing else of the run. footprintjs's rule also remembers
- * the masked form of every thrown value it served (so `onRunFailed`, the
- * logger and a fork envelope agree); the live run needed that, a late fact
- * does not, and keeping it would keep each run's thrown values reachable for
- * as long as the dispatcher keeps the run's serving.
- *
- * @internal — exported for the test that pins it.
- */
-export function retiredRule(
-  rule: RedactionRule,
-  policy: RedactionPolicy | undefined,
-): RedactionRule {
-  const names = new RedactionRule(policy);
-  const marks = rule.marksForCheckpoint();
-  if (marks !== undefined) names.restoreMarks(marks);
-  carryPrivateRuleNames(rule, names);
-  return names;
 }
 
 /**
@@ -417,24 +419,6 @@ export function outsideRunFor(declaration: RedactionCoverage): OutsideRun {
 }
 
 /**
- * The serving of a run whose state is unknown: every payload is the
- * placeholder, and so is the identity on its meta (who asked); the address is
- * kept.
- */
-const REFUSING_SERVING: EventServing = Object.freeze({
-  active: () => true,
-  payload: () => SERVED_PLACEHOLDER,
-  meta: <M extends EventMeta>(meta: M): M =>
-    meta.principal === undefined && meta.tenant === undefined
-      ? meta
-      : {
-          ...meta,
-          ...(meta.principal !== undefined && { principal: SERVED_PLACEHOLDER }),
-          ...(meta.tenant !== undefined && { tenant: SERVED_PLACEHOLDER }),
-        },
-}) as EventServing;
-
-/**
  * Tie `scope` to `outside` — the run of its runner's chart mounted outside any
  * of that runner's runs (`chartBinding.ts` · `bindChartStages` calls it as each
  * stage starts, with the runner's own {@link OutsideRun}). A scope a run
@@ -460,6 +444,16 @@ export function captureLateEmitter(
 /** Whether this exact scope has a native rule already able to keep private fields. */
 export function canStorePrivateFields(scope: object): boolean {
   return scopeRuns.get(scope)?.serving?.privateBinding?.canStore() ?? false;
+}
+
+/** A selected record location may be named only under this stage's native rule. */
+export function canRecordSourceLinkPath(scope: object, path: readonly string[]): boolean {
+  return sourceLinkPathGrant(scope, path) === true;
+}
+
+/** Distinguish a protected path from a scope without an active native rule. */
+export function sourceLinkPathGrant(scope: object, path: readonly string[]): boolean | undefined {
+  return scopeRuns.get(scope)?.serving?.privateBinding?.permitsPath(path);
 }
 
 /** Immutable admitted selector data only, never the raw working values it protects. */
@@ -524,10 +518,16 @@ export function emitServed(
     return;
   }
   entry.run.real(type, payload, entry.stageId);
-  scope.$emit(
+  const served = entry.run.serving.payload(
     type,
-    entry.run.serving.payload(type, servedPayload === undefined ? payload : servedPayload),
+    servedPayload === undefined ? payload : servedPayload,
   );
+  scope.$emit(type, prepareNativeEmit(type, served, entry.clonesObserverEmits));
+}
+
+/** Use the capture mode of the native execution that made this scope, including mounts. */
+export function scopeClonesObserverEmits(scope: object): boolean {
+  return scopeRuns.get(scope)?.serving?.clonesObserverEmits === true;
 }
 
 /** A scope that can set a value — structurally footprintjs's `TypedScope` `$setValue`. */

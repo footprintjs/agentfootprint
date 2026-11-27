@@ -1,6 +1,9 @@
 /**
- * CI splits the test run across machines, and a required check still means what
- * it meant on one machine: every test ran, on both Node versions, and passed.
+ * CI splits the test run across machines, and a check still means what it meant
+ * on one machine: every test it names ran and passed. A full run (a push to main,
+ * the release pull request, a dependency pull request) runs the suite on both Node
+ * versions and coverage; an ordinary pull request runs the suite on Node 24, the
+ * package checks on both, and skips coverage.
  *
  * WHY. On one machine the suite and the coverage run took 9 and 17 minutes, and
  * a pull request waited for the slower one. So `test-shard` and `coverage-shard`
@@ -38,6 +41,20 @@ import {
 } from '../helpers/workflowText';
 
 const CI = readWorkflow('ci.yml');
+const PUBLISH = readWorkflow('publish.yml');
+
+/**
+ * An ordinary pull request runs the suite on Node 24 only and skips coverage; a
+ * push to main, the release pull request and a dependency pull request run
+ * everything (ci.yml says why, above `test-shard`). The condition is written out
+ * at each place that uses it, so what can go wrong is two places disagreeing: a
+ * release run that tests the suite on one Node version, or a coverage check that
+ * waits for shards that never start.
+ */
+const FULL_RUN =
+  "github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')";
+/** The suite's Node versions, as ci.yml · test-shard writes them. */
+const SUITE_NODES = `        node-version: \${{ fromJSON((${FULL_RUN}) && '[22, 24]' || '[24]') }}`;
 
 /** The job's `shard: [...]` list, as numbers. */
 function shardsOf(job: string): number[] {
@@ -93,11 +110,67 @@ describe('ci.yml · every test still runs, under the same required names', () =>
     expect(job).toMatch(/^ {6}fail-fast: false$/m);
   });
 
-  it('the suite and the package checks run on both Node versions, in the check that adds them up', () => {
-    for (const id of ['test-shard', 'test-package', 'test']) {
+  it('a full run tests the suite on both Node versions; the package checks and the check that adds them up always do', () => {
+    expect(jobBlock(CI, 'test-shard')).toContain(`${SUITE_NODES}\n`);
+    // `test-package` is never narrowed: publish.yml · build, the release's fallback,
+    // does not run all of its commands, so a pull request must run them on Node 22.
+    for (const id of ['test-package', 'test']) {
       expect(jobBlock(CI, id), id).toMatch(/^ {8}node-version: \[22, 24\]$/m);
     }
     expect(needsOf(jobBlock(CI, 'test'))).toEqual(['test-shard', 'test-package', 'test-examples']);
+  });
+});
+
+describe('ci.yml · what a pull request skips, a full run does not', () => {
+  it('a full run is every push, the release pull request and a dependency pull request', () => {
+    // The release pull request must be a full run: publish.yml · verdict reads its
+    // run as the release gate (release-verdict.test.ts pins the branch name there).
+    expect(FULL_RUN).toContain("github.event_name != 'pull_request'");
+    expect(FULL_RUN).toContain("github.head_ref == 'release/next'");
+    expect(jobBlock(PUBLISH, 'verdict')).toContain('.head.ref == "release/next"');
+  });
+
+  it('the three places that narrow a pull request use the one condition', () => {
+    const narrowed = CI.split('\n').filter(
+      (line) => !line.trimStart().startsWith('#') && line.includes('renovate/'),
+    );
+    expect(narrowed.sort()).toEqual(
+      [SUITE_NODES, `    if: ${FULL_RUN}`, `    if: always() && (${FULL_RUN})`].sort(),
+    );
+  });
+
+  it('no other job is conditional: a new `if:` on a required check would skip it unseen', () => {
+    // A skipped job satisfies a required check, so a condition on `lint` or
+    // `generated` would let every pull request through unchecked. The jobs that
+    // may carry one are named here; adding to this list is a reviewed decision.
+    const conditional = jobIds(CI).filter((id) => /^ {4}if:/m.test(jobBlock(CI, id)));
+    expect(conditional.sort()).toEqual(
+      ['changes', 'coverage', 'coverage-shard', 'docs', 'hold', 'test'].sort(),
+    );
+    // And no job narrows its matrix by event except the suite.
+    const byEvent = jobIds(CI).filter((id) =>
+      /^ {6}matrix:[\s\S]*fromJSON/m.test(jobBlock(CI, id)),
+    );
+    expect(byEvent).toEqual(['test-shard']);
+  });
+
+  it('coverage runs the suite on Node 22: with `test (24)` that is the suite on both versions', () => {
+    // An ordinary run's `test (22)` does not put the suite on Node 22 behind it
+    // (only a full run does), so what a release's GATES rely on for "the suite
+    // passed on Node 22" is this job. Moving it to 24 would leave nothing.
+    expect(jobBlock(CI, 'coverage-shard')).toMatch(/^ {10}node-version: 22$/m);
+  });
+
+  it('the coverage shards and the check that merges them run together or not at all', () => {
+    expect(jobBlock(CI, 'coverage-shard')).toContain(`\n    if: ${FULL_RUN}\n`);
+    expect(jobBlock(CI, 'coverage')).toContain(`\n    if: always() && (${FULL_RUN})\n`);
+  });
+
+  it('a release still needs both test checks and coverage to have passed', () => {
+    const gates = /^ {10}GATES: '(.*)'$/m.exec(jobBlock(PUBLISH, 'verdict'))?.[1] ?? '[]';
+    expect(JSON.parse(gates)).toEqual(
+      expect.arrayContaining(['test (22)', 'test (24)', 'coverage']),
+    );
   });
 });
 
@@ -107,8 +180,11 @@ describe.each(['test', 'coverage'])('ci.yml · the required check `%s` fails clo
   const results = resultsReadBy(check);
   const everyJobPassed = Object.fromEntries([...results.keys()].map((env) => [env, 'success']));
 
-  it('runs whatever happened behind it, so it can never report a skip', () => {
-    expect(job).toMatch(/^ {4}if: always\(\)$/m);
+  it('runs whatever happened behind it, so a failure behind it can never report a skip', () => {
+    // `coverage` runs only in a full run (see FULL_RUN below); within one it always runs.
+    expect(job).toContain(
+      id === 'coverage' ? `\n    if: always() && (${FULL_RUN})\n` : '\n    if: always()\n',
+    );
   });
 
   it('reads the result of every job it needs', () => {

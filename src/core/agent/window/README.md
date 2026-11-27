@@ -155,7 +155,7 @@ the sentence, so the evidence the pin exists to keep could leave (the
 measured failure in `lastToolResult.ts`). Every reader of the name inherits
 the answer from the one helper: the pin, the drop notice and
 `WindowRecord.droppedObservations`, and the dangling-reference check in
-`../stages/callLLM.ts`. That check names the frame from the committed history
+`../stages/callLLM/prepareCall.ts`. That check names the frame from the committed history
 the stage already read at its top, because the wire has lost the marker —
 never from a second read, which would add a narrative step to every run it
 checks. A run with no settled message names exactly what it named before.

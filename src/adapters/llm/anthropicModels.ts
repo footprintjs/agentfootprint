@@ -39,6 +39,8 @@
  */
 
 import type { ThinkingMode } from '../../thinking/types.js';
+import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
+import { bedrockModelArn } from './bedrockModelArn.js';
 
 /** What one Claude model family takes on the wire. */
 export interface AnthropicModelFacts {
@@ -49,6 +51,12 @@ export interface AnthropicModelFacts {
   /** This family documents preserved-thinking prefix checking. */
   readonly thinkingPrefixBinding?: true;
   /**
+   * The family runs the prefix check, but not on every platform by default, so
+   * whether a given request is checked is not known here: the binding fact
+   * answers `unknown` and the adapter's local check stays off.
+   */
+  readonly thinkingBindingVaries?: true;
+  /**
    * Whether it takes a structured-output format (`output_config.format`, the
    * `'native'` output strategy) — the models the structured-outputs page lists.
    */
@@ -58,13 +66,14 @@ export interface AnthropicModelFacts {
 const row = (
   thinking: ThinkingMode,
   forcedToolChoice = true,
-  thinkingPrefixBinding = false,
+  thinkingPrefixBinding: boolean | 'varies' = false,
   nativeOutputSchema = true,
 ): AnthropicModelFacts =>
   Object.freeze({
     thinking,
     forcedToolChoice,
-    ...(thinkingPrefixBinding && { thinkingPrefixBinding: true as const }),
+    ...(thinkingPrefixBinding === true && { thinkingPrefixBinding: true as const }),
+    ...(thinkingPrefixBinding === 'varies' && { thinkingBindingVaries: true as const }),
     nativeOutputSchema,
   });
 
@@ -79,9 +88,24 @@ const legacy = (thinking: ThinkingMode): AnthropicModelFacts => row(thinking, tr
 export const ANTHROPIC_MODELS: Readonly<Record<string, AnthropicModelFacts>> = Object.freeze({
   // Adaptive only — `budget_tokens` is a 400 (Claude 4.7 and later). Opus 5.5,
   // Sonnet 5.5, Fable 5.1 and Mythos 5.1 also reject a forced tool choice on
-  // every request.
+  // every request. Sources for the 5.2 rows and the third column, from
+  // Anthropic's model-migration and preserved-thinking guides:
+  //   - third column (prefix check): "On models with preserved thinking (Claude
+  //     Fable 5.2, Claude Mythos 5.2, Claude Fable 5.1, Claude Mythos 5.1,
+  //     Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku 5.5 today; …"
+  //   - Fable 5.2, from Opus 5.5: "both models always think adaptively and
+  //     reject forced `tool_choice`"
+  //   - Mythos 5.2: "Moving from Claude Mythos 5.1 to Claude Mythos 5.2 follows
+  //     the same steps as moving to Claude Fable 5.2 … Coming from Claude
+  //     Mythos 5, the forced `tool_choice` 400 applies too."
+  //   - Mythos 5.1 'varies': enforced "on Claude Mythos 5.1, accounts of any age
+  //     by default on the Claude API, Vertex and Foundry, and not by default on
+  //     Amazon Bedrock" — so its binding is answered `unknown` and the adapter's
+  //     check stays off for it, as before. Moving it to bound is its own change.
+  'claude-fable-5-2': row('adaptive', false, true),
+  'claude-mythos-5-2': row('adaptive', false, true),
   'claude-fable-5-1': row('adaptive', false, true),
-  'claude-mythos-5-1': row('adaptive', false),
+  'claude-mythos-5-1': row('adaptive', false, 'varies'),
   'claude-fable-5': row('adaptive'),
   'claude-mythos-5': row('adaptive'),
   'claude-opus-5-5': row('adaptive', false, true),
@@ -128,9 +152,6 @@ const THINKING_SUFFIX = /^(?:$|-0(?![0-9])|-\d{8}(?![0-9])|-latest(?![a-z0-9])|-
 const API_SUFFIX = /^(?:|-0|-\d{8}|-latest|@\d{8})$/;
 const BEDROCK_SUFFIX = /^(?:|-\d{8})(?:-v\d+(?::\d+)?)?$/;
 const BEDROCK_ID = /^(?:(?:us|eu|apac|global|jp|au)\.)?anthropic\.(claude-[a-z0-9:-]+)$/;
-const FOUNDATION_ARN = /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+::foundation-model\/([^/]+)$/;
-const PROFILE_ARN =
-  /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:\d{12}:inference-profile\/([^/]+)$/;
 const VERTEX_ID =
   /^(?:projects\/[a-z0-9-]+\/locations\/[a-z0-9-]+\/)?publishers\/anthropic\/models\/(claude-[a-z0-9@-]+)$/;
 
@@ -161,8 +182,9 @@ export function anthropicModelFamily(model: string): string | undefined {
   const vertex = VERTEX_ID.exec(model);
   if (vertex) return familyMatching(vertex[1], API_SUFFIX);
 
-  const arn = FOUNDATION_ARN.exec(model) ?? PROFILE_ARN.exec(model);
-  const bedrock = BEDROCK_ID.exec(arn ? arn[1] : model);
+  const arn = bedrockModelArn(model);
+  if (arn?.kind === 'application-inference-profile') return undefined;
+  const bedrock = BEDROCK_ID.exec(arn?.id ?? model);
   return bedrock ? familyMatching(bedrock[1], BEDROCK_SUFFIX) : undefined;
 }
 
@@ -244,4 +266,63 @@ export function anthropicTakesForcedToolChoice(model: string): boolean {
  */
 export function anthropicTakesNativeOutputSchema(model: string): boolean {
   return anthropicModelFacts(model)?.nativeOutputSchema ?? true;
+}
+
+/**
+ * An app's statement for a model id the table cannot place; `undefined` defers
+ * to the table. Asked ONLY for such ids: for an id the table places the table
+ * answers, so this statement and the adapter's own replay check never disagree.
+ */
+export type StatedThinkingBinding = (model: string) => 'bound' | 'unbound' | undefined;
+
+/**
+ * Whether a thinking block this Claude model returns is bound to the context
+ * it was written under (preserved thinking: the API refuses or drops a block
+ * replayed after the system prompt, the tool list or an earlier message
+ * changed). The adapters' `thinkingBinding` answer.
+ *
+ * THE UNKNOWN-ID POLICY, named: an id the table does not know answers
+ * `unknown` — an application inference profile, a gateway alias, a deployment
+ * name, a model newer than the table — and so does a family whose check is not
+ * on by default everywhere (`thinkingBindingVaries`). A Claude-looking
+ * substring is not evidence of the model behind it, and such an id may serve
+ * an older model whose thinking is not bound, so the agent records a change
+ * there and never refuses it. An app that knows the model behind an id the
+ * table cannot place says so with the adapter's `thinkingBinding` option
+ * (`by: 'app'`). A statement that throws or answers something else is not
+ * used: the answer stays `unknown`, with `appStatement: 'failed'`.
+ *
+ * @example
+ *   anthropicThinkingBinding('claude-haiku-5-5'); // { binding: 'bound', by: 'provider', family: 'claude-haiku-5-5', model: 'claude-haiku-5-5' }
+ *   anthropicThinkingBinding('claude-haiku-4-5'); // { binding: 'unbound', …, family: 'claude-haiku-4-5' }
+ *   anthropicThinkingBinding('claude-opus-6');    // { binding: 'unknown', by: 'provider', model: 'claude-opus-6' }
+ *   anthropicThinkingBinding('my-profile', () => 'bound'); // { binding: 'bound', by: 'app', model: 'my-profile' }
+ */
+export function anthropicThinkingBinding(
+  model: string,
+  stated?: StatedThinkingBinding,
+): ThinkingBinding {
+  // `model` is the id this adapter sends (its shorthand already resolved), and
+  // the answer says so, so a caller compares and names that id, never the alias.
+  const family = anthropicModelFamily(model);
+  if (family !== undefined) {
+    const facts = ANTHROPIC_MODELS[family];
+    const binding =
+      facts.thinkingPrefixBinding === true
+        ? 'bound'
+        : facts.thinkingBindingVaries === true
+        ? 'unknown'
+        : 'unbound';
+    return { binding, by: 'provider', family, model };
+  }
+  if (stated === undefined) return { binding: 'unknown', by: 'provider', model };
+  let said: unknown;
+  try {
+    said = stated(model);
+  } catch {
+    return { binding: 'unknown', by: 'provider', model, appStatement: 'failed' };
+  }
+  if (said === 'bound' || said === 'unbound') return { binding: said, by: 'app', model };
+  if (said === undefined) return { binding: 'unknown', by: 'provider', model };
+  return { binding: 'unknown', by: 'provider', model, appStatement: 'failed' };
 }

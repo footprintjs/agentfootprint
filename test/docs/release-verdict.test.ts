@@ -229,9 +229,29 @@ describe.runIf(CAN_RUN_THE_STEP)('publish.yml · verdict, run as written', () =>
     expect(outcome.summary).toContain('/actions/runs/501');
   });
 
+  it('reads only the release branch’s runs: a newer run of another branch at the same commit is not its proof', () => {
+    // Another branch pushed at the release head and opened as a pull request has
+    // its own run on the same commit. That run is an ordinary, narrowed one
+    // (ci.yml · test-shard), and it says nothing about the release pull request.
+    const world = releaseMerge();
+    world[RUNS] = {
+      workflow_runs: [
+        ciRun(501),
+        ciRun(502, { head_branch: 'someone/else', conclusion: 'failure' }),
+      ],
+    };
+    const outcome = runVerdict(world);
+    expect(outcome.output, outcome.log).toBe('tested=true\n');
+    expect(outcome.summary).toContain('/actions/runs/501');
+  });
+
   // Each world differs from the yes-world in ONE way. Each must leave `tested`
   // unset — so `build` runs every gate — and exit 0.
   const declines: Array<[string, (world: World) => void]> = [
+    [
+      'the only green run on this commit belongs to another branch',
+      (w) => (w[RUNS] = { workflow_runs: [ciRun(501, { head_branch: 'someone/else' })] }),
+    ],
     [
       'the newest run failed, though an older green run tested this exact tree',
       (w) => (w[RUNS] = { workflow_runs: [ciRun(501), ciRun(502, { conclusion: 'failure' })] }),

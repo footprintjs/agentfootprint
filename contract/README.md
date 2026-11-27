@@ -28,7 +28,8 @@ both the installed CommonJS and ESM declaration entry points. Runtime behaviors
 run independently through both public formats. The tests cover this consumer's
 replay/value basis, backward and forward slices, key timelines, read-source
 strategies, stage identifiers, stop filtering, range indexing, requirement-result
-admission and `/cause` graph/explanation reads. Saved-record loading belongs to
+admission, `/cause` graph/explanation reads, and `/canonical-json` (the canonical form and
+closed refusal codes the LLM ledger's stored lines and MAC input rest on). Saved-record loading belongs to
 this consumer's `footprintjs/trace` imports; it does not import Foottrace's
 `readStoredRecord`, so that unrelated door is deliberately outside this suite.
 

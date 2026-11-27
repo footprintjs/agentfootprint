@@ -168,22 +168,29 @@ describe('INTEGRATION — a prose answer’s appended section, split at the sepa
   it.each([
     {
       mode: 'default standing',
-      dataOnly: false,
+      standingLine: undefined,
       section: 'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you.',
     },
     {
       mode: 'an Assumed block when the line is off',
-      dataOnly: true,
+      standingLine: false as const,
       section: 'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
     },
-  ])('keeps $mode apart from the model’s words', async ({ dataOnly, section }) => {
+    {
+      mode: 'an Assumed block when the reason filter omits the line',
+      standingLine: { when: 'always', raiseOn: [] } as const,
+      section: 'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
+    },
+  ])('keeps $mode apart from the model’s words', async ({ standingLine, section }) => {
     const builder = Agent.create({
       provider: callThen('search_logs', { service: 'checkout' }, 'No errors.'),
       model: 'mock',
     })
       .tool(searchLogs)
       .limitsTravelWithTheAnswer();
-    const agent = (dataOnly ? builder.answerLayer({ standingLine: false }) : builder).build();
+    const agent = (
+      standingLine === undefined ? builder : builder.answerLayer({ standingLine })
+    ).build();
     const recording = await recorded(agent, 'errors on checkout?');
     const account = accountForAnswer(recording);
     expect(account.answer.value).toBe('No errors.');

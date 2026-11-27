@@ -1,3 +1,5 @@
+import { isLibrarySkillReader } from '../../../../../injection-engine/skillTools.js';
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
@@ -5,6 +7,7 @@ import { checkToolPermission } from '../access/toolPermission.js';
 import { policyArgsOf } from '../../../innerCallPolicyArgs.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from '../access/capabilityQuestion.js';
 import { askSkillRead } from '../access/skillReadQuestion.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import { prepareArgumentGate } from '../access/argumentGate.js';
 import { admitMiddlewareCall } from '../access/middlewareAdmission.js';
 import { changedArgKeys, shownArgsOf } from '../../../../toolShownArgs.js';
@@ -202,6 +205,19 @@ export function buildCallDispatch(
           argumentGate.argsRejected = true;
           outcome.error = true;
           outcome.result = invalidArgs;
+          if (
+            isHiddenSkillRead(tool, callArguments.callArgs, {
+              hiddenSkillIds: scope.hiddenSkillIds,
+            })
+          ) {
+            await askSkillRead(askCapability, operations.permissionChecker, {
+              toolName: tc.name,
+              args: callArguments.callArgs,
+              auditOnly: true,
+              currentSkillId: () => scope.currentSkillId,
+              parked: () => operations.parkedNow(scope),
+            });
+          }
         }
       }
       // ── Skill-activation gate (9.11.0) — `access/skillReadQuestion.ts` ──
@@ -272,6 +288,10 @@ export function buildCallDispatch(
         if (tool?.wants !== undefined) {
           await admitWantedArguments(scope, {
             resolveWantsAtDispatch: operations.resolveWantsAtDispatch,
+            runId: operations.runFactsOf(scope)?.runId,
+            callIndex,
+            proposedArgs: batch.frozenArgsAt(callIndex),
+            history: batch.newHistory,
             tc,
             tool,
             callArguments,
@@ -384,8 +404,11 @@ export function buildCallDispatch(
         skillRejected: false,
         skillHop: false,
       };
+      const listedSkillReader = deps.listedScopedTools !== undefined && isLibrarySkillReader(tool);
       applyReadSkillRoute(scope, deps, {
         tc,
+        listedSkillReader,
+        history: batch.newHistory,
         iteration: batch.iteration,
         parkedNow: operations.parkedNow,
         noteSkillRefusal: operations.noteSkillRefusal,
@@ -439,7 +462,7 @@ export function buildCallDispatch(
         if (!presented.ok) outcome.error = true;
       }
 
-      const { capped, modelResult, modelResultCapped, toolResultDisposition } =
+      const { capped, modelResult, modelResultCapped, toolResultDisposition, toolSkillBody } =
         await finalizeCallResult(scope, operations, {
           tool,
           tc,
@@ -449,6 +472,7 @@ export function buildCallDispatch(
           outcome,
           skillRejected: skillRoute.skillRejected,
           sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
+          libraryBody: listedSkillReader,
         });
 
       const durationMs = Date.now() - startMs;
@@ -472,7 +496,22 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
+        ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
+      recordServedLimits(
+        scope,
+        { toolName: tc.name, toolCallId: tc.id, ...callOccurrenceField(tc.callOccurrenceKey) },
+        execution.toolResultExecution === 'returned' &&
+          !outcome.error &&
+          !execution.denied &&
+          !execution.ceilingRefused &&
+          !execution.haltContext &&
+          !skillRoute.skillRejected,
+        toolResultDisposition,
+        capped.cut,
+        execution,
+        delivery.resultStr,
+      );
       landCallResult(scope, deps, {
         delivery,
         execution,

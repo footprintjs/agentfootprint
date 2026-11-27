@@ -318,7 +318,21 @@ describe('UNIT — which rows the fold reads', () => {
         const { iteration, turn, ...eventAssessment } = assessments.at(-1)!;
         expect(iteration).toBeGreaterThan(1);
         expect(turn).toBe(1);
-        expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(['period-not-held']);
+        expect
+          .soft(saved.reasons.map(({ reason }) => reason))
+          .toEqual(
+            evicts ? ['result-dropped-from-window', 'period-not-held'] : ['period-not-held'],
+          );
+        const dropped = saved.reasons.find(({ reason }) => reason === 'result-dropped-from-window');
+        expect.soft(dropped?.witness ?? []).toHaveLength(evicts ? (pauses ? 2 : 1) : 0);
+        const droppedKeys = (sharedState.libraryResultLimits ?? [])
+          .filter(
+            ({ kind, turn }) =>
+              kind === 'result-dropped-from-window' && turn === sharedState.turnNumber,
+          )
+          .map(readCallOccurrenceKey);
+        expect.soft(droppedKeys.includes(keys[0])).toBe(evicts);
+        expect.soft(droppedKeys).not.toContain(keys[1]);
         expect.soft(periodChecks(saved)).toMatchObject([{ ran: 2, of: 2 }]);
         expect.soft(assessmentDataOf(saved)).toEqual(eventAssessment);
         expect
@@ -397,8 +411,14 @@ describe('UNIT — which rows the fold reads', () => {
           .map(readCallOccurrenceKey),
       );
       const saved = assessAnswer({ snapshot });
-      expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
-      expect(periodChecks(saved)).toEqual([]);
+      // A rewrite retains the native declaration without claiming that its bytes were served.
+      if (outcome === 'rewritten') {
+        expect(saved.reasons.map(({ reason }) => reason)).toContain('period-not-held');
+        expect(periodChecks(saved)).toMatchObject([{ ran: 1, of: 1 }]);
+      } else {
+        expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
+        expect(periodChecks(saved)).toEqual([]);
+      }
     },
   );
 

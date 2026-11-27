@@ -18,7 +18,7 @@
  * that is not JSON is tokenized as text. Either way the comparison is
  * token-exact, never substring. Under `decimalRounding` a whole token of
  * text in scientific notation also files the exact decimal it states
- * (`1.12e-02` → `0.0112`, {@link addDecimalOf}); the spelling stays.
+ * (`1.12e-02` → `0.0112`, {@link evidenceTextValues}); the spelling stays.
  *
  * ## What counts as evidence, and what deliberately does not
  *
@@ -110,10 +110,19 @@ import { isCompactedSummary, isSaidByPerson } from '../../../lib/saidByPerson.js
 import { isLibraryAuthoredTurn } from './frames.js';
 import { landedTypedAnswer } from '../../../tools/typedAnswer.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
-import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
-import { scientificDecimalOf } from './numberPrecision.js';
+import { lookupForms, normalizeToken } from '../../../lib/normalize.js';
+import { evidenceTextValues } from './evidenceTextValues.js';
 import { jsonPrefixOf, leadingJsonValues } from '../../../lib/servedJson.js';
-import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
+import type { ResolvedEvidenceGate } from './types.js';
+import {
+  carry,
+  markCarrier,
+  type CarrierSink,
+  type SourceOccurrences,
+  type ValueCarriers,
+} from './carriers.js';
+
+export { MAX_CARRIERS, type ValueCarriers } from './carriers.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
@@ -123,32 +132,6 @@ import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
  * CEILING, TWO METERS" in `resultCarries.ts` before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
-
-/**
- * How many results one indexed form remembers as its CARRIERS (9.110.0)
- * before the list is cut and marked. Eight, because the question the list
- * answers — "did EVERY result that carried this value get judged non-fact?"
- * (`findings/contingent.ts`) — needs the whole list or none of it: a value
- * nine results carried is a common value, not a tower, and the honest answer
- * for it is "not judged" rather than a verdict read off a prefix.
- */
-export const MAX_CARRIERS = 8;
-
-/**
- * Which of THIS turn's tool results carried one indexed form (9.110.0) —
- * the `toolCallId` of each `role: 'tool'` message that served it, in wire
- * order, each id once. The other half of the provenance the walk already
- * had: `values` says WHEN a value was last read, this says FROM WHERE.
- */
-export interface ValueCarriers {
-  readonly toolCallIds: readonly string[];
-  /**
-   * Set when more than `MAX_CARRIERS` results carried the form: the list is
-   * the first `MAX_CARRIERS` and a reader must not judge "every carrier"
-   * from it.
-   */
-  readonly truncated?: true;
-}
 
 /** A finished index plus the honesty flag that says whether it is complete. */
 export interface EvidenceCorpus {
@@ -181,6 +164,7 @@ export interface EvidenceCorpus {
    * ruled-out.
    */
   readonly carriers: ReadonlyMap<string, ValueCarriers>;
+  readonly occurrences?: SourceOccurrences;
   /**
    * True when the ceiling was hit and the index is INCOMPLETE. The gate
    * downgrades itself to record-only when this is set: a partial corpus can
@@ -203,48 +187,17 @@ export interface EvidenceCorpus {
 }
 
 /** Mutable accumulator while walking. */
-interface Sink {
+interface Sink extends CarrierSink {
   /** form → the latest turn that served it. See {@link EvidenceCorpus.values}. */
   readonly values: Map<string, number>;
-  /** form → the ids of THIS turn's results that carried it. See {@link EvidenceCorpus.carriers}. */
-  readonly carriers: Map<string, { toolCallIds: string[]; truncated?: true }>;
   budget: number;
-  /** The turn the walk is currently inside. Bumped by each user turn. */
-  turn: number;
   /**
-   * The `toolCallId` of the tool result being walked, or `undefined` when
-   * the text is not a tool result (the exempt corpus, a result with no id)
-   * — nothing is then recorded as a carrier.
+   * Declared ID shapes preserve comma-bearing identifiers. Under
+   * `decimalRounding`, a standalone scientific token also files its exact
+   * decimal unless it matches a declared shape ({@link evidenceTextValues}).
+   * The exempt corpus has no evidence gate.
    */
-  toolCallId: string | undefined;
-  /**
-   * Under `decimalRounding` only: the declared ID shapes, present as the sign
-   * that a standalone scientific token in a result's TEXT also files the
-   * exact decimal it states ({@link addDecimalOf}). Absent → the index it
-   * always was; the exempt corpus never sets it.
-   */
-  readonly decimalShapes?: readonly EvidenceShape[];
-}
-
-/**
- * File the result being walked as a carrier of `form` — once per result,
- * in wire order, cut and marked at `MAX_CARRIERS`. Costs no index entry: a
- * carrier is an attribute of an entry the walk was going to write anyway.
- */
-function carry(sink: Sink, form: string): void {
-  const id = sink.toolCallId;
-  if (id === undefined) return;
-  const entry = sink.carriers.get(form);
-  if (entry === undefined) {
-    sink.carriers.set(form, { toolCallIds: [id] });
-    return;
-  }
-  if (entry.toolCallIds.includes(id)) return;
-  if (entry.toolCallIds.length >= MAX_CARRIERS) {
-    entry.truncated = true;
-    return;
-  }
-  entry.toolCallIds.push(id);
+  readonly gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>;
 }
 
 function add(sink: Sink, raw: string): void {
@@ -266,27 +219,11 @@ function add(sink: Sink, raw: string): void {
   }
 }
 
-function addText(sink: Sink, text: string): void {
-  for (const token of tokenize(text)) {
+function addText(sink: Sink, text: string, readNumbers = false): void {
+  for (const value of evidenceTextValues(text, sink.gate, readNumbers)) {
     if (sink.budget <= 0) return;
-    add(sink, token);
-    if (sink.decimalShapes !== undefined) addDecimalOf(sink, token, sink.decimalShapes);
+    add(sink, value);
   }
-}
-
-/**
- * Under `decimalRounding`: a standalone scientific token (`1.12e-02`) also
- * files the exact decimal it states (`0.0112`, `numberPrecision.ts` ·
- * `scientificDecimalOf`) — beside its spelling, never instead of it, and
- * from the same result, so it carries the same turn and the same carrier.
- * A token that matches a declared ID shape is an identifier, not a
- * measurement, and files nothing more. The decimal takes one entry of the
- * same budget as any form.
- */
-function addDecimalOf(sink: Sink, token: string, shapes: readonly EvidenceShape[]): void {
-  const decimal = scientificDecimalOf(token);
-  if (decimal === undefined || shapes.some((shape) => shape.match.test(token))) return;
-  add(sink, decimal.exact);
 }
 
 /** Walk a parsed JSON value, indexing keys and leaves. */
@@ -296,7 +233,7 @@ function walk(node: unknown, sink: Sink): void {
     // Whole value first (a leaf may contain spaces and still be one value),
     // then its tokens (`"fc1/3 is down"` carries `fc1/3`).
     add(sink, node);
-    addText(sink, node);
+    addText(sink, node, true);
     return;
   }
   if (typeof node === 'number' || typeof node === 'boolean' || typeof node === 'bigint') {
@@ -393,11 +330,11 @@ export function readResult(content: string): ResultReading {
 function indexResult(content: string, sink: Sink): void {
   const read = readResult(content);
   if ('text' in read) {
-    addText(sink, read.text);
+    addText(sink, read.text, true);
     return;
   }
   walk(read.parsed, sink);
-  if (read.tail !== undefined) addText(sink, read.tail);
+  if (read.tail !== undefined) addText(sink, read.tail, true);
 }
 
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result
@@ -419,9 +356,10 @@ export function evidenceFromHistory(
    * The gate this corpus is judged by. Under its `decimalRounding`, a
    * standalone scientific token in a result's text also files the exact
    * decimal it states, unless it matches one of its declared `shapes`.
-   * Absent, or the dial off → the corpus it always was.
+   * The shapes also preserve whole comma-bearing identifiers.
    */
   gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>,
+  captureOccurrences?: true,
 ): EvidenceCorpus {
   const sink: Sink = {
     values: new Map<string, number>(),
@@ -429,7 +367,8 @@ export function evidenceFromHistory(
     budget: MAX_INDEX_TOKENS,
     turn: 0,
     toolCallId: undefined,
-    ...(gate?.decimalRounding === true && { decimalShapes: gate.shapes }),
+    ...(gate !== undefined && { gate }),
+    ...(captureOccurrences === true && { occurrences: new Map() }),
   };
   let toolResultsThisTurn = 0;
   for (const msg of history) {
@@ -446,7 +385,7 @@ export function evidenceFromHistory(
     }
     if (msg.role !== 'tool') continue;
     toolResultsThisTurn += 1;
-    sink.toolCallId = typeof msg.toolCallId === 'string' ? msg.toolCallId : undefined;
+    markCarrier(sink, msg);
     // The tool's OWN bytes (`lib/toolBytes.ts` · `toolBytesOf`, the one owner of the
     // boundary): the inputs layer's note carries a value the call ran with ("2h", the
     // value the tool's rule assumes), and indexing it would let an assumption ground an
@@ -457,6 +396,7 @@ export function evidenceFromHistory(
   return {
     values: sink.values,
     carriers: sink.carriers,
+    ...(sink.occurrences !== undefined && { occurrences: sink.occurrences }),
     truncated: sink.budget <= 0,
     currentTurn: sink.turn,
     toolResultsThisTurn,

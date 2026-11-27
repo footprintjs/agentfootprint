@@ -4,8 +4,8 @@
  * Pattern: one pure function over the committed spec (the twin of the
  *          replay-only `findings/serve.ts · findingsLedgerPiece`): no scope,
  *          no I/O, no clock, no call number. Same spec, same bytes.
- * Role:    Lens. `ontologyPiece` composes the piece `callLLM ·
- *          buildCallLLMStage` joins after the recovery piece (injections →
+ * Role:    Lens. `ontologyPiece` composes the piece `callLLM/prepareCall.ts ·
+ *          prepareCall` joins after the recovery piece (injections →
  *          recovery → ontology, FIXED; the findings DATA goes after history)
  *          and `servedView.ts · viewOf` recomposes from the run
  *          constant `ontology` in the same slot, so the receipt agrees by
@@ -43,6 +43,8 @@
  */
 
 import { CONTEXT_FIELD_MEANINGS } from '../lib/context-contract/index.js';
+import { skillVisibleToRole } from '../lib/spokenIds.js';
+import { ontologyHiddenSkills } from './roleView.js';
 import type {
   OntologyEdge,
   OntologyJoin,
@@ -170,10 +172,11 @@ function heldByLines(id: string, node: OntologyNode, join: OntologyJoin): string
 function viaToken(name: string, join: OntologyJoin): string | undefined {
   const owners = join.tools?.[name];
   if (owners === undefined || owners.length === 0) return name;
-  const hidden = new Set(join.hiddenSkillIds ?? []);
-  const visible = owners.filter((id) => !hidden.has(id));
-  if (visible.length === 0) return undefined;
-  return `${name} [${visible.length === 1 ? 'skill' : 'skills'}: ${visible.join(', ')}]`;
+  const hidden = ontologyHiddenSkills(join);
+  const visible = owners.filter((id) => skillVisibleToRole(id, hidden));
+  return visible.length === 0
+    ? undefined
+    : `${name} [${visible.length === 1 ? 'skill' : 'skills'}: ${visible.join(', ')}]`;
 }
 
 /** `<from> —<relation>→ <to>[ · <meaning>]` */

@@ -223,17 +223,21 @@ describe('UNIT — the read list and the run constant', () => {
     const none = { tools: false, evidenceGate: false, answerValidation: false, inputs: false };
     // `stoppedEarly` with no arm at all: the Route decider writes it on every
     // agent — a tool-less one included, when its model asks for a call at the
-    // limit (pinned end to end in answer-layer-equality.test.ts).
+    // limit (pinned end to end in answer-layer-equality.test.ts). W2 is also
+    // independent of the optional arms and skips the read if no check filed a report.
     expect(answerFoldReads({ ...none, toolMiddleware: false })).toEqual([
       'history',
       'turnNumber',
       'pausedToolCallId',
       'findingsLedger',
       'stoppedEarly',
+      'llmLatestStopReason',
+      'answerExecutionClaims',
     ]);
     expect(
       answerFoldReads({
         tools: true,
+        resultLimits: true,
         evidenceGate: true,
         answerValidation: true,
         inputs: true,
@@ -245,11 +249,15 @@ describe('UNIT — the read list and the run constant', () => {
       'pausedToolCallId',
       'findingsLedger',
       'stoppedEarly',
+      'llmLatestStopReason',
+      'answerExecutionClaims',
       'coverageDeclared',
       'enteredToolCalls',
       'enteredToolCallsComplete',
       'settledToolCalls',
       'settledToolCallsComplete',
+      'libraryResultLimits',
+      'libraryResultLimitsIncomplete',
       'unsupportedValues',
       'answerValidation',
       'argumentAsk',
@@ -258,8 +266,12 @@ describe('UNIT — the read list and the run constant', () => {
     // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('settledToolCalls');
-    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toEqual(
-      expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']),
+    const withTools = answerFoldReads({ ...none, tools: true, toolMiddleware: true });
+    expect(withTools).toEqual(expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']));
+    expect(withTools).not.toContain('libraryResultLimits');
+    expect(withTools).not.toContain('libraryResultLimitsIncomplete');
+    expect(answerFoldReads({ ...none, resultLimits: true, toolMiddleware: false })).not.toContain(
+      'libraryResultLimits',
     );
   });
 

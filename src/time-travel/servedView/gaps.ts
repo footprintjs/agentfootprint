@@ -5,7 +5,7 @@ import type { EpochLocation } from '../epochs.js';
 
 type GapRead =
   | {
-      readonly receipt: Pick<StoredReceipt, 'cache' | 'replayPreparations'>;
+      readonly receipt: Pick<StoredReceipt, 'cache' | 'messages' | 'replayPreparations'>;
       readonly cause?: undefined;
     }
   | { readonly receipt?: undefined; readonly cause: ServedGapCause };
@@ -33,7 +33,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // THE RULE FOR THIS LIST is the request the strategy holds: `systemPrompt`
     // (→ `system.*`), `messages` (→ `messages.*`), `tools` and `toolChoice`
     // (→ every `tools.*` field). `tools.forced` and `tools.withheld` were
-    // missing until 9.93.0 (`recorded-not-built.md`, entry 7): `callLLM.ts`
+    // missing until 9.93.0 (`recorded-not-built.md`, entry 7): `callLLM/prepareCall.ts`
     // writes both from assembly's own decision — `deps.schemaTool?.name`,
     // `scope.wrapUpAsked` — and never from `preparedRequest`, so a strategy
     // that dropped the answer tool from `request.tools` or emptied the list
@@ -295,7 +295,8 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // `unavailable`; receiptAt preserves those states, never zero counts.
     // Neither state means the receipt is missing or changes this gap's cause.
     // The same applies to replayPreparations: downstream preparation was
-    // observed only when the enabled receipt carries its annotation.
+    // observed only when the enabled receipt carries its annotation. The
+    // Bedrock preparation rows and usage link are likewise receipt-only.
     //
     // AND THE SEVENTH ROUND SCOPED THE PRINTED CLAIM TO THE LEVEL IT HOLDS AT.
     // It said the absence of these fields is "a gap in the record, never a call
@@ -316,10 +317,14 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'cache.transform',
       'cache.transformHash',
       'cache.markersApplied',
+      'cache.commandPreparations',
+      'cache.commandOverflow',
+      'cache.acceptedCommand',
       'cache.strategy',
       'omittedForAttention',
       'requestMeasurement',
       'replayPreparations',
+      'toolSelection',
     ]),
     why:
       'Nothing on this view has been checked against what went out. Every field below is ' +
@@ -516,7 +521,37 @@ export function gapsOf(
     gaps.push(gapOf('cache-transform'));
   }
   if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
-  if (receipt?.replayPreparations !== undefined) gaps.push(gapOf('thinking-replay'));
+  const nativeReplay = nativeReplayGapDetails(receipt);
+  if (nativeReplay !== undefined || receipt?.replayPreparations !== undefined) {
+    gaps.push({ ...gapOf('thinking-replay'), ...nativeReplay });
+  }
   if (forced !== undefined) gaps.push(gapOf('forced-tool-schema'));
   return gaps;
+}
+
+function nativeReplayGapDetails(receipt: GapRead['receipt']): Omit<ServedGap, 'gap'> | undefined {
+  const requestOnly = receipt?.messages?.requestOnly;
+  const nativeReasons = Array.isArray(requestOnly)
+    ? requestOnly.flatMap((line) =>
+        typeof line?.reason === 'string' && line.reason.startsWith('native-turn-')
+          ? [line.reason]
+          : [],
+      )
+    : [];
+  const omission = receipt?.replayPreparations !== undefined;
+  if (nativeReasons.length === 0) return undefined;
+  const why =
+    'The request included native tool-turn context whose placement cannot be reconstructed from the public conversation history.';
+  const fields = [
+    ...(nativeReasons.includes('native-turn-recovery')
+      ? ['system.hash', 'system.pieces', 'system.chars']
+      : []),
+    'messages.count',
+    'messages.entries',
+    'messages.requestOnly',
+  ];
+  return {
+    fields: omission ? [...fields, 'requestMeasurement'] : fields,
+    why: omission ? `${why} ${SERVED_GAPS['thinking-replay'].why}` : why,
+  };
 }

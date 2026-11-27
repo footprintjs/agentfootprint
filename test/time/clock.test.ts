@@ -14,7 +14,7 @@
  *   security    — hostile inputs (class instances, `__proto__` keys, 1 MB strings, an
  *                 abbreviation, a bare offset, an invalid Date) are refused by name, never thrown
  *                 on as a TypeError from inside, and never reach a row;
- *   performance — one schema enumeration and seven field reads per closed input;
+ *   performance — one schema enumeration and bounded field reads per closed input;
  *   load        — not applicable: pure functions with no shared state (the per-call row's load
  *                 case is in clock-run.test.ts).
  */
@@ -75,13 +75,17 @@ describe('readRunTime — the run input, checked', () => {
   });
 
   it('reads a control window as two strict instants, from before to', () => {
-    expect(valueOf(readRunTime({ window: WINDOW }))).toEqual({ window: WINDOW });
+    expect(valueOf(readRunTime({ window: WINDOW }))).toEqual({
+      window: { ...WINDOW, endpoint: { cutoff: WINDOW.to, end: 'exclusive', precision: 'second' } },
+    });
     for (const window of [
       { from: WINDOW.to, to: WINDOW.from },
       { from: WINDOW.from, to: WINDOW.from },
       { from: '2026-10-09 08:00', to: WINDOW.to },
       { from: WINDOW.from },
       { ...WINDOW, source: 'control' },
+      { ...WINDOW, end: 'closed' },
+      { ...WINDOW, precision: 'hour' },
       `${WINDOW.from}/${WINDOW.to}`,
     ]) {
       expect(problemOf(readRunTime({ window }))).toMatch(/time\.window/);
@@ -116,6 +120,28 @@ describe('readTimeOptions — the builder fallback', () => {
     expect(valueOf(readTimeOptions({}))).toEqual({});
     expect(valueOf(readTimeOptions({ zone: 'Europe/Paris' }))).toEqual({ zone: 'Europe/Paris' });
     expect(problemOf(readTimeOptions({ zone: 'utc' }))).toMatch(/IANA zone name/);
+  });
+
+  it('accepts only an explicit boolean opt-in with a reader', () => {
+    const reader = {
+      id: 'clock-test',
+      version: '1',
+      kind: 'rule',
+      locale: 'en-US',
+      read: () => ({ mentions: [] }),
+    };
+    const baseline = valueOf(readTimeOptions({ reader }));
+    expect(valueOf(readTimeOptions({ reader, skipProvenConfirmation: false }))).toEqual(baseline);
+    expect(valueOf(readTimeOptions({ reader, skipProvenConfirmation: true }))).toEqual({
+      ...baseline,
+      skipProvenConfirmation: true,
+    });
+    expect(problemOf(readTimeOptions({ reader, skipProvenConfirmation: 'true' }))).toMatch(
+      /must be a boolean/,
+    );
+    expect(problemOf(readTimeOptions({ skipProvenConfirmation: true }))).toMatch(
+      /requires a time reader/,
+    );
   });
 
   it('refuses an unknown key, a malformed reader, a policy without a reader, and a malformed zone', () => {
@@ -329,9 +355,8 @@ describe('performance', () => {
         if ('value' in read) last = draftClock(read.value, {});
       }
       expect(last).toMatchObject({ now: NOW, zone: LA, window: WINDOW });
-      // One schema enumeration and seven direct field reads per admitted input.
+      // One schema enumeration and bounded direct field reads per admitted input.
       expect(enumerations).toBe(n);
-      expect(reads).toBeGreaterThanOrEqual(7 * n);
       expect(reads).toBeLessThanOrEqual(7 * n);
     },
   );

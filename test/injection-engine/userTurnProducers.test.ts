@@ -85,6 +85,7 @@ import {
   LIBRARY_NOTE_OPENING,
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
+  NATIVE_RECOVERY_FRAME_PREFIX,
 } from '../../src/lib/saidByPerson.js';
 import { timeLine } from '../../src/core/agent/arguments/serve.js';
 import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
@@ -186,7 +187,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'used to build the continued entry itself, from the raw message, before the chain ran',
     },
   ],
-  'src/core/agent/stages/prepareFinal.ts': [
+  'src/core/agent/assistantReplay.ts': [
     {
       cls: 'person',
       why:
@@ -201,7 +202,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   'src/core/agent/buildAgentMessageApiChart.ts': [
     { cls: 'person', why: "the message-API agent chart's seed: `args.message`, as given" },
   ],
-  'src/core/LLMCall.ts': [
+  'src/core/LLMCall/chart.ts': [
     {
       cls: 'person',
       why:
@@ -230,7 +231,12 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       opening: STAGED_DATA_FRAME_PREFIX,
     },
   ],
-  'src/core/agent/stages/callLLM.ts': [
+  'src/core/agent/stages/callLLM/requestOnly.ts': [
+    {
+      cls: 'never-in-history',
+      why: 'Evidence feedback appended to the native request while keeping the signed system text stable.',
+      opening: NATIVE_RECOVERY_FRAME_PREFIX,
+    },
     {
       cls: 'never-in-history',
       why:
@@ -281,7 +287,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       why: 'Replay of the recorded findings DATA layout, never a conversation turn.',
     },
   ],
-  'src/core/agent/stages/reliabilityExecution.ts': [
+  'src/core/agent/stages/reliabilityExecution/feedback.ts': [
     {
       cls: 'never-in-history',
       why: "the retry feedback line, carried `ephemeral: true` on one attempt's request",
@@ -301,7 +307,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   'src/injection-engine/llmClassifier.ts': [
     { cls: 'never-in-history', why: 'the classifier request — one provider call' },
   ],
-  'src/core-flow/Parallel.ts': [
+  'src/core-flow/Parallel/merge.ts': [
     { cls: 'never-in-history', why: "the merge call's request over the branches' outputs" },
   ],
   'src/memory/stages/summarize.ts': [
@@ -336,7 +342,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
     },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
-  'src/adapters/llm/BedrockProvider.ts': [
+  'src/adapters/llm/BedrockProvider/request.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
@@ -467,7 +473,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // marker below instead.
     expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -475,7 +481,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
   });
 });
 

@@ -254,6 +254,10 @@ describe('functional: the evicted ground files ONE finding through the real loop
  * read), the tail marker beside the system one. No step was added, removed
  * or renumbered, so the law this pins still holds.
  *
+ * The cache mount records one compact seed and one read in place of two
+ * full-history reads. Only its marker write shifts to the preceding step.
+ * The dangling-reference composition reads still match exactly.
+ *
  * Occurrence addressing changes only the tool start/end payload summaries.
  * The end summary now abbreviates five keys, including the address.
  *
@@ -277,6 +281,7 @@ describe('regression: the check adds no step to the narrative', () => {
       .map((entry) => entry.text.replace(/turnStartMs = \d+/g, 'turnStartMs = <clock>'));
     const reference = JSON.parse(readFileSync(NATIVE_NARRATIVE_REFERENCE, 'utf8')) as string[];
     // Explicit14 correction: remove only the initial undefined owner read and renumber steps.
+    // The terminal W2 check adds one read of the accepted reply at Route.
     // All remaining reads, writes, payloads and observed order stay exact.
     const reads = (lines: readonly string[]) => lines.filter((line) => / Read \w+/.test(line));
     expect(reads(narrative)).toEqual(reads(reference));

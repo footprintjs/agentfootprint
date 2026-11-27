@@ -128,16 +128,11 @@ import {
   type NotFoundMeaning,
   type ObjectListingRow,
 } from './objectStore.js';
-import {
-  canonicalPayloadBytes,
-  computeArtifactDigest,
-  decodeCanonicalPayload,
-  payloadShapeOf,
-  type PayloadShape,
-} from './payload.js';
+import { computeArtifactDigest, decodeCanonicalPayload, type PayloadShape } from './payload.js';
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -447,20 +442,24 @@ export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
   };
 
   return {
+    ...scopeBudgetMember(retention),
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         async (parent) => (await liveTicket(scope, parent)) !== undefined,
         retention,
         at,
       );
-      const bytes = canonicalPayloadBytes(input.data);
-      const shape = payloadShapeOf(input.data);
-      const metaValue = encodeArtifactMetaValue(meta, shape, GCS_METADATA_BUDGET, 'gcsArtifacts');
+      const metaValue = encodeArtifactMetaValue(
+        meta,
+        payload.shape,
+        GCS_METADATA_BUDGET,
+        'gcsArtifacts',
+      );
       const swept = await applyRetention(scope, meta.bytes, at);
       await call('save', () =>
-        bucket.file(nameFor(scope, meta.ref)).save(bytes, {
+        bucket.file(nameFor(scope, meta.ref)).save(payload.bytes, {
           contentType: meta.mediaType,
           resumable: false,
           metadata: { metadata: { [ARTIFACT_META_KEY]: metaValue } },

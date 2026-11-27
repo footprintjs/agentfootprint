@@ -198,7 +198,7 @@ describe('arguments that are not an object', () => {
   });
 });
 
-describe('an inner read_skill', () => {
+describe('role-scoped skill arguments', () => {
   /** A generic composer: the MODEL picks the inner tool and its arguments. */
   const router = () =>
     defineTool<{ tool: string; args: Record<string, unknown> }, string>({
@@ -219,7 +219,7 @@ describe('an inner read_skill', () => {
     });
 
   it.each([true, false])(
-    'is asked the skill_read question (direct=%s): a hidden skill’s text never reaches the model',
+    'an unavailable skill is refused before dispatch (direct=%s)',
     async (direct) => {
       const checker: PermissionChecker & { asked: string[] } = {
         ...checkerOf((req) =>
@@ -256,13 +256,22 @@ describe('an inner read_skill', () => {
         .of('permission.check')
         .filter((e) => e.payload.capability === 'skill_read')
         .map((e) => [e.payload.toolCallId, e.payload.target, e.payload.result]);
+      expect(checker.asked).toContain('skill_read:skill:secret');
       expect(skillChecks).toEqual([[direct ? 'c1' : 'c1#inner-1', 'skill:secret', 'deny']]);
-      if (!direct) {
-        expect(served[0]).toMatch(
-          /^refused: ctx\.tools\.call\('read_skill'\): the permission check/,
-        );
+      expect(served.join('\n')).toContain('expected an offered skill id');
+      expect(served.join('\n')).not.toContain('secret');
+      if (direct) {
+        expect(seen.of('validation.args_invalid').map((e) => e.payload)).toEqual([
+          expect.objectContaining({
+            toolCallId: 'c1',
+            toolName: 'read_skill',
+            enforced: true,
+            issues: [{ path: 'id', expected: 'an offered skill id', got: 'string' }],
+          }),
+        ]);
+      } else {
         expect(rows(agent).map((r) => [r.toolName, r.refusedBy])).toEqual([
-          ['read_skill', 'permission'],
+          ['read_skill', 'dispatch'],
         ]);
       }
     },

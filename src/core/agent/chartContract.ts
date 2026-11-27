@@ -33,6 +33,9 @@ export interface AgentChartDeps {
   readonly maxIterations: number;
 
   // ─ Stage handlers ───────────────────────────────────────────────
+  readonly chooseHostTurn?: (
+    scope: import('footprintjs').TypedScope<import('./types.js').AgentState>,
+  ) => string | Promise<string>;
   readonly seed: (scope: never) => void | Promise<void>;
   readonly callLLM: (scope: never) => Promise<void>;
   readonly routeDecider: (scope: never) => RouteBranch | Promise<RouteBranch>;
@@ -234,6 +237,8 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */
   readonly releaseOutputTokens?: true;
+  /** `hostEndedTurns: true`: the final stage records a settled reply's origin (`assistantReplay.ts`). */
+  readonly hostEndedTurns?: true;
   /** The evidence gate's `'rails'` posture: a refused answer is recorded flagged and ends the branch (`prepareFinalFor`). */
   readonly evidenceRails?: true;
   /**
@@ -264,6 +269,9 @@ export interface AgentChartDeps {
    */
   readonly timeWindows?: true;
 
+  /** Current agent can use and state an admitted look-back. */
+  readonly stateProvenWindow?: true;
+
   /**
    * The time layer is armed with the inputs layer (`.time()` over a tool that
    * declares a period, step T8). Gates ONE mount arg on the Tools branch's
@@ -293,6 +301,7 @@ export interface AgentChartDeps {
    * This flag never makes the cache subflow suppress findings cache markers.
    */
   readonly hasFindingsLedger?: boolean;
+  readonly hasCitations?: true;
 
   /**
    * The inputs layer is armed (honesty layer 2) — present ONLY when a tool
@@ -348,6 +357,8 @@ export interface AgentChartDeps {
    * Absent — the default — the boundary maps exactly the keys it always did.
    */
   readonly hasOntology?: boolean;
+  /** Carry the opted-in source evidence through the grouped request boundary. */
+  readonly sourceNotConsulted?: true;
 
   /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +

@@ -1,4 +1,5 @@
 import { ontologyPiece } from '../../ontology/serve.js';
+import { ontologyRoleJoin, type ScopedOntologyRecord } from '../../ontology/roleView.js';
 import type { OntologyRecord } from '../../ontology/types.js';
 import type { EpochLocation } from '../epochs.js';
 import { readAtCall, readRunConstant } from './recordReads.js';
@@ -8,13 +9,17 @@ import { readAtCall, readRunConstant } from './recordReads.js';
  * narrowed the way every run constant is: only a record carrying a `spec`
  * with `nodes` and `sources` records composes a piece, and an absent key —
  * every agent without `.ontology()` — composes nothing, which is what the
- * wire did (`callLLM.ts · buildCallLLMStage`, under `deps.ontology`).
+ * wire did (`callLLM/prepareCall.ts · prepareCall`, under `deps.ontology`).
  */
 function ontologyOf(
   value: unknown,
-): { spec: OntologyRecord['spec']; tools?: OntologyRecord['tools'] } | undefined {
+): Pick<ScopedOntologyRecord, 'spec' | 'tools' | 'ontologyRoleViewRequired'> | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const { spec, tools } = value as { spec?: unknown; tools?: unknown };
+  const { spec, tools, ontologyRoleViewRequired } = value as {
+    spec?: unknown;
+    tools?: unknown;
+    ontologyRoleViewRequired?: unknown;
+  };
   if (spec === null || typeof spec !== 'object') return undefined;
   const { nodes, sources } = spec as { nodes?: unknown; sources?: unknown };
   if (
@@ -29,7 +34,11 @@ function ontologyOf(
   // record without the key (9.106.0, or a map naming only static tools)
   // composes the bytes it always did.
   const join = toolsJoinOf(tools);
-  return { spec: spec as OntologyRecord['spec'], ...(join !== undefined && { tools: join }) };
+  return {
+    spec: spec as OntologyRecord['spec'],
+    ...(join !== undefined && { tools: join }),
+    ...(ontologyRoleViewRequired === true && { ontologyRoleViewRequired }),
+  };
 }
 
 /** `tools` narrowed by shape: string → string[]; anything else is no join. */
@@ -63,9 +72,6 @@ export function ontologyAt(
   const ontology =
     ontologyRecord === undefined
       ? undefined
-      : ontologyPiece(ontologyRecord.spec, {
-          ...(ontologyRecord.tools !== undefined && { tools: ontologyRecord.tools }),
-          ...(hiddenAtCall !== undefined && { hiddenSkillIds: hiddenAtCall }),
-        });
+      : ontologyPiece(ontologyRecord.spec, ontologyRoleJoin(ontologyRecord, hiddenAtCall));
   return ontology;
 }

@@ -58,6 +58,15 @@ export interface DomainSubflowEvent extends DomainEventBase {
   readonly isAgentInternal: boolean;
   /** `inputMapper` result on entry; subflow shared state on exit. */
   readonly payload?: unknown;
+  /**
+   * Set ONLY on an event read from a recording saved in parts (index format
+   * 2), in place of `payload`: the payload lives with the invocation this
+   * event's `runtimeStageId` names, read with
+   * `openSavedRecording(…).readInvocation(runtimeStageId)` (its `payloads`).
+   * The row's `meta.subflowPayloads` is `'with-invocation'` then. No mark and
+   * no `payload` means none was recorded. The live stream never carries it.
+   */
+  readonly payloadWith?: 'invocation';
 }
 
 export interface DomainForkBranchEvent extends DomainEventBase {

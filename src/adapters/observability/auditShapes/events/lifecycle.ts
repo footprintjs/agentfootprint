@@ -78,6 +78,7 @@ export function lifecycleShapes() {
     }),
 
     'agentfootprint.agent.turn_end': eventShape<'agentfootprint.agent.turn_end'>({
+      replyAuthor: oneOf('host'),
       turnIndex: num,
       finalContent: charsMarker,
       totalInputTokens: num,
@@ -93,6 +94,7 @@ export function lifecycleShapes() {
       answerCoverage: boundAnswerCoverage,
       answerAssessment: boundAnswerAssessment,
       standingLineNames: recordOf(str),
+      standingLineOmittedByRaiseOn: bool,
       answerNegatives: boundAnswerNegatives,
       scripts: boundScripts,
       refused: shapeOf<At<PayloadOf<'agentfootprint.agent.turn_end'>, 'refused'>>({

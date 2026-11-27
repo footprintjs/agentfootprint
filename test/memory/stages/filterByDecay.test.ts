@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { filterByDecay, DEFAULT_DECAY_MIN_SCORE } from '../../../src/memory/stages/filterByDecay';
+import { recallOutcome } from '../../../src/memory/retrieval/outcome.js';
 import type { MemoryState } from '../../../src/memory/stages/types';
 import type { MemoryEntry } from '../../../src/memory/entry';
 import type { Message } from '../../../src/types/messages';
@@ -210,4 +211,32 @@ describe('filterByDecay — performance', () => {
     expect(timestampReads).toBe(2 * 10_000);
     expect(scope.loaded.length).toBeLessThan(10_000);
   });
+});
+
+it('counts both faded occurrences of a repeated ID and keeps its fresh sibling', async () => {
+  const fresh = aged('repeated', 0);
+  const loaded = [aged('repeated', 100 * SECOND), fresh, aged('repeated', 200 * SECOND)];
+  const scope = makeScope(loaded);
+  scope.recallOutcomes = [
+    recallOutcome(
+      1,
+      'test',
+      loaded.map(({ id }, i) => ({
+        id,
+        order: i + 1,
+        admitted: true,
+      })),
+      true,
+    ),
+  ];
+  await filterByDecay({ halfLifeMs: SECOND, now: clock })(scope as never);
+  expect(scope.loaded).toEqual([fresh]);
+  expect(scope.recallOutcomes?.[0]).toMatchObject({
+    complete: true,
+    candidateCount: 3,
+    admittedCount: 1,
+    candidatesComplete: false,
+    exclusions: { decayed: 2 },
+  });
+  expect(scope.recallOutcomes?.[0]?.candidates).toBeUndefined();
 });

@@ -35,6 +35,7 @@ import {
   type Coverage,
   type DeclaredCoverage,
 } from '../../../src/index.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
 import { mock } from '../../../src/llm-providers.js';
 import { coverageOfAnswer } from '../../../src/semantics/coverage/index.js';
 
@@ -46,7 +47,11 @@ type Verdict = z.infer<typeof Verdict>;
 const VERDICT: Verdict = { healthy: true, summary: 'Replication is healthy.' };
 const JSON_ANSWER = JSON.stringify(VERDICT);
 const COVERAGE_STANDING =
-  'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.';
+  'Not sure — a tool said there is ground it did not check or cannot cover ' +
+  '(a tool did not check “NDM migration sessions” because “the API timed out — ask again”; ' +
+  'a tool cannot cover “multipathing” because “no collector runs on the ESX hosts”; ' +
+  'a tool cannot cover “host-side multipathing” because “no collector runs on the ESX hosts”); ' +
+  'a tool said nothing matched.';
 
 const LEDGER = {
   checked: ['SRDF pair state on all 4 arrays (live query)'],
@@ -464,11 +469,21 @@ const VOLATILE_KEYS = new Set(['runId', 'traceId', 'timestamp', 'at', 'conversat
 const CLOCK_KEY = /(?:Ms|At)$/;
 const DIGEST = /^(?:[0-9a-f]{16}|[0-9a-f]{64})$/;
 const RUN_ID = /^run_[0-9a-z_-]+$/i;
-function normalise(value: unknown, batches: Map<string, number>, key?: string): unknown {
+function normalise(
+  value: unknown,
+  batches: Map<string, number>,
+  key?: string,
+  inSourceLinkConsumer = false,
+): unknown {
   if (key !== undefined && (VOLATILE_KEYS.has(key) || CLOCK_KEY.test(key))) return '<volatile>';
   if (typeof value === 'string') {
     if (DIGEST.test(value)) return '<digest>';
     if (RUN_ID.test(value)) return '<run-id>';
+    if (inSourceLinkConsumer && key === 'occurrence') {
+      const words = value.split('.').map(Number);
+      if (readCallOccurrenceKey({ callOccurrenceKey: words }) === value)
+        return normalise(words, batches, 'callOccurrenceKey');
+    }
     return value;
   }
   if (Array.isArray(value)) {
@@ -478,12 +493,17 @@ function normalise(value: unknown, batches: Map<string, number>, key?: string): 
       batches.set(batch, ordinal);
       return [ordinal, 0, 0, 0, value[4]];
     }
-    return value.map((v) => normalise(v, batches));
+    return value.map((v) => normalise(v, batches, undefined, inSourceLinkConsumer));
   }
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(value as Record<string, unknown>).sort()) {
-      out[k] = normalise((value as Record<string, unknown>)[k], batches, k);
+      out[k] = normalise(
+        (value as Record<string, unknown>)[k],
+        batches,
+        k,
+        inSourceLinkConsumer || key === 'sourceLinkConsumer',
+      );
     }
     return out;
   }

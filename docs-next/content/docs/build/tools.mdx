@@ -189,8 +189,8 @@ and the artifact argument names configured in `codeRunnerTool({ wants })`.
 Both declare `additionalProperties: false`. With default enforcement, remove
 previously tolerated extra fields from calls or middleware-added arguments.
 Declared artifact inputs remain optional; runtime-enabled `_findings` is still
-accepted and peeled before validation. The skill id enum remains the full
-catalog, so unreachable picks still receive the graph's teaching refusal.
+accepted and peeled before validation. The skill id enum lists the full role-visible
+catalog, so visible off-route picks still receive the graph's teaching refusal.
 
 Declare an identifier's format and explain it in `description`:
 
@@ -329,6 +329,20 @@ does not know.
 ## When a tool throws
 
 When `execute` throws, the framework catches it, reports it to the LLM as a tool error, and continues the loop. The LLM sees the error message and can decide to retry with different args, try a different tool, or surface to the user. See [Error handling](doc:error-handling) for the typed error contract + retry decorators.
+
+## When a tool knows why it failed
+
+Return `toolFailure(content, { category, notChecked?, tryInstead? })` from a native tool
+to declare a failed result. Use one category from `timeout`, `rate-limited`, `server`,
+`network`, `auth`, `permanent`, or `unknown`. The model receives `content` through
+ordinary result delivery. The saved warning attributes the failure and any retained
+advice to the tool. It distinguishes this declaration from an exception classified
+by the engine. Once the result commits, the attempt recorder counts one declared
+failure and excludes the advice from telemetry.
+
+A `ToolFailureDeclaration` holds the category and optional advice passed to the helper.
+The returned `ToolFailureResult` carries the content. Return that object directly so
+the tool runner can recognize the original declaration.
 
 ## Tool sessions — holding something across calls
 

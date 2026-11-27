@@ -584,6 +584,80 @@ Every law on this page applies to both spellings identically — the union arms,
 the check-up, `match` as data, `scopeTools`, deferred body-contract checks — because
 the object form is compiled *through* the builder: there is one implementation.
 
+## Skills on a model that binds its reasoning
+
+The newest Claude models accept a signed thinking block only under the system
+prompt and tool list it was written under. A skill that joins the system prompt
+or the tool list in the middle of a tool turn would change both, so on such a
+model (the provider's `thinkingBinding` answers `bound`, or `unknown` for an id
+it cannot place) the agent's default `skillContext` is `'listed'`:
+
+- every skill tool is on the tool list from the first request, with its own
+  description, and `read_skill`'s description is the catalog for the whole run;
+- the body of any skill `read_skill` loads, a graph route or step target
+  included, is that call's result, and the system prompt leaves it out while that
+  result is in the history the request sends. A re-read of a skill whose body is
+  already there answers with a short confirmation, so each request carries the
+  body once, and a window never drops the newest such result while the skill is
+  active;
+- the body is not cut by `maxToolResultChars` or placed by reference, and the
+  evidence gate and the answer account read it as your own text, as they read a
+  system-prompt body;
+- a call to a scoped skill's tool (`autoActivate: 'currentSkill'`, `scopeTools`,
+  `.toolsFromActiveSkill()`) before its skill is loaded is refused with a
+  sentence that names the skill and the `read_skill` call that loads it, and
+  the tool does not run.
+
+In both strategies, the tools slot omits tools owned only by role-hidden
+skills. Direct, resumed and inner calls check the tool's registered skill
+claim. A hidden tool receives the same reply as an unknown tool. A visible
+owner keeps a shared implementation eligible. Resume checks the role again
+before entry. In classic mode the first tool list can stay in context after a
+role change; later dispatch still checks the role.
+
+<CodeFile path="examples/features/skills-listed.ts" region="listed" title="examples/features/skills-listed.ts (region: listed)" />
+
+The first `agentfootprint.stream.llm_start` of each run says what was chosen
+and why, as `skillContext`: the tool strategy and the body channel, each in the
+shared decision-record shape (`strategy`, `by`, `rule`, `label`, `reads`), and
+the binding answer that decided them. On every model the adapter places as
+unbound the default is `'declared'`, each skill's own `autoActivate` and
+`surfaceMode`, and nothing about those runs changes, the event included.
+
+<CodeFile path="examples/features/skills-listed.ts" region="early" title="examples/features/skills-listed.ts (region: early)" />
+
+State it to choose for yourself: `Agent.create({ ..., skillContext: 'declared' })`
+keeps each skill's declarations on a bound model (a load inside a signed tool
+turn is then refused by name, `ContextChangedError`), and `'listed'` lists them
+on any model. Either is recorded with `by: 'fixed'`. For an inference profile,
+gateway alias or deployment name you know to be unbound, say so with the
+adapter's `thinkingBinding` option instead, and the default is `'declared'`.
+
+Gotchas:
+
+- A graph can load a body's instructions into the system prompt before any
+  `read_skill` call. Under `'listed'` those instructions stay for the rest of
+  that turn after a cursor hop, while the role still permits them. A read of
+  the current skill acknowledges instructions the model already has.
+- When the `read_skill` result is gone from the history (a summary folded it, a
+  conversation paused before this option existed is resumed), the body is served
+  in the system prompt as under `'declared'`. Inside a signed tool turn on a
+  bound model that change is refused by name before the request is sent.
+  When tool-result middleware replaced or withheld the body, the refusal
+  names that middleware change.
+- A window that drops other turns inside a signed tool turn, step narrowing
+  (`steps`), an instruction whose `activeWhen` reads a tool result, and a tool
+  provider whose list moves between calls still change the turn, and are still
+  refused by name inside a signed tool turn.
+- Listing every skill tool from the first request makes every request's tool
+  list longer; with many scoped skills the tools slot can pass its budget.
+- The run records which `read_skill` call carried a body. Appending a note
+  to that result keeps one copy of the body. A replacement or fold that
+  removes the body restores the ordinary system-delivery rule.
+- A `withFallback` pair answers the binding question for its primary: an
+  unbound primary with a bound fallback stays `'declared'` unless you state
+  `'listed'`.
+
 ## A plain name for a person (`title`)
 
 A skill's id is written for code (`array-inventory`); a person reading a report

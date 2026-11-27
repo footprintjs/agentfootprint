@@ -37,6 +37,11 @@
  * stream over bytes it already holds — a fake stream is an accepted-and-
  * silently-wrong promise about memory. See {@link ArtifactStreamPutInput} for
  * the two things streaming costs you (a stated `bytes`, and no digest).
+ *
+ * `scopeBudget?` is the third: it STATES the byte and count budget `put`
+ * enforces in a scope, so a caller about to write several artifacts can know
+ * before the first one whether they can fit at all. A store with no budget
+ * leaves it absent or answers `null`; it is a statement, never a reservation.
  */
 
 import type { MemoryIdentity } from '../memory/identity/types.js';
@@ -111,6 +116,8 @@ export interface ArtifactMeta {
    *  Validated at mint (a malformed one is refused, never repaired); absent =
    *  undeclared, and a consumer keeps its own heuristic. See `time/axis.ts`. */
   readonly timeAxis?: DatasetTimeAxis;
+  /** Number of values in the declared time column with no offset or source zone, when positive. */
+  readonly naiveCount?: number;
   /** Unix ms when the artifact was stored. */
   readonly createdAt: number;
 }
@@ -286,6 +293,22 @@ export interface ArtifactStore {
    * silently traded.
    */
   getStream?(scope: ArtifactScope, ref: ArtifactRef): Promise<ArtifactStreamRecord | null>;
+
+  /**
+   * OPTIONAL — the budget `put` enforces in `scope`: the most bytes and the
+   * most artifacts the scope may hold. `null` when neither binds. A statement
+   * of the store's retention, never a reservation: other writers may still
+   * fill the scope, and a put may still evict older artifacts to make room.
+   */
+  scopeBudget?(scope: ArtifactScope): Promise<ArtifactScopeBudget | null>;
+}
+
+/** The budget a store enforces in one scope (see {@link ArtifactStore.scopeBudget}). */
+export interface ArtifactScopeBudget {
+  /** The most bytes the scope may hold; absent when bytes do not bind. */
+  readonly maxBytes?: number;
+  /** The most artifacts the scope may hold; absent when the count does not bind. */
+  readonly maxCount?: number;
 }
 
 // ─── Refusals ────────────────────────────────────────────────────────

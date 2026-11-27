@@ -107,6 +107,9 @@ export interface AgentInput {
    * ```
    */
   readonly time?: RunTime;
+
+  /** This new question's reported IANA viewer zone, used only to display the recorded window. Requires .time(); a pause keeps it. */
+  readonly timeDisplay?: { readonly viewerZone: string };
 }
 
 export type AgentOutput = string;

@@ -32,6 +32,7 @@ import { sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { keyOfLabel } from '../../../tools/finiteLabel.js';
+import { roleVisibleImplementation } from '../skillContext/toolVisibility.js';
 
 /** One name, resolved. */
 export interface ToolResolution {
@@ -59,6 +60,19 @@ export interface ToolResolverDeps {
 /** `resolve(name, pinned?)` — `pinned` is a paused call's recorded party. */
 export type ToolResolver = (toolName: string, pinned?: ToolParty) => ToolResolution;
 
+export type ToolRegistrations = Pick<ToolResolverDeps, 'registryByName' | 'toolClaimants'>;
+
+/** Keep the same resolved implementation only if an actual claim is visible. */
+export function resolveSkillToolForRole(
+  candidate: ToolResolution,
+  claims: readonly ToolClaim[],
+  hidden: readonly string[] | undefined,
+): ToolResolution {
+  if (candidate.tool === undefined || candidate.party?.channel !== 'skill') return candidate;
+  const role = hidden === undefined ? undefined : new Set(hidden);
+  return roleVisibleImplementation(candidate.tool, claims, role) ? candidate : {};
+}
+
 /** The declaration currently labeling the provider, not its implementation identity. */
 function providerPartyOf(deps: ToolResolverDeps): ToolParty {
   const id = deps.externalToolProvider?.id;
@@ -85,6 +99,17 @@ function toolForParty(
         : undefined;
     return tool === undefined ? undefined : { tool, party: declared };
   }
+  return registeredToolForParty(deps, name, party);
+}
+
+/** Read the bound registration using only the chart's own maps. A provider label
+ * cannot establish which implementation a dynamic provider will dispatch. */
+export function registeredToolForParty(
+  deps: ToolRegistrations,
+  name: string,
+  party: ToolParty,
+): ToolResolution | undefined {
+  if (party.channel === 'provider') return undefined;
   const tool = deps.registryByName.get(name);
   if (tool === undefined) return undefined;
   const claims = deps.toolClaimants?.get(name);

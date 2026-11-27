@@ -30,7 +30,7 @@ const modules = Object.fromEntries(
     ]),
   ),
 );
-function contracts(ft, cause, paths) {
+function contracts(ft, cause, paths, canonical) {
   function commit(stage, idx, key, value, verb = 'set', readKeys = []) {
     return {
       idx,
@@ -72,6 +72,15 @@ function contracts(ft, cause, paths) {
       },
     ]);
   }
+  const sourceLinkRow = {
+    kind: 'source-link',
+    version: 1,
+    consumer: 'answer#1',
+    linkBasis: 'match',
+    check: 'value-found',
+    input: { key: 'history', element: 0 },
+    output: { key: 'answer', checkedIn: 'written' },
+  };
   const cases = {
     'foottrace:CommitRangeIndex': () => {
       const index = new ft.CommitRangeIndex();
@@ -172,18 +181,23 @@ function contracts(ft, cause, paths) {
       assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'input'), {
         before: 0,
         during: [],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, overlappingReader], 2, 'input'), {
         before: 0,
         during: [1],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, unstampedReader], 2, 'input'), {
         before: 1,
         during: [],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'missing'), {
         before: -1,
         during: [],
+        absenceReason: 'never-written',
+        initialStatePresence: 'unknown',
       });
     },
     'foottrace:flattenCausalDAG': () =>
@@ -195,6 +209,64 @@ function contracts(ft, cause, paths) {
     'foottrace:isCommitBundle': () => {
       assert.equal(ft.isCommitBundle(log[0]), true);
       assert.equal(ft.isCommitBundle({ ...log[0], trace: [{}] }), false);
+    },
+    // The saved-recording reader keeps only execution keys spelled exactly as the
+    // codec builds them: parse, rebuild, compare.
+    'foottrace:buildRuntimeStageId': () => {
+      assert.equal(ft.buildRuntimeStageId('seed', 0), 'seed#0');
+      assert.equal(ft.buildRuntimeStageId('answer', 12, 'outer'), 'outer/answer#12');
+      const parsed = ft.parseRuntimeStageId('sf-llm-call/sf-tools#12');
+      assert.equal(
+        ft.buildRuntimeStageId(parsed.stageId, parsed.executionIndex, parsed.subflowPath),
+        'sf-llm-call/sf-tools#12',
+      );
+    },
+    'foottrace:isExecutionKey': () => {
+      assert.equal(ft.isExecutionKey('sf-llm-call#0'), true);
+      assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools#12'), true);
+      assert.equal(ft.isExecutionKey('sf-llm-call'), false);
+      assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools'), false);
+    },
+    // The LLM ledger's one canonical form: its stored lines and the file store's MAC input.
+    'foottrace/canonical-json:canonicalizeJson': () => {
+      assert.equal(
+        canonical.canonicalizeJson({ b: 1, a: [true, null, 'x', -0, 1e21] }),
+        '{"a":[true,null,"x",0,1e+21],"b":1}',
+      );
+      const refused = (value, options) => {
+        try {
+          canonical.canonicalizeJson(value, options);
+          return 'accepted';
+        } catch (error) {
+          assert.ok(error instanceof canonical.CanonicalJsonError);
+          return error.code;
+        }
+      };
+      let read = false;
+      const accessor = Object.defineProperty({}, 'g', {
+        enumerable: true,
+        get() {
+          read = true;
+          return 1;
+        },
+      });
+      const cycle = {};
+      cycle.self = cycle;
+      assert.equal(refused({ f: () => 1 }), 'unsupported');
+      assert.equal(refused({ x: undefined }), 'unsupported');
+      assert.equal(refused(accessor), 'unsupported');
+      assert.equal(read, false);
+      assert.equal(refused(cycle), 'cycle');
+      assert.equal(refused({ s: 'a\ud800' }), 'unicode');
+      assert.equal(refused({ s: 'abcdef' }, { maxBytes: 5 }), 'output-bytes');
+      assert.equal(refused({ a: { b: 1 } }, { maxDepth: 1 }), 'depth');
+      assert.equal(refused([1], { maxNodes: 100_001 }), 'options');
+    },
+    'foottrace/canonical-json:CanonicalJsonError': () => {
+      const error = new canonical.CanonicalJsonError('depth');
+      assert.ok(error instanceof Error);
+      assert.equal(error.code, 'depth');
+      assert.equal(error.message, 'Canonical JSON refused: depth');
     },
     'foottrace/paths:pathSegments': () => {
       assert.deepEqual(paths.pathSegments('literal.dot\u001fitems'), ['literal.dot', 'items']);
@@ -313,6 +385,43 @@ function contracts(ft, cause, paths) {
       assert.ok(result.gaps.some((gap) => gap.code === 'not-collected'));
       assert.deepEqual(result.nodes, []);
     },
+    'foottrace/cause:bindSourceLinkWrites': () => {
+      const key = 'sourceLinkRows';
+      const answer = log[1];
+      const scope = {
+        initialState: { [key]: [] },
+        commitLog: [
+          log[0],
+          {
+            ...answer,
+            trace: [...answer.trace, { path: key, verb: 'append' }],
+            overwrite: { ...answer.overwrite, [key]: [sourceLinkRow] },
+          },
+        ],
+      };
+      const witness = { runtimeStageId: 'answer#1', commitIdx: 1, key, element: 0 };
+      assert.deepEqual(cause.bindSourceLinkWrites(scope, [{ ...witness, element: 1 }, witness]), {
+        writes: [undefined, { runtimeStageId: 'answer#1', commitIdx: 1 }],
+        complete: true,
+      });
+    },
+    'foottrace/cause:readServedRow': () => {
+      const served = {
+        kind: 'served',
+        version: 1,
+        consumer: 'answer#1',
+        served: [{ key: 'history', elements: [[0, 2]] }],
+      };
+      assert.deepEqual(cause.readServedRow(served), served);
+      assert.equal(
+        cause.readServedRow({ ...served, served: [{ key: 'history', elements: [[2, 1]] }] }),
+        undefined,
+      );
+    },
+    'foottrace/cause:readSourceLinkRow': () => {
+      assert.deepEqual(cause.readSourceLinkRow(sourceLinkRow), sourceLinkRow);
+      assert.equal(cause.readSourceLinkRow({ ...sourceLinkRow, check: 'redeemed' }), undefined);
+    },
     'foottrace/cause:explain': async () => {
       const g = graph();
       const id = g.nodeId(address, { runtimeStageId: 'answer#1', commitIdx: 1, key: 'answer' });
@@ -391,7 +500,12 @@ test('physical singleton control refuses a nested copy with identical version an
 test('every source-imported runtime symbol has a behavior contract, with no extra Foottrace features', () => {
   assert.deepEqual(
     Object.keys(
-      contracts(modules.foottrace, modules['foottrace/cause'], modules['foottrace/paths']),
+      contracts(
+        modules.foottrace,
+        modules['foottrace/cause'],
+        modules['foottrace/paths'],
+        modules['foottrace/canonical-json'],
+      ),
     ).sort(),
     runtime,
     `Source imports:\n${JSON.stringify(imported, null, 2)}`,
@@ -402,6 +516,7 @@ for (const mode of ['import', 'require']) {
     mode === 'import' ? modules.foottrace : require('foottrace'),
     mode === 'import' ? modules['foottrace/cause'] : require('foottrace/cause'),
     mode === 'import' ? modules['foottrace/paths'] : require('foottrace/paths'),
+    mode === 'import' ? modules['foottrace/canonical-json'] : require('foottrace/canonical-json'),
   );
   for (const [key, behavior] of Object.entries(cases))
     test(`${mode} ${key}`, { timeout: 5000 }, async () => {

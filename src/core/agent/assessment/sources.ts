@@ -1,3 +1,4 @@
+import type { DeclaredToolFailureRecord } from '../../../provider-contract/toolResultRecord.js';
 /**
  * assessment/sources — what each reason rests on
  * (`AnswerAssessment.reasons[].source`): specific calls, the answer itself, or
@@ -62,6 +63,7 @@
  * a list — one call the record cannot name. Each is counted in `unnamed`.
  */
 
+import type { AttemptCategory } from 'footprintjs';
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
@@ -74,6 +76,7 @@ import {
   type HistoryCall,
 } from '../recordedCalls.js';
 import { resolveArgumentHistory, waitingArgumentIteration } from './argumentRows.js';
+import { citationConflictIndex } from './pointer.js';
 import { unfinishedCallStatus } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
@@ -88,8 +91,8 @@ export const MAX_ROW_LIST_ENTRIES = 1_000;
 
 /**
  * A list on a row, as the fold reads it — THE one reader, shared by the
- * projection here and the fold's placement (`assess.ts` · `conflictOfThisTurn`,
- * `callsNamedBy`): `readOwnList` at `MAX_ROW_LIST_ENTRIES`. `undefined` when
+ * projection here and the fold's placement (`assessment/conflicts.ts` ·
+ * `conflictOfThisTurn`): `readOwnList` at `MAX_ROW_LIST_ENTRIES`. `undefined` when
  * the value is not a plain array.
  */
 export function rowList(value: unknown): OwnList | undefined {
@@ -112,6 +115,8 @@ interface CallRef {
   readonly unlandedKey?: string;
   readonly count?: number;
   readonly outcome?: NonNullable<ReturnType<typeof assessmentCallOutcome>>;
+  readonly category?: AttemptCategory;
+  readonly declaredFailure?: DeclaredToolFailureRecord;
   readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
 }
 
@@ -132,6 +137,8 @@ export interface SourceRead {
   readonly historyCalls?: readonly HistoryCall[];
   readonly turnBegins?: number;
   readonly declarationAddresses?: ReadonlyMap<number, number> | undefined;
+  readonly failureCategories?: ReadonlyMap<number, AttemptCategory>;
+  readonly declaredFailures?: ReadonlyMap<number, DeclaredToolFailureRecord>;
 }
 
 const arrayEntry = (rows: unknown, index: number): unknown =>
@@ -255,6 +262,9 @@ function callsOfWitness(
         : served === undefined
         ? unfinishedCallStatus(call.message)
         : served.reportedStatus;
+    const category = outcome === 'failed' ? read.failureCategories?.get(call.index) : undefined;
+    const declaredFailure =
+      outcome === 'failed' ? read.declaredFailures?.get(call.index) : undefined;
     const id = str(call.providerId);
     const name =
       str(call.toolName) ??
@@ -267,6 +277,8 @@ function callsOfWitness(
         ...(id !== undefined && { id }),
         ...(name !== undefined && { name }),
         ...(outcome !== undefined && { outcome }),
+        ...(category !== undefined && { category }),
+        ...(declaredFailure !== undefined && { declaredFailure }),
         ...(reportedStatus !== undefined && { reportedStatus }),
       },
     ];
@@ -334,7 +346,21 @@ export function reasonSourceOf(
   const seen = new Set<number | string>();
   const unplaced: AssessmentPointer[] = [];
   let unnamed = 0;
+  const anonymousCitationSlots = new Set<number>();
   for (const w of witness) {
+    const citationIndex = reason === 'sources-conflict' ? citationConflictIndex(w) : undefined;
+    if (citationIndex !== undefined) {
+      // The admitted pair contains offer slots only, never identities that could join to history.
+      const citationRecord = read.state.answerCitations;
+      const conflicts = isRecord(citationRecord)
+        ? Object.getOwnPropertyDescriptor(citationRecord, 'conflicts')?.value
+        : undefined;
+      const pair = readOwnList(arrayEntry(conflicts, citationIndex), 2);
+      for (const slot of pair?.entries ?? []) {
+        if (typeof slot === 'number') anonymousCitationSlots.add(slot);
+      }
+      continue;
+    }
     const refs = callsOfWitness(reason, w, read, callAt);
     const declaration = w.kind === 'state' && w.key === 'coverageDeclared';
     if (declaration && refs.length === 0) {
@@ -411,10 +437,13 @@ export function reasonSourceOf(
         toolCallId,
         toolName,
         ...(ref.outcome !== undefined && { outcome: ref.outcome }),
+        ...(ref.category !== undefined && { category: ref.category }),
+        ...(ref.declaredFailure !== undefined && { declaredFailure: ref.declaredFailure }),
         ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
       });
     }
   }
+  unnamed += anonymousCitationSlots.size;
   return {
     kind: 'calls',
     calls,

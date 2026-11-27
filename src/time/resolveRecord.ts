@@ -28,6 +28,7 @@ import type { DurationText } from './duration.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import type { Grain } from './present.js';
+import { endpointFits, type WindowEndpoint } from './windowEndpoint.js';
 
 // ─── The shapes (time design § 3.2) ──────────────────────────────────────
 
@@ -103,6 +104,7 @@ export interface ResolvedWindow {
   readonly window: TimeWindow;
   /** Always present: a look-back resolved against the clock. Spelled in the offset the person meant. */
   readonly range: TimeRange;
+  readonly endpoint?: WindowEndpoint;
   /** The zone the person meant, else the clock's. */
   readonly zone: ZoneName;
   /** The finest part the person said. */
@@ -191,6 +193,8 @@ export type OpenQuestion =
 export type ReadingChoice =
   /** Every candidate left names the same window. */
   | { readonly by: 'only'; readonly candidate: number }
+  /** A measured look-back was admitted. Only a live scope may reuse the proof. */
+  | { readonly by: 'proven'; readonly candidate: 0 }
   /** The policy removed a reading and one window is left — assumed, recorded. */
   | {
       readonly by: 'policy';
@@ -208,6 +212,15 @@ export type ReadingChoice =
       readonly by: 'none';
       readonly why: 'unreadable' | 'unsupported' | 'no-candidate' | 'excluded-by-policy';
     };
+
+/** A raw saved decision supplies an offer, and only the native run can activate its proof. */
+export function choiceForConfirmation(
+  choice: ReadingChoice | undefined,
+): ReadingChoice | undefined {
+  return choice?.by === 'proven'
+    ? { by: 'open', remaining: [choice.candidate], open: ['confirm'] }
+    : choice;
+}
 
 // ─── The policy ──────────────────────────────────────────────────────────
 
@@ -410,6 +423,7 @@ export function candidateIsWellFormed(value: unknown): boolean {
   return (
     isWindow(value.window) &&
     isTimeRange(value.range) &&
+    (value.endpoint === undefined || endpointFits(value.endpoint, value.range)) &&
     isZoneName(value.zone) &&
     GRAINS.includes(value.grain as string) &&
     isPartList(value.said) &&
@@ -440,6 +454,8 @@ export function choiceIsWellFormed(value: unknown, count: number): boolean {
   switch (value.by) {
     case 'only':
       return isIndex(value.candidate, count);
+    case 'proven':
+      return count === 1 && value.candidate === 0;
     case 'policy':
       return isIndex(value.candidate, count) && isPolicyUsed(value.policy);
     case 'open':

@@ -3,7 +3,9 @@ import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { describeServingBrain } from '../../skillBrains.js';
 import { pendingDurableWrite } from '../../../durabilityBarrier.js';
-import { ensureDiscoveredTools } from '../../../slots/discoverTools.js';
+import { discoverTools } from '../../../slots/discoverTools.js';
+import { awaitUnder } from '../../../../lib/abort.js';
+import { checkerGoverns } from '../../../../provider-contract/types.js';
 import type { AgentState } from '../../types.js';
 import { buildToolCallsHandler } from '../../stages/toolCalls/index.js';
 import { memberIdentityIn, memberRequestIn } from '../../../memberRun.js';
@@ -11,6 +13,7 @@ import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
 import type { buildToolResolver } from '../../stages/toolResolver.js';
+import { canQualifyProvenWindow } from '../provenWindow.js';
 import { evidenceExemptArm } from '../routing/exemptArm.js';
 import type { buildSlots } from '../slots/buildSlots.js';
 
@@ -20,6 +23,8 @@ export interface ToolCallsEnvironment {
   readonly runner: object;
   readonly registryByName: ReturnType<typeof buildToolRegistry>['registryByName'];
   readonly toolDeclaringSkills: ReturnType<typeof buildToolRegistry>['toolDeclaringSkills'];
+  readonly resolveHiddenSkillIds?: (scope: object) => Promise<readonly string[]>;
+  readonly listedScopedTools: ReturnType<typeof buildToolRegistry>['listedScopedTools'];
   readonly toolClaimants: ReturnType<typeof buildToolRegistry>['toolClaimants'];
   readonly scriptRecordArmed: boolean;
   readonly inputsArmed: boolean;
@@ -66,14 +71,28 @@ function evidenceExemptOf(
 export function toolCallsFactory(environment: ToolCallsEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildToolCallsHandler({
+      ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
+        get sourceConsultation() {
+          return run.value.sourceConsultation;
+        },
+      }),
       registryByName: environment.registryByName,
       // WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — read by the unknown-tool
       // roster so a role that may not see a skill is not told the names of the
       // tools that skill brought. Value-conditional: an agent whose skills carry
       // no tools hands the handler exactly the deps object it always did.
+      // The skill context's call gate and body exemption (`skillContext/decide.ts`).
+      ...(environment.configuration.skillContext?.strategy === 'listed' && {
+        listedScopedTools: environment.listedScopedTools,
+      }),
       ...(environment.toolDeclaringSkills.size > 0 && {
         toolDeclaringSkills: environment.toolDeclaringSkills,
       }),
+      // The role view also governs the selection of skills that carry no tools.
+      ...(checkerGoverns(environment.permissionChecker, 'skill_read') &&
+        environment.resolveHiddenSkillIds !== undefined && {
+          resolveHiddenSkillIds: environment.resolveHiddenSkillIds,
+        }),
       // The claim ledger accumulates only for an agent that declared a
       // contract to read it (9.61.0) — value-conditional, so every other
       // agent commits exactly what it always did.
@@ -158,15 +177,25 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       }),
       ...(environment.configuration.externalToolProvider && {
         providerToolCache: run.value.providerToolCache,
-        prepareProviderTools: (scope: TypedScope<AgentState>) =>
-          ensureDiscoveredTools(scope, {
-            provider: environment.configuration.externalToolProvider!,
-            cache: run.value.providerToolCache,
-            callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
-            get iteration() {
-              return scope.iteration ?? 1;
-            },
-          }),
+        prepareProviderTools: (scope: TypedScope<AgentState>) => {
+          const cache = run.value.providerToolCache;
+          if (cache.resolved === true) return undefined;
+          const discover = (hiddenSkillIds: readonly string[] | undefined) =>
+            discoverTools(scope, {
+              provider: environment.configuration.externalToolProvider!,
+              cache,
+              callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
+              roleView: { hiddenSkillIds },
+              get iteration() {
+                return scope.iteration ?? 1;
+              },
+            });
+          if (!checkerGoverns(environment.permissionChecker, 'skill_read')) return discover([]);
+          const resolve = environment.resolveHiddenSkillIds;
+          return resolve === undefined
+            ? discover(undefined)
+            : awaitUnder(scope.$getEnv().signal, () => resolve(scope)).then(discover);
+        },
       }),
       servedTools: run.value.servedTools,
       toolClaimants: environment.toolClaimants,
@@ -184,6 +213,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       ...(environment.artifactStore && { artifactStore: environment.artifactStore }),
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceConfig: environment.configuration.sourceEvidenceConfig,
+      }),
+      ...(environment.configuration.citationOptions !== undefined && {
+        citationOptions: environment.configuration.citationOptions,
       }),
       // The placement threshold (9.22.0) — only ever set beside a store (the
       // option's own shape enforces it). Absent → results are never measured
@@ -301,6 +333,7 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // resume door compares a resume's passed `time` with the kept clock.
       ...(environment.configuration.timeOptions !== undefined && {
         time: {
+          allowProven: canQualifyProvenWindow(environment.configuration),
           takePassedOnResume: () => {
             // Only the agent's own resumed leg takes it — never a member's.
             if (!run.own) return undefined;

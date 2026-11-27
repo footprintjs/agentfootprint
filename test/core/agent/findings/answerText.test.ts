@@ -6,7 +6,7 @@
  *          then three properties over seeded random inputs: nothing removed ⇒
  *          byte-identical; any chunking ⇒ the same bytes as the whole text; a
  *          `JSON.stringify` answer ⇒ `JSON.stringify` of it without the key.
- * Role:    The stream (`stages/callLLM.ts`) and the peel
+ * Role:    The stream (`stages/callLLM/executeCall.ts`) and the peel
  *          (`peel.ts · peelAnswerFindings`) share this scanner, so these
  *          properties are what make the tokens a UI shows and the answer the
  *          run returns the same text.
