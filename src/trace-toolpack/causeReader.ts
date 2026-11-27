@@ -1,9 +1,31 @@
-import { attentionList, explain } from 'foottrace/cause';
+import { type CauseGraph, attentionList, explain } from 'foottrace/cause';
 import type { TraceCauseOperation, TraceCauseQuestion } from './causeTypes.js';
 import type { CauseLimits } from './causeLimits.js';
 import { snapshotCauseArtifacts } from './causeSnapshot.js';
 import { causeGap, causeResponse } from './causeResponse.js';
 import { causeContextAssessment, type CauseContext } from './causeContext.js';
+
+/** The typed cause query used by readers with an admitted graph and an exact node ID. */
+export function readCauseOfNode(
+  graph: CauseGraph,
+  nodeId: string,
+  limits: CauseLimits,
+  timeoutMs: number,
+  signal?: AbortSignal,
+) {
+  const { backward, impact, maxNodes, maxDepth, maxEdges, maxCalls, includeBackward } = limits;
+  return explain(graph, nodeId, {
+    maxNodes,
+    maxDepth,
+    maxEdges,
+    maxCalls,
+    timeoutMs,
+    signal,
+    backward,
+    impact,
+    ...(includeBackward === true && { includeBackward: true }),
+  });
+}
 
 /** One public query, one cache/deadline/total ceiling. No model, rerun, storage URL or second walker. */
 export async function readCause(
@@ -42,7 +64,7 @@ export async function readCause(
   const remaining = Math.floor(deadline - performance.now());
   if (signal?.aborted) return causeGap(operation, 'cancelled', capture, storage, limits.maxChars);
   if (remaining < 1) return causeGap(operation, 'timeout', capture, storage, limits.maxChars);
-  const { maxChars, backward, impact, maxNodes, maxDepth, maxEdges, maxCalls } = limits;
+  const { maxChars, maxNodes, maxDepth, maxEdges, maxCalls } = limits;
   const options = { maxNodes, maxDepth, maxEdges, maxCalls, timeoutMs: remaining, signal };
   if (operation === 'attention_list') {
     const result = await attentionList(source.graph, {
@@ -72,14 +94,13 @@ export async function readCause(
   // Each invocation projects one bounded query. Separate root/impact calls do not share a result yet.
   if (question.nodeId === undefined)
     return causeGap(operation, 'invalid-data', capture, storage, limits.maxChars);
-  const finding = await explain(source.graph, question.nodeId, {
-    ...options,
-    backward,
-    impact,
-    ...(operation === 'root_cause' && limits.includeBackward === true
-      ? { includeBackward: true }
-      : {}),
-  });
+  const finding = await readCauseOfNode(
+    source.graph,
+    question.nodeId,
+    operation === 'root_cause' ? limits : { ...limits, includeBackward: false },
+    remaining,
+    signal,
+  );
   if (operation === 'impact') {
     return causeResponse(
       operation,

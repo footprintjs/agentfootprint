@@ -8,14 +8,18 @@ import { bindStoredCause } from './storedCauseBinding.js';
 import { storedCauseSources } from './storedCauseSources.js';
 import type { StoredCauseResult } from './storedCauseTypes.js';
 
-function savedNodes(history: StoredCaptureHistory): {
+/** Index the exact served stage tree for a cause projection, without reading stage values. */
+export function indexCauseStages(
+  executionTree: unknown,
+  absent: StoredCaptureHistory['absent'] = [],
+): {
   nodes: ReadonlyMap<string, StageSnapshot>;
   readKeys: ReadonlyMap<string, readonly string[]>;
 } {
   const nodes = new Map<string, StageSnapshot>();
   const paths = new Map<string, string>();
   const pending: { node: unknown; path: string[] }[] = [
-    { node: history.executionTree, path: ['executionTree'] },
+    { node: executionTree, path: ['executionTree'] },
   ];
   let visited = 0;
   while (pending.length) {
@@ -41,7 +45,7 @@ function savedNodes(history: StoredCaptureHistory): {
         throw Error('Ambiguous saved tree.');
       nodes.set(id, node as StageSnapshot);
       // JSON arrays of literal segments are injective; dotted/slashed business keys stay whole.
-      paths.set(JSON.stringify(path), id);
+      if (absent.length > 0) paths.set(JSON.stringify(path), id);
     }
     const next = own(node, 'next');
     if (next !== undefined) pending.push({ node: next, path: [...path, 'next'] });
@@ -54,7 +58,7 @@ function savedNodes(history: StoredCaptureHistory): {
   }
   const readKeys = new Map<string, string[]>();
   // FootPrint already validated the paths and their digest. Only project their recorded meaning.
-  for (const path of history.absent ?? []) {
+  for (const path of absent) {
     const id = paths.get(JSON.stringify(path.slice(0, -2)));
     if (id === undefined) throw Error('Missing saved observation owner.');
     if (path[path.length - 2] !== 'stageReads') continue;
@@ -89,7 +93,7 @@ export function projectStoredCause(
       return { status: 'unknown', reason: 'native-capture' };
     const sources = version === 2 ? storedCauseSources(history) : undefined;
     if (typeof sources === 'string') return { status: 'unknown', reason: sources };
-    const { nodes, readKeys } = savedNodes(history);
+    const { nodes, readKeys } = indexCauseStages(history.executionTree, history.absent);
     // These are facts from this one history; no runtime-only fields or alternate history are synthesized.
     const basis = {
       runId: history.runId,

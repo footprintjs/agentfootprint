@@ -118,6 +118,7 @@ export function initializeAgent(
         this.resumeOwned(run, checkpoint, input, options),
       prepareResume: (checkpoint) => this.native.noteResumeTakenUp(checkpoint),
       checkpoint: (run) => this.checkpointFor(run),
+      observe: (listener) => this.runner.on('*', listener),
       replaced: () => replacedTurnMethods(this.runner, this.ownTurnMethods),
     }),
     pause: {

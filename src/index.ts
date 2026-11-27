@@ -428,6 +428,10 @@ export {
 // travels with the class, so a bundler that skips this barrel cannot drop it
 // (`trace-toolpack/selfExplainHost.ts` says why).
 export { Agent, AgentBuilder } from './trace-toolpack/selfExplainHost.js';
+export type {
+  CompletedAgentTurn,
+  CompletedTurnNode,
+} from './core/agent/turnEvidence/completedTurnHandle.js';
 export {
   type AgentArtifactsOptions,
   type AgentRecordingsOptions,

@@ -4,7 +4,7 @@ import {
   historyStartsWith,
   readCallOccurrences,
 } from '../recordedCalls.js';
-import { isRecord, recordedTurn } from './source.js';
+import { isRecord, type RecordedTurn, recordedTurn } from './source.js';
 import type { TurnEvidenceSource } from './types.js';
 
 /** Counts for one call occurrence or one unattributed declaration in the completed leg. */
@@ -71,7 +71,14 @@ export function readTurnCoverage(
   runId: string,
 ): readonly TurnCallCoverage[] | undefined {
   const turn = recordedTurn(source, runId);
-  if (turn?.snapshot === undefined) return undefined;
+  return turn === undefined ? undefined : coverageOfRecordedTurn(turn);
+}
+
+/** Read coverage from an already selected exact turn. */
+export function coverageOfRecordedTurn(
+  turn: RecordedTurn,
+): readonly TurnCallCoverage[] | undefined {
+  if (turn.snapshot === undefined) return undefined;
   const rows = ownRows(turn.snapshot);
   if (rows === undefined) return undefined;
   if (rows.length === 0) return [];

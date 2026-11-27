@@ -9,21 +9,12 @@ import { classifyOutcome } from './agent/runtime/observations/owner.js';
 import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 import { type AroundTurn } from './agent/aroundTurn/index.js';
-/**
- * Agent — ReAct primitive (LLM + tools + iteration loop).
- *
- * Pattern: Builder (GoF) → produces a Runner backed by a footprintjs FlowChart.
- * Role:    Layer-5 primitive (core/). Assembles the 3-slot context
- *          pipeline + callLLM + route decider + tool-calls subflow +
- *          loopTo. Composition nestable anywhere that accepts a Runner.
- * Emits:   Via internal recorders:
- *            agentfootprint.agent.turn_start / turn_end
- *            agentfootprint.agent.iteration_start / iteration_end
- *            agentfootprint.agent.route_decided
- *            agentfootprint.stream.llm_start / llm_end
- *            agentfootprint.stream.tool_start / tool_end
- *            agentfootprint.context.* (via ContextRecorder)
- */
+import { completedTurnQueries } from './agent/turnEvidence/completedTurnQueries.js';
+import type {
+  CompletedAgentTurn,
+  CompletedTurnNode,
+} from './agent/turnEvidence/completedTurnHandle.js';
+// See core/README.md for the Agent runtime and its events.
 import {
   type CombinedNarrativeEntry,
   type FlowchartCheckpoint,
@@ -919,6 +910,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
     return nativeOperations.assessment(() => this.runExecution(), declarations);
   }
+  /** Explain an evidence node from a host-authorized, completed turn. */
+  why(node: CompletedTurnNode, turn?: CompletedAgentTurn) {
+    return completedTurnQueries().why(this, node, turn);
+  }
+  /** Read coverage and witnessed omissions for a host-authorized, completed turn. */
+  whatWasNotRead(turn?: CompletedAgentTurn) {
+    return completedTurnQueries().whatWasNotRead(this, turn);
+  }
+
   /**
    * @internal What a mount of this agent's chart handed back
    * (`core/terminalVerdict.ts` · `ReadsItsOwnOutcome`, read by every

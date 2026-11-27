@@ -24,6 +24,7 @@
  */
 
 import { registerSelfExplain, type SelfExplainExtension } from '../core/agent/selfExplainPort.js';
+import { registerCompletedTurnQueries } from '../core/agent/turnEvidence/completedTurnQueries.js';
 import {
   buildSelfExplainSkill,
   buildSelfExplainToolProvider,
@@ -38,5 +39,10 @@ export const selfExplainExtension: SelfExplainExtension = {
 };
 
 registerSelfExplain(selfExplainExtension);
+registerCompletedTurnQueries({
+  why: async (...args) => (await import('./completedTurnWhy.js')).explainCompletedTurn(...args),
+  whatWasNotRead: async (...args) =>
+    (await import('../answer-account/completedTurnCoverage.js')).readCompletedTurnCoverage(...args),
+});
 
 export { Agent, AgentBuilder } from '../core/Agent.js';

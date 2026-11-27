@@ -5,6 +5,10 @@ import { createLanePool } from './standingAgent/lanes/pool.js';
 import { createRequestHandler } from './standingAgent/requests/handler.js';
 import { createSessionHistory } from './standingAgent/sessions/history.js';
 import { createTurnRunner } from './standingAgent/turn/run.js';
+import {
+  type CompletedTurnEvidenceOptions,
+  completedTurnOffer,
+} from './standingAgent/completedTurn.js';
 import { readConfiguration } from './standingAgent/configuration/read.js';
 import { recordHostRefusal } from './ingressRecord.js';
 import { runnerLive } from '../core/runnerLive.js';
@@ -134,10 +138,13 @@ import { laneKeyOf } from './standingAgent/lanes/keys.js';
  *   });
  */
 export async function standingAgent<TH extends HostHandle>(
-  options: StandingAgentOptions<TH>,
+  options: StandingAgentOptions<TH> & CompletedTurnEvidenceOptions,
 ): Promise<TH & StandingAgentHandle> {
   const configuration = readConfiguration(options);
   const { host, ingressSink } = configuration;
+  const observeCompleted = options.onCompletedTurn;
+  if (observeCompleted !== undefined && typeof observeCompleted !== 'function')
+    throw new TypeError('onCompletedTurn must be a function');
   const lanePool = createLanePool({ ...configuration, isClosing: () => closing !== undefined });
   const { shared, pool } = lanePool;
   const history = createSessionHistory(configuration, (id) => {
@@ -159,7 +166,20 @@ export async function standingAgent<TH extends HostHandle>(
     redeemerFor: lanePool.redeemerFor,
     isClosing: () => closing !== undefined,
   });
-  const answerOne = createTurnRunner({ ...configuration, mayOpenSession: history.mayOpenSession });
+  const offerCompleted =
+    observeCompleted === undefined || configuration.identityOptions === undefined
+      ? undefined
+      : completedTurnOffer({
+          observe: observeCompleted,
+          identity: configuration.identityOptions,
+          access,
+          active: (agent) => closing === undefined && !lanePool.retired.has(agent),
+        });
+  const answerOne = createTurnRunner({
+    ...configuration,
+    mayOpenSession: history.mayOpenSession,
+    offerCompleted,
+  });
   const handler = createRequestHandler({
     ...configuration,
     laneFor: lanePool.laneFor,

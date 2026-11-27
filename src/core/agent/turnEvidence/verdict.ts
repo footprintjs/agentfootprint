@@ -1,4 +1,4 @@
-import { isRecord, recordedTurn } from './source.js';
+import { isRecord, type RecordedTurn, recordedTurn } from './source.js';
 import type { TurnEvidenceSource } from './types.js';
 
 /** A flagged value and the evidence rule that selected it, as served in the record. */
@@ -46,7 +46,11 @@ export function readTurnEvidenceVerdict(
   runId: string,
 ): TurnEvidenceVerdict {
   const turn = recordedTurn(source, runId);
-  if (turn === undefined) return { status: 'not-checked' };
+  return turn === undefined ? { status: 'not-checked' } : verdictOfRecordedTurn(turn);
+}
+
+/** Read the final evidence verdict from an already selected exact turn. */
+export function verdictOfRecordedTurn(turn: RecordedTurn): TurnEvidenceVerdict {
   const terminal: unknown = turn.terminal.payload;
   const iteration = isRecord(terminal) ? terminal.iterationCount : undefined;
   if (!isIteration(iteration)) return { status: 'not-checked' };
