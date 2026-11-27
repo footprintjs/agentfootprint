@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "runId": "1795749924624-0000000001",
+  "history": [
+    {
+      "role": "user",
+      "content": "Read the selected window."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+        {
+          "id": "read",
+          "name": "read_window",
+          "args": {
+            "from": "2026-11-13T11:00:00Z",
+            "to": "2026-11-13T13:00:00Z"
+          },
+          "callOccurrenceKey": [
+            689248987,
+            3320514489,
+            3623634649,
+            3768701442,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"af_absent\":true,\"outcome\":\"nothing_found\",\"looked_for\":\"matching rows\",\"checked\":[{\"what\":\"synthetic fixture\"}],\"period\":{\"queried\":{\"from\":\"2026-11-13T11:00:00Z\",\"to\":\"2026-11-13T13:00:00Z\"},\"held\":{\"from\":\"2026-11-13T11:00:00Z\",\"to\":\"2026-11-13T13:00:00Z\"},\"read_at\":\"2026-11-13T14:00:00Z\"},\"retry_returns_the_same\":true,\"note\":\"The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.\"}",
+      "toolCallId": "read",
+      "toolName": "read_window",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ],
+      "toolResultExecution": "returned"
+    },
+    {
+      "role": "assistant",
+      "content": "Done.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool said nothing matched; a tool read a different stretch of time than the one asked about.\n\nCoverage of this answer — declared by the tools that produced it, not by the model:\n\nChecked:\n- synthetic fixture\n\nPeriod:\n- read_window queried 2026-11-13 03:00–05:00 America/Los_Angeles (UTC-08:00); the store holds 2026-11-13 03:00–05:00 America/Los_Angeles (UTC-08:00); read at 2026-11-13 06:00 America/Los_Angeles (UTC-08:00)\n- read_window read more than was asked — asked: 2026-11-13 03:00:00–04:59:59 America/Los_Angeles (UTC-08:00); read: 2026-11-13 03:00:00–05:00:00 America/Los_Angeles (UTC-08:00) (the tool reported different bounds)"
+    }
+  ],
+  "lastCompletedIteration": 2,
+  "originalInput": {
+    "message": "Read the selected window."
+  },
+  "checkpointedAt": 1795749924764,
+  "findingsLedger": [
+    {
+      "kind": "clock",
+      "turn": 1,
+      "iteration": 1,
+      "now": "2026-11-13T14:00:00Z",
+      "nowSource": "app",
+      "zone": "America/Los_Angeles",
+      "zoneSource": "builder",
+      "window": {
+        "from": "2026-11-13T11:00:00Z",
+        "to": "2026-11-13T13:00:00Z",
+        "endpoint": {
+          "cutoff": "2026-11-13T13:00:00Z",
+          "end": "exclusive",
+          "precision": "minute"
+        },
+        "source": "control"
+      }
+    },
+    {
+      "kind": "argument",
+      "turn": 1,
+      "toolCallId": "read",
+      "toolName": "read_window",
+      "iteration": 1,
+      "argument": "from",
+      "rule": "ask",
+      "period": true,
+      "source": "model",
+      "value": "2026-11-13T11:00:00Z",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ]
+    },
+    {
+      "kind": "argument",
+      "turn": 1,
+      "toolCallId": "read",
+      "toolName": "read_window",
+      "iteration": 1,
+      "argument": "to",
+      "rule": "ask",
+      "period": true,
+      "source": "model",
+      "value": "2026-11-13T13:00:00Z",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ]
+    },
+    {
+      "kind": "call-window",
+      "turn": 1,
+      "iteration": 1,
+      "toolCallId": "read",
+      "toolName": "read_window",
+      "how": "bound",
+      "form": 0,
+      "asked": {
+        "from": "2026-11-13T11:00:00Z",
+        "to": "2026-11-13T13:00:00Z"
+      },
+      "person": {
+        "from": "2026-11-13T11:00:00Z",
+        "to": "2026-11-13T13:00:00Z",
+        "source": "control",
+        "endpoint": {
+          "cutoff": "2026-11-13T13:00:00Z",
+          "end": "exclusive",
+          "precision": "minute"
+        }
+      },
+      "by": "value",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ]
+    },
+    {
+      "kind": "call",
+      "turn": 1,
+      "iteration": 1,
+      "toolCallId": "read",
+      "toolName": "read_window",
+      "dispatchedAt": "2026-11-27T03:25:24.700Z",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ]
+    },
+    {
+      "kind": "period",
+      "turn": 1,
+      "toolCallId": "read",
+      "callOccurrenceKey": [
+        689248987,
+        3320514489,
+        3623634649,
+        3768701442,
+        0
+      ],
+      "toolName": "read_window",
+      "iteration": 1,
+      "verdict": "covered",
+      "argument": "from",
+      "differs": {
+        "against": "asked",
+        "asked": {
+          "from": "2026-11-13T11:00:00Z",
+          "to": "2026-11-13T13:00:00Z"
+        },
+        "endpoint": {
+          "cutoff": "2026-11-13T13:00:00Z",
+          "end": "exclusive",
+          "precision": "minute"
+        },
+        "read": [
+          {
+            "from": "2026-11-13T11:00:00Z",
+            "to": "2026-11-13T13:00:00.001Z"
+          }
+        ],
+        "source": "declared",
+        "stepMs": 1,
+        "missing": [],
+        "extra": [
+          {
+            "from": "2026-11-13T13:00:00Z",
+            "to": "2026-11-13T13:00:00.001Z"
+          }
+        ]
+      }
+    }
+  ],
+  "turnNumber": 1
+}

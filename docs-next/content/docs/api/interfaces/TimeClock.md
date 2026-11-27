@@ -4,7 +4,7 @@ title: TimeClock
 
 # Interface: TimeClock
 
-Defined in: [src/time/clock.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L58)
+Defined in: [src/time/clock.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L59)
 
 The run's clock, stamped once per turn (time design § 4).
 
@@ -18,7 +18,7 @@ The run's clock, stamped once per turn (time design § 4).
 
 > `readonly` **now**: `string`
 
-Defined in: [src/time/clock.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L60)
+Defined in: [src/time/clock.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L61)
 
 The anchor for this turn — the app's `now`, else the turn's start.
 
@@ -28,7 +28,7 @@ The anchor for this turn — the app's `now`, else the turn's start.
 
 > `readonly` **nowSource**: `"default"` \| `"app"`
 
-Defined in: [src/time/clock.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L62)
+Defined in: [src/time/clock.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L63)
 
 The app passed `now`, or the library took the turn's start.
 
@@ -38,7 +38,7 @@ The app passed `now`, or the library took the turn's start.
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/clock.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L68)
+Defined in: [src/time/clock.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L69)
 
 The person's zone for this run — an IANA name. Under `zoneSource:
 'unknown'` it is `'UTC'`: the zone instants are SPELLED in, never the
@@ -50,7 +50,7 @@ person's.
 
 > `readonly` **zoneSource**: `"unknown"` \| `"run"` \| `"answered"` \| `"builder"`
 
-Defined in: [src/time/clock.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L74)
+Defined in: [src/time/clock.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L75)
 
 The run's `time.zone`, else the `.time({ zone })` fallback; with neither,
 the zone the person answered in an earlier turn of this conversation

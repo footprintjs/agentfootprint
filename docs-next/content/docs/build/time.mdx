@@ -47,6 +47,32 @@ agent.findings();
 //  { kind: 'call', dispatchedAt, … }]
 ```
 
+## A separate viewer zone
+
+Pass `timeDisplay: { viewerZone: 'America/New_York' }` on a new question to
+show the same window in a viewer's reported IANA zone. The time layer must be
+armed with `.time()`. The interpretation zone still comes from `time.zone`
+or the builder: a known viewer zone never answers a missing interpretation zone.
+
+<CodeFile path="examples/features/viewer-display-zone.ts" region="viewer-display-zone" />
+
+Confirmation labels and model-facing time lines include an explicit **viewer
+display** label; the final coverage block does too when
+`.limitsTravelWithTheAnswer()` is armed. Tool arguments, selected instants and
+confirmation values keep their existing meaning. Legacy calendar-grain records
+show their exact stored interval in the viewer zone with the end excluded.
+
+A native pause keeps the original display declaration. Error-checkpoint replay
+reads that same turn's declaration without changing the error door's clock
+policy. A new question does not inherit a prior viewer zone; pass it again on
+`run({ continueFrom, ... })` if wanted. The library never reads a browser's zone.
+
+Malformed new declarations are refused before effects. Unavailable saved display
+metadata is labelled unavailable, rather than guessed. Omitting `timeDisplay`
+keeps the existing single-zone behavior. The added text can influence a model;
+display-only means it does not change time interpretation, not that a model
+must answer identically.
+
 ## Reading the person's words
 
 The library reads a person's message only through a `TimeReader` you arm with

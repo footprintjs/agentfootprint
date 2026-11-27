@@ -4,7 +4,7 @@ title: TimeReplyRow
 
 # Interface: TimeReplyRow
 
-Defined in: [src/time/rows/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L156)
+Defined in: [src/time/rows/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L159)
 
 One request-bound correction decision, without the raw reply.
 
@@ -30,7 +30,7 @@ Defined in: [src/time/replyRecord.ts:18](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L159)
+Defined in: [src/time/rows/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L162)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/time/rows/types.ts:159](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"time-reply"`
 
-Defined in: [src/time/rows/types.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L157)
+Defined in: [src/time/rows/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L160)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/time/rows/types.ts:157](https://github.com/footprintjs/agentfoo
 
 > `readonly` **mention**: `number`
 
-Defined in: [src/time/rows/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L160)
+Defined in: [src/time/rows/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L163)
 
 ***
 
@@ -66,4 +66,4 @@ Defined in: [src/time/replyRecord.ts:19](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L158)
+Defined in: [src/time/rows/types.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L161)

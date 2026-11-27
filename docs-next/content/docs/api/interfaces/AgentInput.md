@@ -138,3 +138,17 @@ second spelling of `run(input, { time })`; this one wins.
 ```ts
 await agent.run({ message, time: { now: message.sentAt, zone: session.zone } });
 ```
+
+***
+
+### timeDisplay?
+
+> `readonly` `optional` **timeDisplay?**: `object`
+
+Defined in: [src/core/agent/types/input.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/input.ts#L112)
+
+This new question's reported IANA viewer zone, used only to display the recorded window. Requires .time(); a pause keeps it.
+
+#### viewerZone
+
+> `readonly` **viewerZone**: `string`

@@ -167,6 +167,8 @@ export type AskContextObject = Readonly<Record<string, unknown>>;
 
 /** Under `.time()`: the turn's clock and the app's zone — what a period answer is judged against. */
 export interface AskTime {
+  /** Original clock-row display metadata, never an interpretation zone. */
+  readonly display?: unknown;
   readonly now: InstantText;
   readonly appZone?: ZoneName;
   /** The turn's clock zone — a window answered with no zone of its own is written in it. */

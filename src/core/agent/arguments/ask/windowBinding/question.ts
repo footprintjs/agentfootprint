@@ -1,5 +1,6 @@
 /** Lens: project and narrow the next existing time question. */
 import { timeAskOf } from '../../../../../time/readingAsk.js';
+import { displayPresentationOf } from '../../../../../time/display.js';
 import { spellRange } from '../../../../../time/range.js';
 import type { TimeReadingRow } from '../../../../../time/rows.js';
 import type { ToolOf } from '../../resolve.js';
@@ -16,7 +17,10 @@ export function windowQuestion(
   time: AskTime,
 ): WindowBinding {
   const window = field.window!;
-  const ask = time.reading === undefined ? undefined : timeAskOf(row, time.reading.messages);
+  const ask =
+    time.reading === undefined
+      ? undefined
+      : timeAskOf(row, time.reading.messages, 'time', displayPresentationOf(time));
   if (ask === undefined || (ask.field.format !== 'time-range' && ask.field.format !== 'zone'))
     return { expected: WINDOW_ZONE_EXPECTATION };
   const choices = ask.field.enum;

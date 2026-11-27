@@ -23,6 +23,7 @@
 import { clockChange, type ReadRunTime, type TimeClock } from './clock.js';
 import type { CheckedMention } from './reader.js';
 import type { RecordedWindow } from './windowEndpoint.js';
+import type { TimeDisplay } from './display.js';
 import type { CallWindow, TurnWindow } from './bind.js';
 import { chooseReading, resolveMention, type TimePolicy } from './resolve.js';
 import type {
@@ -43,6 +44,7 @@ export function clockRow(
   clock: TimeClock,
   at: { readonly turn: number; readonly iteration: number },
   window?: RecordedWindow,
+  display?: TimeDisplay,
   provenInputPosition?: number,
 ): ClockRow {
   return {
@@ -53,6 +55,7 @@ export function clockRow(
     nowSource: clock.nowSource,
     zone: clock.zone,
     zoneSource: clock.zoneSource,
+    ...(display !== undefined && { display: { ...display } }),
     ...(provenInputPosition !== undefined && { provenInputPosition }),
     ...(window !== undefined && {
       window: { ...window, source: 'control' as const },

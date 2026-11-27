@@ -48,6 +48,7 @@ import {
   type RecordedWindow,
 } from './windowEndpoint.js';
 import { isZoneName, type ZoneName } from './zone.js';
+import type { TimeDisplay } from './display.js';
 import { readerIssue, type TimeReader } from './reader.js';
 import { readPolicy, type TimePolicy } from './resolveRecord.js';
 import { readTimeAskMessages, type TimeAskMessages } from './ask.js';
@@ -166,6 +167,8 @@ export interface ReadTimeOptions {
 
 /** What a turn's clock is before seed knows the turn's start. */
 export interface ClockDraft {
+  /** Optional presentation metadata; never part of the interpretation clock. */
+  readonly display?: TimeDisplay;
   readonly now?: InstantText;
   readonly zone: ZoneName;
   /** `'unknown'`: neither the run nor the builder named a zone — `zone` is the UTC spelling. */

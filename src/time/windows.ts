@@ -42,6 +42,7 @@ import {
   type TimeReadingRow,
 } from './rows.js';
 import type { ZoneName } from './zone.js';
+import { displayOfTurn } from './display.js';
 
 // ─── The turn's windows ──────────────────────────────────────────────────
 
@@ -249,6 +250,8 @@ function controlWindowOf(clock: ClockRow | undefined): TurnWindow | undefined {
 
 /** The windows of the person's words this turn, with the turn's clock — what the served sentence names. */
 export interface ReaderWindows {
+  /** Existing clock-row metadata, possibly unavailable in a shared record. */
+  readonly display?: unknown;
   readonly now: InstantText;
   /** Each settled mention's window (`answered`, or a `model` reader's), in mention order — never the `control` window. */
   readonly windows: readonly TurnWindow[];
@@ -459,6 +462,7 @@ export function readerWindowsOf(
   );
   return {
     now: clock.now,
+    ...displayOfTurn(ledger, clock.turn),
     windows,
     ...(control !== undefined && { control }),
     ...(pending.length > 0 && { pending }),

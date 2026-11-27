@@ -37,8 +37,7 @@ import {
 import type { TimeLimitLines } from '../../../semantics/coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
 import type { FindingsLedger } from '../findings/types.js';
-import { presentationZoneOf } from '../../../time/rows.js';
-import type { BoundPresentation } from '../../../time/present.js';
+import { presentationOf } from './prepareFinal/presentation.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
 import { modelTurnMessages } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
@@ -324,23 +323,6 @@ const prepareFinalWithLimits = (
 };
 export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void =>
   prepareFinalWithLimits(scope);
-
-/**
- * The run's presentation zone (the time layer) — the zone of the turn's
- * `clock` row (`time/rows.ts` · `presentationZoneOf`). Read ONLY by the
- * variants mounted under `.time()`, so an agent without the layer never reads
- * the ledger here. `undefined` when no clock was filed (a paused turn from a
- * runtime without the layer): the lines are then the declared instants.
- */
-async function presentationOf(
-  scope: TypedScope<AgentState>,
-): Promise<BoundPresentation | undefined> {
-  const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
-  if (zone === undefined) return undefined;
-  // The renderer loads only here, under `.time()` — the optional-family law.
-  const { bindPresentation } = await import('../../../time/present.js');
-  return bindPresentation({ zone });
-}
 
 /**
  * The time layer's limits lines for THIS turn (step T8), composed from the

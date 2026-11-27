@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.3.0] - 2026-11-27
+
+### Added
+
+- **Show a question's time window in a viewer's zone as well as its interpretation zone.**
+  An agent with `.time()` accepts `timeDisplay: { viewerZone }` on a new question.
+  Confirmation labels, model-facing time lines and the final coverage block name
+  the viewer display without changing instants, confirmation values or tool
+  arguments. The display declaration is recorded with its purpose and restored
+  from the same turn's record. Missing interpretation zones still require an
+  answer; malformed display input is refused before effects. Omitted display
+  input preserves the existing behavior. Reading a saved turn’s time limits uses
+  that turn’s display declaration, including no viewer opt-in, rather than a later
+  turn’s viewer.
+
+## [20.2.1] - 2026-11-27
+
+### Fixed
+
+- **Keep listed skill instructions in one place during tool turns.** Skill reads carry their recorded origin through result annotations and history windows. A cursor hop retains previously served system instructions while the role permits them, and a self-read acknowledges the instructions already served. A signed-turn refusal names a tool-result middleware change when it made the body fall back to the system prompt. Resuming a saved listed-mode turn retains a skill body already delivered as an exact tool result. The evidence check treats exact saved skill text as app instructions. If a skill body changed after an AgentFootprint 20.1.0 checkpoint, models that bind thinking to context can still refuse the changed prefix before sending a request.
+
 ## [20.2.0] - 2026-11-27
 
 ### Added

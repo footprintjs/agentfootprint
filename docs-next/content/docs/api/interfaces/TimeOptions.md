@@ -4,7 +4,7 @@ title: TimeOptions
 
 # Interface: TimeOptions
 
-Defined in: [src/time/clock.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L112)
+Defined in: [src/time/clock.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L113)
 
 The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11).
 
@@ -14,7 +14,7 @@ The builder's `.time(options)` — the fallback zone, the reader and its policy 
 
 > `readonly` `optional` **messages?**: `Partial`\<`Readonly`\<`Record`\<`"answer.not-an-instant"` \| `"answer.no-offset"` \| `"answer.not-a-range"` \| `"answer.out-of-order"` \| `"answer.dst-gap"` \| `"answer.not-a-zone"` \| `"answer.time-future"` \| `"answer.time-past"` \| `"answer.beyond-retention"` \| `"answer.over-max-range"` \| `"ask.which"` \| `"ask.confirm"` \| `"ask.zone"` \| `"ask.zone-unknown"` \| `"choice.confirm"`, `string`\> & `Partial`\<`Record`\<`"choice.unconverted"` \| `"reply.correction"`, `string`\>\>\>\>
 
-Defined in: [src/time/clock.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L141)
+Defined in: [src/time/clock.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L142)
 
 Your words for the time ask (`defaultTimeAskMessages` keys → sentence):
 the reason a refused time answer is re-asked with, the ask's questions,
@@ -26,7 +26,7 @@ the label on a reading to confirm. A key you leave out keeps the default.
 
 > `readonly` `optional` **policy?**: `object`
 
-Defined in: [src/time/clock.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L132)
+Defined in: [src/time/clock.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L133)
 
 How the library picks among a reading's candidates (needs `reader`).
 `dateOrder` (default `'ask'`): a numeric date's orders become choices,
@@ -48,7 +48,7 @@ asked, or `'current'` — the clock's year, recorded as assumed.
 
 > `readonly` `optional` **reader?**: [`TimeReader`](/docs/api/interfaces/TimeReader)
 
-Defined in: [src/time/clock.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L124)
+Defined in: [src/time/clock.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L125)
 
 The strategy that reads the person's words into time parts (`TimeReader`).
 No default: without one, the person's words are not read — no
@@ -60,7 +60,7 @@ No default: without one, the person's words are not read — no
 
 > `readonly` `optional` **skipProvenConfirmation?**: `boolean`
 
-Defined in: [src/time/clock.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L147)
+Defined in: [src/time/clock.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L148)
 
 Let a benchmark-qualified, standalone look-back use the library's reading
 without a separate confirmation. The default is false. Unproved readings
@@ -72,7 +72,7 @@ still follow the usual time question.
 
 > `readonly` `optional` **zone?**: `string`
 
-Defined in: [src/time/clock.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L118)
+Defined in: [src/time/clock.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L119)
 
 The fallback zone for a run that names none. Omitted with no run zone
 either: the zone is unknown — never the server's — and the person is

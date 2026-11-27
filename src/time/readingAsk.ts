@@ -30,7 +30,7 @@ import {
   type TimeFormat,
 } from './ask.js';
 import { spellRange } from './range.js';
-import { presentRange, presentSpan } from './present.js';
+import { presentRange, presentSpan, type Presentation } from './present.js';
 import type { TimeReadingRow } from './rows.js';
 import type { TimeCandidate } from './resolve.js';
 import { shownGrain } from './resolveRecord.js';
@@ -76,6 +76,7 @@ export function timeAskOf(
   row: TimeReadingRow,
   messages: TimeAskMessages,
   id = 'time',
+  display?: Pick<Presentation, 'viewerZone' | 'viewerDisplayUnavailable'>,
 ): TimeAsk | undefined {
   const choice = choiceForConfirmation(row.choice);
   if (row.quote === undefined || row.refused !== undefined) return undefined;
@@ -116,7 +117,7 @@ export function timeAskOf(
   const labels = offered.map(({ candidate }) => {
     // The end as said when it was widened, a look-back's at now: "8 AM to 9 AM" is shown
     // 8:00 – 9:00, not 8:59; "last 40 minutes" 8:00 – 8:40, not 8:40:00.001.
-    const presentation = { zone: candidate.zone, locale: row.reader.locale };
+    const presentation = { zone: candidate.zone, locale: row.reader.locale, ...display };
     const window =
       candidate.endpoint === undefined
         ? presentRange(candidate.range, presentation, shownGrain(candidate))
