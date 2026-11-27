@@ -3,9 +3,9 @@ title: Read one completed Agent turn
 description: Inspect the recorded causes and coverage of a specific authorized Agent turn.
 ---
 
-A verified standing host can inspect the evidence of an earlier completed turn even after the same Agent answers another conversation. Set the host's `onCompletedTurn` callback to retain the exact turn you want to inspect. Call `forRequest` with the current request credentials to get an opaque handle. The callback and handle belong in trusted host code.
+A verified standing host can inspect the evidence of an earlier completed turn even after the same Agent answers another conversation. Set `onCompletedTurn` in the host's `CompletedTurnEvidenceOptions` to receive a `HostedCompletedAgentTurn`. Its `forRequest` method checks the current request credentials and returns an opaque `CompletedAgentTurn` handle. Keep the callback and handle in trusted host code.
 
-Use `agent.whatWasNotRead(turn)` for recorded coverage and omissions. For an existing cause-graph node ID, call `agent.why(completed.node(nodeId), turn)` to read the backward evidence. The readers return evidence pointers and gaps, without model calls or raw tool results.
+Use `agent.whatWasNotRead(turn)` for recorded coverage and omissions. For an existing cause-graph node ID, create a `CompletedTurnNode` with `completed.node(nodeId)` and call `agent.why(completed.node(nodeId), turn)` to read the backward evidence. The readers return evidence pointers and gaps, without model calls or raw tool results.
 
 <CodeFile path="examples/artifacts/completed-turn-evidence.ts" region="completed-turn" />
 
