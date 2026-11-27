@@ -427,7 +427,7 @@ export {
 // plugs `.selfExplain()` into the builder's port at load — the registration
 // travels with the class, so a bundler that skips this barrel cannot drop it
 // (`trace-toolpack/selfExplainHost.ts` says why).
-export { Agent, AgentBuilder } from './trace-toolpack/selfExplainHost.js';
+export * from './trace-toolpack/selfExplainHost.js';
 export {
   type AgentArtifactsOptions,
   type AgentRecordingsOptions,

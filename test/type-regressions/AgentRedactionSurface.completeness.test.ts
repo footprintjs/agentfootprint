@@ -40,6 +40,8 @@ export const AGENT_PUBLIC_SURFACE: { readonly [K in keyof Agent]-?: SurfaceKind 
   emitAttributed: 'record',
   getArtifactStore: 'record',
   bindSelfExplain: 'record',
+  why: 'record',
+  whatWasNotRead: 'record',
   // ── Structure: no conversation content ─────────────────────────────────
   id: 'structure',
   name: 'structure',

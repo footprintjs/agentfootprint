@@ -24,6 +24,7 @@
  */
 
 import { registerSelfExplain, type SelfExplainExtension } from '../core/agent/selfExplainPort.js';
+import { registerCompletedTurnQueries } from '../core/agent/turnEvidence/completedTurnQueries.js';
 import {
   buildSelfExplainSkill,
   buildSelfExplainToolProvider,
@@ -31,12 +32,21 @@ import {
 } from './selfExplain.js';
 
 /** The toolpack's half of the port, exactly what the builder called before the port existed. */
-export const selfExplainExtension: SelfExplainExtension = {
+const selfExplainExtension: SelfExplainExtension = {
   binding: (options) => new SelfExplainBinding(options.include, options.maxEvents),
   skill: buildSelfExplainSkill,
   toolProvider: buildSelfExplainToolProvider,
 };
 
 registerSelfExplain(selfExplainExtension);
+registerCompletedTurnQueries({
+  why: async (...args) => (await import('./completedTurnWhy.js')).explainCompletedTurn(...args),
+  whatWasNotRead: async (...args) =>
+    (await import('./completedTurnCoverage.js')).readCompletedTurnCoverage(...args),
+});
 
 export { Agent, AgentBuilder } from '../core/Agent.js';
+export type {
+  CompletedAgentTurn,
+  CompletedTurnNode,
+} from '../core/agent/turnEvidence/completedTurnHandle.js';

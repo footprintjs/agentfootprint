@@ -21,6 +21,7 @@
  * Reproduce a failure with the seed printed in the test name.
  */
 import type { RedactionPolicy } from 'footprintjs';
+import { createRecordGraph } from 'foottrace/cause';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, inMemoryArtifacts } from '../../src/index.js';
@@ -28,6 +29,12 @@ import type { LLMProvider, LLMRequest } from '../../src/provider-contract/types.
 import { ALL_EVENT_TYPES, type AgentfootprintEvent } from '../../src/events/registry.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
+import {
+  memorySessions,
+  standingAgent,
+  type HostedCompletedAgentTurn,
+} from '../../src/hosting/index.js';
+import { inProcessHost } from '../hosting/testHost.js';
 import { AGENT_PUBLIC_SURFACE } from '../type-regressions/AgentRedactionSurface.completeness.test.js';
 import { adversarialStrings, locationsOf, withoutAnswerBoundary } from './fixture.js';
 import type { ToolProvider } from '../../src/tools/toolProvider.js';
@@ -47,6 +54,7 @@ function rng(seed: number): () => number {
 
 const FIELDS = ['pin', 'token', 'accountNo', 'dob', 'passport', 'iban', 'badge', 'vin'] as const;
 const SCOPE = { conversationId: 'surface-case' };
+const HOST_SCOPE = { ...SCOPE, principal: 'fixture-reader' };
 
 interface Case {
   readonly seed: number;
@@ -98,6 +106,8 @@ function agentFor(c: Case) {
     provider,
     model: 'm',
     redact: c.policy,
+    readTracking: 'full',
+    writeProvenance: 'reads-prefix',
     artifacts: { store, recordings: true },
   })
     .tool(
@@ -116,12 +126,65 @@ function agentFor(c: Case) {
   return { agent, requests, store };
 }
 
+async function hostedSurfaces(agent: Agent, message: string) {
+  const host = inProcessHost();
+  const request = { sessionId: SCOPE.conversationId, headers: { authorization: 'Bearer fixture' } };
+  let completed: HostedCompletedAgentTurn | undefined;
+  const door = await standingAgent({
+    agent,
+    host,
+    sessions: memorySessions(),
+    shutdown: 'none',
+    identity: { verify: async () => ({ userId: HOST_SCOPE.principal }) },
+    onCompletedTurn: (turn) => {
+      completed = turn;
+    },
+  });
+  try {
+    const surfaced = await everySurface(agent, message, SCOPE, async () => {
+      const reply = await host.deliver({ input: message, ...request });
+      if (reply.output === undefined) throw new Error('Expected a completed hosted turn');
+      return reply.output;
+    });
+    if (completed === undefined) throw new Error('Expected a host-held turn');
+    const live = await completed.forRequest(() => request);
+    const saved = await completed.forRequest(() => request, 'saved');
+    if (live === undefined || saved === undefined) throw new Error('Expected both turn handles');
+    const snapshot = agent.getLastSnapshot();
+    const write = snapshot?.commitLog.findLast((commit) =>
+      commit.trace.some((row) => row.path === 'history'),
+    );
+    if (snapshot?.logAddress === undefined || write === undefined)
+      throw new Error('Expected a committed history node from this turn');
+    const nodeId = createRecordGraph([]).nodeId(snapshot.logAddress, {
+      runtimeStageId: write.runtimeStageId,
+      commitIdx: write.idx,
+      key: 'history',
+    });
+    const node = completed.node(nodeId);
+    const why = await Promise.all([agent.why(node, live), agent.why(node, saved)]);
+    const whatWasNotRead = await Promise.all([
+      agent.whatWasNotRead(live),
+      agent.whatWasNotRead(saved),
+    ]);
+    for (const result of [...why, ...whatWasNotRead]) {
+      expect(result).toMatchObject({ runId: completed.runId });
+    }
+    return { surfaced, why, whatWasNotRead };
+  } finally {
+    await door.close();
+  }
+}
+
 describe('property — the Agent public surface keeps a selected value out of every record', () => {
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]) {
     const c = caseFor(seed);
     it(`seed ${seed} (${c.form} ${c.field})`, async () => {
       const { agent, requests, store } = agentFor(c);
-      const surfaced = await everySurface(agent, `Check my ${c.field}: ${c.secret}`, SCOPE);
+      const { surfaced, why, whatWasNotRead } = await hostedSurfaces(
+        agent,
+        `Check my ${c.field}: ${c.secret}`,
+      );
       const artifacts = await servedArtifacts(surfaced);
 
       // A consumer's own emits are served too — by the selected name.
@@ -150,6 +213,8 @@ describe('property — the Agent public surface keeps a selected value out of ev
         // The agent's own minted recording, read back from its artifact store.
         getArtifactStore: await mintedRecordings(store),
         bindSelfExplain: artifacts.traceToolpack,
+        why,
+        whatWasNotRead,
         id: agent.id,
         name: agent.name,
         appName: agent.appName,
@@ -388,10 +453,10 @@ describe('property — every event type in the registry, under the value-kind ru
 
 /** Every artifact the run filed under its scope (its minted recording), read back. */
 async function mintedRecordings(store: ReturnType<typeof inMemoryArtifacts>): Promise<unknown[]> {
-  const page = await store.list(SCOPE);
+  const page = await store.list(HOST_SCOPE);
   const out: unknown[] = [];
   for (const meta of page.artifacts) {
-    const record = await store.get(SCOPE, meta.ref);
+    const record = await store.get(HOST_SCOPE, meta.ref);
     out.push(record?.data);
   }
   expect(out.length).toBeGreaterThan(0);

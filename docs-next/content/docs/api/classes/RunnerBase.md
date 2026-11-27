@@ -14,13 +14,13 @@ composition.
 ## Extended by
 
 - [`LLMCall`](/docs/api/classes/LLMCall)
-- [`Agent`](/docs/api/classes/Agent)
 - [`Sequence`](/docs/api/classes/Sequence)
 - [`Parallel`](/docs/api/classes/Parallel)
 - [`Conditional`](/docs/api/classes/Conditional)
 - [`Loop`](/docs/api/classes/Loop)
 - [`Workflow`](/docs/api/classes/Workflow)
 - [`Graph`](/docs/api/classes/Graph)
+- [`Agent`](/docs/api/classes/Agent)
 
 ## Type Parameters
 

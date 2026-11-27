@@ -1,0 +1,18 @@
+---
+title: Read one completed Agent turn
+description: Inspect the recorded causes and coverage of a specific authorized Agent turn.
+---
+
+A verified standing host can inspect the evidence of an earlier completed turn even after the same Agent answers another conversation. Set `onCompletedTurn` in the host's `CompletedTurnEvidenceOptions` to receive a `HostedCompletedAgentTurn`. Its `forRequest` method checks the current request credentials and returns an opaque `CompletedAgentTurn` handle. Keep the callback and handle in trusted host code.
+
+Use `agent.whatWasNotRead(turn)` for recorded coverage and omissions. For an existing cause-graph node ID, create a `CompletedTurnNode` with `completed.node(nodeId)` and call `agent.why(completed.node(nodeId), turn)` to read the backward evidence. The readers return evidence pointers and gaps, without model calls or raw tool results.
+
+<CodeFile path="examples/artifacts/completed-turn-evidence.ts" region="completed-turn" />
+
+`forRequest` uses the live capture by default. Pass `'saved'` to redeem the exact recording filed for the turn. The host checks the caller again when the handle is used. A paused turn, a lost recording, or access that the host no longer grants cannot supply evidence.
+
+An empty declared-coverage list says the admitted turn recorded no coverage declarations. A gap says the reader could not establish coverage. Missing same-value or skipped-writer evidence produces its own gap.
+
+For an authorized saved turn that exceeds the reader's recording limit, both readers return a `recording-too-large` gap. For resumed turns, coverage includes verified declarations from before the pause. If the reader cannot establish that coverage, it reports `resumed-turn-coverage-incomplete`.
+
+`why` reads the root scope. When child scopes are present, it reports `scope-boundary` and names unopened subflows so callers can see where the evidence stops.

@@ -4,7 +4,7 @@ import {
   historyStartsWith,
   readCallOccurrences,
 } from '../recordedCalls.js';
-import { isRecord, recordedTurn } from './source.js';
+import { isRecord, type RecordedTurn, recordedTurn } from './source.js';
 import type { TurnEvidenceSource } from './types.js';
 
 /** Counts for one call occurrence or one unattributed declaration in the completed leg. */
@@ -44,16 +44,24 @@ function countsOf(row: Declaration): Counts | undefined {
   };
 }
 
-function ownRows(snapshot: Declaration): readonly unknown[] | undefined {
-  const { sharedState, initialState } = snapshot;
+function ownRows(turn: RecordedTurn): readonly unknown[] | undefined {
+  const { sharedState, initialState } = turn.snapshot ?? {};
   if (!isRecord(sharedState) || !isRecord(initialState)) return undefined;
+  // The standing host only marks a checkpoint continuation of this turn.
+  // A mismatched carried turn number cannot prove ownership of inherited rows.
+  if (
+    turn.resumed &&
+    (!Number.isSafeInteger(initialState.turnNumber) ||
+      initialState.turnNumber !== sharedState.turnNumber)
+  )
+    return undefined;
   const before: unknown = initialState.coverageDeclared;
   const after: unknown = sharedState.coverageDeclared;
   if (before === undefined && after === undefined) return [];
   if (!Array.isArray(after)) return undefined;
   if (before === undefined) return after;
   if (!Array.isArray(before) || !historyStartsWith(after, before)) return undefined;
-  return after.slice(before.length);
+  return turn.resumed ? after : after.slice(before.length);
 }
 
 /**
@@ -71,17 +79,26 @@ export function readTurnCoverage(
   runId: string,
 ): readonly TurnCallCoverage[] | undefined {
   const turn = recordedTurn(source, runId);
-  if (turn?.snapshot === undefined) return undefined;
-  const rows = ownRows(turn.snapshot);
+  return turn === undefined ? undefined : coverageOfRecordedTurn(turn)?.calls;
+}
+
+/** Read coverage from an already selected exact turn. */
+export function coverageOfRecordedTurn(
+  turn: RecordedTurn,
+): { readonly calls: readonly TurnCallCoverage[]; readonly declaredAbsence: boolean } | undefined {
+  if (turn.snapshot === undefined) return undefined;
+  const rows = ownRows(turn);
   if (rows === undefined) return undefined;
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { calls: [], declaredAbsence: false };
 
   const rowCounts: Counts[] = [];
+  let declaredAbsence = false;
   for (const row of rows) {
     if (!isRecord(row)) return undefined;
     const counts = countsOf(row);
     if (counts === undefined) return undefined;
     rowCounts.push(counts);
+    declaredAbsence ||= row.kind === 'absence';
   }
 
   // The occurrence reader pairs declarations through recorded events.
@@ -119,5 +136,5 @@ export function readTurnCoverage(
     previous.notChecked += row.notChecked;
     previous.cannotCover += row.cannotCover;
   }
-  return result;
+  return { calls: result, declaredAbsence };
 }

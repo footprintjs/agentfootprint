@@ -178,6 +178,10 @@ export {
 // lists calls it, in-tree and out (the conformance battery checks it).
 export { listedFormatOf } from './answeredPause.js';
 export { standingAgent } from './standingAgent.js';
+export type {
+  CompletedTurnEvidenceOptions,
+  HostedCompletedAgentTurn,
+} from './standingAgent/completedTurn.js';
 
 export {
   DEFAULT_ARTIFACT_OPS_PER_SESSION,

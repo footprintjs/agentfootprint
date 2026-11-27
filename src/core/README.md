@@ -21,6 +21,22 @@ Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 
 # `src/core/` — primitives + Runner foundation
 
+## Agent
+
+Agent — ReAct primitive (LLM + tools + iteration loop).
+
+Pattern: Builder (GoF) → produces a Runner backed by a footprintjs FlowChart.
+Role:    Layer-5 primitive (core/). Assembles the 3-slot context
+pipeline + callLLM + route decider + tool-calls subflow +
+loopTo. Composition nestable anywhere that accepts a Runner.
+Emits:   Via internal recorders:
+agentfootprint.agent.turn_start / turn_end
+agentfootprint.agent.iteration_start / iteration_end
+agentfootprint.agent.route_decided
+agentfootprint.stream.llm_start / llm_end
+agentfootprint.stream.tool_start / tool_end
+agentfootprint.context.* (via ContextRecorder)
+
 ## What lives here
 
 The consumer-facing primitives (`LLMCall`, `Agent`) and the shared Runner infrastructure they build on.
