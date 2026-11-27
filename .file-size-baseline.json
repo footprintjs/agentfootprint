@@ -39,7 +39,7 @@
     "src/core/agent/findings/reserved.ts": 704,
     "src/core/agent/negativeClaims/capture.ts": 630,
     "src/core/agent/receipt/receipt.ts": 992,
-    "src/core/agent/stages/prepareFinal.ts": 714,
+    "src/core/agent/stages/prepareFinal.ts": 696,
     "src/core/agent/stages/route.ts": 1807,
     "src/core/agent/stages/routeTurn.ts": 621,
     "src/core/agent/stages/seed.ts": 814,
