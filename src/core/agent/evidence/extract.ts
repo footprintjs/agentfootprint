@@ -52,6 +52,7 @@ import {
   normalizeToken,
   tokenize,
 } from '../../../lib/normalize.js';
+import { numericCommaItems } from './numericCommaItems.js';
 import { splitNumericRange } from './numericRanges.js';
 import { decimalsOf, scientificDecimalOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
@@ -421,6 +422,8 @@ export function readAnswer(
       span,
     );
   };
+  const keepWhole = (token: string): boolean =>
+    isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token));
   for (const [text, offset] of answerTexts(answer, typed)) {
     const spans =
       candidateSpans !== undefined && offset !== undefined && budget > 0
@@ -447,7 +450,7 @@ export function readAnswer(
       const span = spans?.[index];
       const token = normalizeToken(spelling);
       // Test app-owned ID declarations on the intact token before heuristics.
-      if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
+      if (keepWhole(token)) {
         add(spelling, undefined, span);
         continue;
       }
@@ -483,6 +486,14 @@ export function readAnswer(
         for (const piece of tokenize(spelling)) add(piece);
       } else {
         add(spelling, undefined, span);
+        for (const item of numericCommaItems(spelling)) {
+          const start = span === undefined ? undefined : span[0] + item.offset;
+          add(
+            item.spelling,
+            undefined,
+            start === undefined ? undefined : [start, start + item.spelling.length],
+          );
+        }
       }
     }
   }
