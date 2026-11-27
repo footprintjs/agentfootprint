@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { withFallback, withRetry } from '../../../src/doors/resilience.js';
+import type { LLMProvider } from '../../../src/provider-contract/types.js';
 import {
   answer,
   chunk,
@@ -154,14 +155,29 @@ it.each(['complete', 'stream'] as const)(
       controller.abort(reason);
       return failure('primary down');
     };
-    const primary =
+    const primary: LLMProvider =
       operation === 'complete'
         ? scriptedProvider('primary', trace, [
             async () => {
               throw abortAndFail();
             },
           ])
-        : scriptedProvider('primary', trace, [], [[abortAndFail()]]);
+        : {
+            ...scriptedProvider('primary', trace, []),
+            stream(input) {
+              expect(input.signal?.aborted).toBe(false);
+              trace.enter('primary', 'stream', input);
+              return {
+                [Symbol.asyncIterator]() {
+                  return {
+                    async next() {
+                      throw abortAndFail();
+                    },
+                  };
+                },
+              };
+            },
+          };
     const secondary = scriptedProvider('secondary', trace, [answer('must stay unused')], [[]]);
     const provider = withFallback(primary, secondary);
     const req = { ...request, signal: controller.signal };
