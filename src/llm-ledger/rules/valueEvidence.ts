@@ -53,7 +53,8 @@ export function valueEvidence(
   let needsTime = false;
   for (const token of stated) {
     const value = time(token);
-    if (value === undefined || value.kind === 'unreadable') continue;
+    if (value === undefined || value.kind === 'unreadable' || value.kind === 'unresolved-zone')
+      continue;
     needsTime = true;
     if (value.kind === 'anchored') wanted.atMinute.add(value.minute);
     if (value.kind === 'floating-date') wanted.wallDate.add(value.minute);
@@ -100,6 +101,7 @@ export function valueEvidence(
   return (token) => {
     const value = time(token);
     if (value?.kind === 'unreadable') return { kind: 'missing' };
+    if (value?.kind === 'unresolved-zone') return { kind: 'ambiguous' };
     if (exemptions.has(token)) return { kind: 'supplied' };
     if (value === undefined) {
       const receipt = literals.get(token);

@@ -54,6 +54,11 @@ it in `opened.rules` whatever the host asked for, and its reply lists the rules 
 
 A complete timestamp can match the same instant across written offsets, at the precision the statement wrote. A clock without a date can match when its cited receipts resolve it to one instant at that precision. Conflicting dates and plausible evidence without an offset leave it open. An invalid time or a clock that cannot match any cited receipt is missing. The rule can read spaces and a zone suffix from the statement’s own bounded text. The stored receipt uses only the tokens it retained. Earlier `traceable-values@1` checks are read as recorded.
 
+UTC and explicit supported offsets can establish an instant. A recognized but unresolved zone spelling
+leaves the clock open; it never silently becomes a clock with no zone. A dateless numeric offset must
+use a civil quarter-hour offset within ±14 hours, so a clock range such as `02:14-02:20` is not an offset.
+A duration written as a clock (`took 02:14`) can match by respelling; the rule does not read intent.
+
 A token found only in a `supplied` entry is exempt: neither missing nor support, and only the host
 writes `supplied`. A note's own `values` are what it claims, never support. An incomplete receipt
 (`isIncomplete`: cut, masked, limited, holding grouped numbers or escaped pieces) turns a missing value

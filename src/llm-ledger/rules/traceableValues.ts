@@ -49,17 +49,14 @@ export const traceableValues: LedgerTableRule = {
   appliesTo: ['claim', 'ruled-out', 'draft'],
   facts: (input) => {
     const subject = input.subject;
-    const stated = new Set(
-      subject.kind === 'draft'
-        ? statementValues(subject.text)
-        : [subject.note.text, ...(subject.note.values ?? [])].flatMap(statementValues),
-    );
-    // Values the token rule cannot read as one token: numbers with thousands separators, pieces after an escape.
-    const unreadable = (
+    const texts =
       subject.kind === 'draft'
         ? [subject.text]
-        : [subject.note.text, ...(subject.note.values ?? [])]
-    )
+        : [subject.note.text, ...(subject.note.values ?? [])];
+    const unresolvedZones = new Set<string>();
+    const stated = new Set(texts.flatMap((text) => statementValues(text, unresolvedZones)));
+    // Grouped numbers and escaped pieces have no single readable token.
+    const unreadable = texts
       .map(readTokens)
       .reduce((n, r) => n + (r.groupedNumbers ?? 0) + (r.escapedPieces ?? 0), 0);
     const evidenceFor = valueEvidence(stated, input.receipts, input.supplied);
@@ -68,6 +65,10 @@ export const traceableValues: LedgerTableRule = {
     let supplied = 0;
     let unsupported = 0;
     for (const token of stated) {
+      if (unresolvedZones.has(token)) {
+        missing.push(token);
+        continue;
+      }
       const evidence = evidenceFor(token);
       if (evidence.kind === 'supplied') supplied++;
       else if (evidence.kind === 'receipt') restsOn.push(evidence.seq);
@@ -84,6 +85,7 @@ export const traceableValues: LedgerTableRule = {
         checkable: stated.size - supplied,
         missing: missing.length,
         unsupported,
+        unresolvedZones: unresolvedZones.size,
         incomplete,
         unreadable,
       },
@@ -107,6 +109,11 @@ export const traceableValues: LedgerTableRule = {
       when: { unsupported: { gt: 0 }, incomplete: { eq: 0 } },
       then: 'checked-fail',
       label: 'a value it states is in none of its receipts',
+    },
+    {
+      when: { unresolvedZones: { gt: 0 } },
+      then: 'unreachable',
+      label: 'a time zone could not be resolved',
     },
     {
       when: { missing: { gt: 0 }, incomplete: { eq: 0 } },

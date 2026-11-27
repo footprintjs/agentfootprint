@@ -82,6 +82,30 @@ it.each([
   ['2026-11-21T02:14:18.123457Z', '2026-11-21T02:14:18.123456Z', 'checked-fail'],
   ['02:14', '2026-11-21T02:14:18Z and 02:14', 'checked-pass'],
   ['02:14 and id-4040', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['02:14 CST', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 CST: alarm', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 PST', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 EST', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 ist', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 local time', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 America/Chicago', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14cst', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['At 2026-11-21 02:14 CST', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['2026-11-21T02:14 XYZ', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14 CST', 'unrelated id-4040', 'unreachable'],
+  ['02:14 CST and id-4040', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['2:14 am', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['2:14 pm', '2026-11-21T14:14:18Z', 'checked-pass'],
+  ['2:14 pm PST', '2026-11-21T14:14:18Z', 'unreachable'],
+  ['2:14pm PST', '2026-11-21T14:14:18Z', 'unreachable'],
+  ['2:14 pm UTC', '2026-11-21T15:14:18+01:00', 'checked-pass'],
+  ['12:14am', '2026-11-21T00:14:18Z', 'checked-pass'],
+  ['02:14 UTC', '2026-11-21T03:14:18+01:00', 'checked-pass'],
+  ['02:14 Z', '2026-11-21T03:14:18+01:00', 'checked-pass'],
+  ['02:14-02:20', '2026-11-21T04:34:18Z', 'checked-fail'],
+  ['02:14+14:15', '2026-11-20T11:59:18Z', 'checked-fail'],
+  ['02:14+05:45', '2026-11-20T20:29:18Z', 'checked-pass'],
+  ['The check ran at 02:14 on Friday', '2026-11-21T02:14:18Z', 'checked-pass'],
 ] as const)('compares %s with %s on each door', async (text, evidence, disposition) => {
   const checks = await inspect(text, evidence);
   expect(checks).toHaveLength(3);
@@ -89,7 +113,7 @@ it.each([
     expect(check).toMatchObject({
       rule: 'traceable-values@2',
       disposition,
-      restsOn: disposition === 'checked-pass' || text.includes('id-4040') ? [2] : [],
+      restsOn: disposition === 'checked-pass' || text.startsWith('02:14 and id-4040') ? [2] : [],
     });
 });
 
@@ -104,6 +128,21 @@ it.each([
   async (receipts, disposition) => {
     const checks = await inspect('02:14Z', receipts);
     for (const check of checks) expect(check?.disposition).toBe(disposition);
+  },
+);
+
+it.each([65, 110])(
+  'keeps a zone with %i letters out of stored tokens on all doors',
+  async (size) => {
+    const checks = await inspect('02:14 Area/' + 'a'.repeat(size), '2026-11-21T02:14:18Z');
+    expect(checks).toHaveLength(3);
+    for (const check of checks)
+      expect(check).toMatchObject({
+        disposition: 'unreachable',
+        verdict: 'open',
+        restsOn: [],
+        missing: ['02:14'],
+      });
   },
 );
 
