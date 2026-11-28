@@ -27,17 +27,19 @@ import type {
   LedgerCheckWhy,
   LedgerDisposition,
   LedgerNote,
+  LedgerNoteKind,
   LedgerReceipt,
   LedgerSupplied,
   LedgerVerdict,
 } from '../types.js';
 
 /** What a rule can be about. */
-export type LedgerSubjectKind = 'claim' | 'ruled-out' | 'draft';
+type CheckedNoteKind = Exclude<LedgerNoteKind, 'question'>;
+export type LedgerSubjectKind = CheckedNoteKind | 'draft';
 
 /** The subject of one check: a note (a claim or a ruled-out), or the draft's text. */
 export type LedgerRuleSubject =
-  | { readonly kind: 'claim' | 'ruled-out'; readonly note: LedgerNote }
+  | { readonly kind: CheckedNoteKind; readonly note: LedgerNote }
   | { readonly kind: 'draft'; readonly text: string };
 
 /** What a rule reads: real values, frozen. */
@@ -131,7 +133,7 @@ const DISPOSITIONS: readonly string[] = Object.freeze([
   'not-applicable',
   'unreachable',
 ]);
-const SUBJECTS: readonly string[] = Object.freeze(['claim', 'ruled-out', 'draft']);
+const SUBJECTS: readonly string[] = Object.freeze(['claim', 'ruled-out', 'disclosed-gap', 'draft']);
 const BUILT_IN_ID = /^[a-z][a-z0-9-]{1,47}$/;
 const HOST_ID = /^[a-z][a-z0-9-]{1,31}\/[a-z][a-z0-9-]{1,47}$/;
 const ZERO: LedgerCheckCounts = Object.freeze({

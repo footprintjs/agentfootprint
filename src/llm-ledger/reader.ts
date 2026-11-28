@@ -8,10 +8,10 @@
  *          fold. It never writes and never loads.
  * Emits:   N/A.
  */
+import { COVERAGE_RULE_KEY, gapNoteAllowed, mixesTimeWindowVersions } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { LedgerStoreError } from './store.js';
 import type { LedgerLog } from './store.js';
-import { COVERAGE_RULE_KEY, mixesTimeWindowVersions } from './entries.js';
 import type {
   LedgerCheck,
   LedgerDelivered,
@@ -39,7 +39,7 @@ export interface LedgerReader {
   /** The withdrawal of `note`, when there is one. */
   withdrawalOf(note: number): LedgerWithdrawal | undefined;
   readonly entries: readonly LedgerEntry[];
-  readonly admitsClaimStanding: boolean;
+  noteAdmissionFault(note: LedgerNote): 'noteKind' | 'claimStanding' | undefined;
   readonly receipts: readonly LedgerReceipt[];
   readonly supplied: readonly LedgerSupplied[];
   readonly notes: readonly LedgerNote[];
@@ -70,9 +70,16 @@ export function readerOf(log: LedgerLog): LedgerReader {
   if (opened !== undefined && mixesTimeWindowVersions(opened.rules))
     throw new LedgerStoreError('malformed', 'rules');
   const admitsClaimStanding = opened?.rules.includes(COVERAGE_RULE_KEY) === true;
+  function noteAdmissionFault(note: LedgerNote): 'noteKind' | 'claimStanding' | undefined {
+    if (!gapNoteAllowed(opened, note)) return 'noteKind';
+    if (note.claimStanding !== undefined && !admitsClaimStanding) return 'claimStanding';
+    return undefined;
+  }
   const notes = byKind('note');
-  if (!admitsClaimStanding && notes.some((note) => note.claimStanding !== undefined))
-    throw new LedgerStoreError('malformed', 'claimStanding');
+  for (const note of notes) {
+    const fault = noteAdmissionFault(note);
+    if (fault !== undefined) throw new LedgerStoreError('malformed', fault);
+  }
   const entry = (seq: number): LedgerEntry | undefined =>
     Number.isSafeInteger(seq) && seq >= 1 ? entries[seq - 1] : undefined;
   const as =
@@ -84,7 +91,7 @@ export function readerOf(log: LedgerLog): LedgerReader {
   return Object.freeze({
     seq: log.seq,
     opened,
-    admitsClaimStanding,
+    noteAdmissionFault,
     entries,
     full: log.seq >= L.maxEntries,
     entry,

@@ -46,7 +46,7 @@ export function withValueLaw(keys: readonly string[]): string[] {
 export const traceableValues: LedgerTableRule = {
   id: 'traceable-values',
   version: 2,
-  appliesTo: ['claim', 'ruled-out', 'draft'],
+  appliesTo: ['claim', 'ruled-out', 'disclosed-gap', 'draft'],
   facts: (input) => {
     const subject = input.subject;
     const texts =

@@ -34,7 +34,13 @@ export type LedgerKind =
   | 'delivered';
 
 /** What a note says it is. */
-export type LedgerNoteKind = 'claim' | 'ruled-out' | 'question';
+export const LEDGER_NOTE_KINDS = Object.freeze([
+  'claim',
+  'ruled-out',
+  'question',
+  'disclosed-gap',
+] as const);
+export type LedgerNoteKind = (typeof LEDGER_NOTE_KINDS)[number];
 export type LedgerClaimStanding = 'sure' | 'qualified';
 
 /** Who supplied a value the agent did not read. */
@@ -108,6 +114,7 @@ export interface LedgerOpened extends LedgerEntryBase<'opened'> {
   readonly rules: readonly string[];
   readonly confirm: boolean;
   readonly askRunsRules: boolean;
+  readonly disclosedGaps?: true;
 }
 
 /** What one read was told to have returned — tokens, never the text. */

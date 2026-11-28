@@ -220,8 +220,7 @@ export function admit(frame: CallFrame) {
       if (APPENDS.includes(frame.kind)) s.full = reader.full;
       const entry = frame.built;
       if (entry?.kind === 'note') {
-        if (entry.claimStanding !== undefined && !reader.admitsClaimStanding)
-          s.inputRefusal = 'bad-input';
+        if (reader.noteAdmissionFault(entry) !== undefined) s.inputRefusal = 'bad-input';
         const problem = citeProblem(reader.entries, entry.cites);
         s.unknownReceipt = problem === 'unknown-receipt';
         s.notAReceipt = problem === 'not-a-receipt';
@@ -327,7 +326,8 @@ export function checkClaims(frame: CallFrame) {
     const reader = frame.reader as LedgerReader;
     const findings: (LedgerFinding & { subject: LedgerCheckView['subject'] })[] = [];
     for (const note of claimsOf(frame)) {
-      const kind = note.noteKind as 'claim' | 'ruled-out';
+      const kind = note.noteKind;
+      if (kind === 'question') continue;
       for (const rule of rulesFor(frame, kind))
         findings.push({
           ...(await runRule(rule, inputOf(reader, { kind, note }))),
