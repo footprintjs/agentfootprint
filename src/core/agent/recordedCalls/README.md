@@ -25,3 +25,8 @@ an unreadable final changer blocks an earlier name and its pointer. A potentiall
 owning decision with no usable address clears earlier candidates; a later
 positively bound changer can establish its own attribution. Known unchanged or
 non-after-tool decisions do not clear ownership. No index is persisted.
+
+For a native rewrite, the selected occurrence's tool identity and iteration
+corroborate its terminal, decisions and history. The provider ID must agree
+with the start, even if the same ID names another call. A native terminal can
+omit the tool name and iteration, while a decision must carry both.

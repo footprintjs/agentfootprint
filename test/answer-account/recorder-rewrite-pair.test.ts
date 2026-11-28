@@ -256,6 +256,7 @@ describe('one bounded in-memory rewritten result', () => {
     'native tool name missing',
     'terminal tool name differs',
     'terminal call ID differs',
+    'the decision and both ledgers agree on a different provider ID',
     'terminal stage differs',
     'accepted and committed iterations differ from native iteration',
     'explicit start iteration differs',
@@ -331,6 +332,23 @@ describe('one bounded in-memory rewritten result', () => {
           payload: { ...end.payload, toolCallId: 'different-id' },
         };
         break;
+      case 'the decision and both ledgers agree on a different provider ID': {
+        const wrongId = 'same-occurrence-wrong-provider-id';
+        events[events.indexOf(decision)] = {
+          ...decision,
+          payload: { ...decision.payload, toolCallId: wrongId },
+        } as AgentfootprintEvent;
+        state.middlewareDecisions[0]!.toolCallId = wrongId;
+        const commit = snapshot.commitLog.find(
+          (row) => row.runtimeStageId === end.meta.runtimeStageId,
+        )!;
+        commit.overwrite.middlewareDecisions = state.middlewareDecisions;
+        commit.trace = [
+          ...commit.trace.filter(({ path }) => path !== 'middlewareDecisions'),
+          { path: 'middlewareDecisions', verb: 'set' },
+        ];
+        break;
+      }
       case 'terminal stage differs':
         events[events.indexOf(end)] = {
           ...end,

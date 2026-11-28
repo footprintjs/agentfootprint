@@ -1,8 +1,10 @@
 import { parseMaybeJson } from '../core/agent/emptiness.js';
 import {
+  corroboratesNativeCall,
   historyCallResolver,
   indexResultRewrites,
   readHistoryCalls,
+  readNativeCallWitness,
   readResultDispositionMark,
 } from '../core/agent/recordedCalls.js';
 import { copyJson, readOwnList } from '../lib/boundedJson.js';
@@ -152,36 +154,22 @@ export function linkToolRewrite(
   );
   const [start, terminal] = bracket;
   if (bracket.length !== 2 || start?.event.type !== START || terminal !== end) return unproven;
-  const toolName = start.event.payload.toolName;
-  const toolCallId = start.event.payload.toolCallId;
-  if (
-    typeof toolName !== 'string' ||
-    typeof toolCallId !== 'string' ||
-    end.event.payload.toolCallId !== toolCallId ||
-    (end.event.payload.toolName !== undefined && end.event.payload.toolName !== toolName)
-  )
-    return unproven;
-
   const inStage = ({ event }: AccountEventEvidence) =>
     event.meta.runId === runId && event.meta.runtimeStageId === stage;
   const completions = events.filter((row) => row.event.type === ITERATION_END && inStage(row));
   const [completion] = completions;
   if (completions.length !== 1 || completion === undefined || completion.index <= end.index)
     return unproven;
-  const iteration = completion.event.payload.iterIndex;
+  const witness = readNativeCallWitness(start.event.payload, completion.event.payload.iterIndex);
   if (
-    typeof iteration !== 'number' ||
-    (start.event.payload.iteration !== undefined && start.event.payload.iteration !== iteration) ||
-    (end.event.payload.iteration !== undefined && end.event.payload.iteration !== iteration) ||
+    witness === undefined ||
+    !corroboratesNativeCall(witness, end.event.payload, 'terminal') ||
     ![start, ...decisions].every(inStage) ||
     decisions.some(
       ({ index, event: { payload } }) =>
         index >= end.index ||
         (payload.moment === 'after-tool' && index <= start.index) ||
-        readCallOccurrenceKey(payload) !== key ||
-        payload.toolName !== toolName ||
-        payload.toolCallId !== toolCallId ||
-        payload.iteration !== iteration,
+        !corroboratesNativeCall(witness, payload, 'decision'),
     )
   )
     return unproven;
@@ -215,8 +203,7 @@ export function linkToolRewrite(
   const matched = resolve(committed.history);
   if (
     matched.kind !== 'matched' ||
-    matched.call.toolName !== toolName ||
-    matched.call.providerId !== toolCallId ||
+    !corroboratesNativeCall(witness, matched.call.message, 'history') ||
     !ownsResult(matched.call.message, comparison, budget)
   )
     return unproven;
@@ -225,8 +212,7 @@ export function linkToolRewrite(
   if (
     retained.kind === 'ambiguous' ||
     (retained.kind === 'matched' &&
-      (retained.call.toolName !== toolName ||
-        retained.call.providerId !== toolCallId ||
+      (!corroboratesNativeCall(witness, retained.call.message, 'history') ||
         !ownsResult(retained.call.message, comparison, budget)))
   )
     return unproven;

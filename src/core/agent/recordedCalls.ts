@@ -15,6 +15,7 @@ export {
   unlandedCallKey,
   type HistoryCall,
 } from './recordedCalls/history.js';
+export { corroboratesNativeCall, readNativeCallWitness } from './recordedCalls/nativeWitness.js';
 export { readCallOccurrences, type CallOccurrence } from './recordedCalls/events.js';
 export { declarationOccurrences, groupOccurrenceEvidence } from './recordedCalls/evidence.js';
 export {
