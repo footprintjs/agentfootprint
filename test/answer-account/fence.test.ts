@@ -92,6 +92,9 @@ describe('IMPORT-GRAPH FENCE', () => {
       ),
     );
     expect(forbidden).toEqual([]);
+    // Capture is internal; reading an explanation must not load a live recorder.
+    expect(reached).not.toContain('answer-account/recordToolEvidence.ts');
+    expect(reached).not.toContain('recorders/observability/answerAccount/recorder.ts');
     // The walk is real: it reaches past the folder (the owners below and what they import).
     expect(reached).toContain('bridge/eventMeta.ts');
     expect(reached).toContain('semantics/coverage/items.ts');
@@ -123,6 +126,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
       'core/agent/placedTickets.ts', // issuedTicketsOf reads the native placement receipt
+      'core/agent/plainResultShape.ts', // internal capture runs the bounded emptiness comparison
       'core/agent/recordedCalls.ts', // recorded call addresses and attribution across the two readers
       'core/agent/scripts/attachment.ts', // scriptsBlock + recordedScripts — the ONE composer of the attached scripts, and the ONE reader of `turn_end.scripts`
       'core/agent/scripts/match.ts', // recordedBlocks — the ONE reader of `evidence_checked.scripts`, the checkpoint door's rule
@@ -132,9 +136,11 @@ describe('IMPORT-GRAPH FENCE', () => {
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
       'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result
+      'recorders/observability/answerAccount/recorder.ts', // only the private capture entry attaches a recorder
       'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
       'semantics/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
       'semantics/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
+      'semantics/resultShape.ts', // select a captured shape with the app's read-time declaration
       'semantics/toolOutcome.ts', // reportedStatusOf and callOutcomeOf share the zero-import settlement vocabulary
       'semantics/toolRan.ts', // toolRanOf — the ONE reader of "did this call's tool run"
       'time-travel/selectionWitness.ts', // recordedOmissions matches a source omission to the recorded tool selection
