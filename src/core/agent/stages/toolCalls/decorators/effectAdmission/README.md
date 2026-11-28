@@ -1,4 +1,4 @@
-# Result effect admission
+**Fold** — determine which typed proposals may reach the effect owners.
 
 Capture native proposal authority before result middleware. The settlement
 checks bounded immutable content and keeps exact selection references in one

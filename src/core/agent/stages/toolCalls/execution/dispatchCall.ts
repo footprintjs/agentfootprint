@@ -469,7 +469,7 @@ export function buildCallDispatch(
         modelResultCapped,
         toolResultDisposition,
         toolSkillBody,
-        effectAdmission,
+        effectHandoff,
       } = await finalizeCallResult(scope, operations, {
         tool,
         tc,
@@ -503,7 +503,7 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
-        effectAdmission,
+        effectHandoff,
         ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
       recordServedLimits(

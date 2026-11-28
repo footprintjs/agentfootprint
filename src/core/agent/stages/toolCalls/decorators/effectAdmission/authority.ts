@@ -3,9 +3,10 @@ import {
   type CallOccurrenceKey,
 } from '../../../../../../lib/callOccurrence.js';
 import { nativeIsProxy } from '../../../../../../lib/nativeProxyCheck.js';
-import type {
-  ProposedEffect,
-  ReadToolResultEnvelope,
+import {
+  readToolResultEnvelope,
+  type ProposedEffect,
+  type ReadToolResultEnvelope,
 } from '../../../../../../semantics/toolEffects.js';
 import { ownedToolEffectContentBytes } from '../../../../../../semantics/sealedToolEffectContent.js';
 
@@ -83,4 +84,46 @@ export function captureEffectAuthority(
     occurrence,
     bytes,
   };
+}
+
+/** Snapshot proposal fields from own data at the successful native return. */
+export function captureReturnedEffectAuthority(
+  raw: unknown,
+  occurrence: CallOccurrenceKey,
+): EffectAuthority | undefined {
+  const list = ownValue(raw, 'effects');
+  if (
+    typeof list !== 'object' ||
+    list === null ||
+    nativeIsProxy?.(list) !== false ||
+    !Array.isArray(list) ||
+    list.length === 0 ||
+    list.length > MAX_OBSERVED_PROPOSALS
+  )
+    return undefined;
+  if (
+    Object.keys(raw as object).some(
+      (key) => key !== 'content' && key !== 'effects' && key !== 'status',
+    )
+  )
+    return undefined;
+  const content = Object.getOwnPropertyDescriptor(raw, 'content');
+  const status = Object.getOwnPropertyDescriptor(raw, 'status');
+  if (!content || !('value' in content) || (status && !('value' in status))) return undefined;
+  const effects = [];
+  for (let ordinal = 0; ordinal < list.length; ordinal++) {
+    const item = ownValue(list, String(ordinal));
+    const kind = ownValue(item, 'kind');
+    effects.push(
+      kind === 'propose-transition'
+        ? { kind, targetSkillId: ownValue(item, 'targetSkillId'), reason: ownValue(item, 'reason') }
+        : {
+            kind,
+            instructionId: ownValue(item, 'instructionId'),
+            deliveryLease: ownValue(item, 'deliveryLease'),
+          },
+    );
+  }
+  const normalized = readToolResultEnvelope({ content: undefined, effects, status: status?.value });
+  return normalized && captureEffectAuthority(raw, normalized, occurrence);
 }

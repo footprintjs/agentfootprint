@@ -138,13 +138,12 @@ export function landCallResult(
   // truth, the step-suffix precedent); accepted effects speak through
   // what they do — the cursor move, the delivered instruction — and
   // through `tools.effect` on the record.
-  const effectEnvelope = settledEffects(frame.outcome.toolEnvelope, frame.delivery.effectAdmission);
-  if (
-    effectEnvelope !== undefined &&
-    frame.execution.executed &&
-    !frame.outcome.error &&
-    !frame.execution.denied
-  ) {
+  const effectEnvelope = settledEffects(
+    frame.outcome.toolEnvelope,
+    frame.delivery.effectHandoff,
+    frame.execution.executed && !frame.outcome.error && !frame.execution.denied,
+  );
+  if (effectEnvelope !== undefined) {
     frame.delivery.resultStr += frame.applyToolEffects(
       scope,
       { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },

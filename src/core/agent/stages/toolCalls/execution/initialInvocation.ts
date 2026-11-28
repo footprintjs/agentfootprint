@@ -250,7 +250,7 @@ export async function invokeInitialTool(
       frame.callArguments.callArgs,
     );
     let returned = false;
-    let declaredFailure: ReturnType<typeof captureToolReturn>['declaredFailure'];
+    let nativeReturn: ReturnType<typeof captureToolReturn> | undefined;
     try {
       markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
@@ -263,9 +263,14 @@ export async function invokeInitialTool(
       const { outcome } = frame;
       outcome.result = await frame.tool.execute(callArgs, executionContext);
       returned = true;
-      const captured = captureToolReturn(outcome.result, startedAt, startedMonotonic, dispatch);
-      frame.outcome.result = captured.result;
-      declaredFailure = captured.declaredFailure;
+      nativeReturn = captureToolReturn(
+        outcome.result,
+        startedAt,
+        startedMonotonic,
+        dispatch,
+        frame.observesResult ? frame.tc.callOccurrenceKey : undefined,
+      );
+      frame.outcome.result = nativeReturn.result;
       frame.execution.resultFinalizer?.captureReturned?.(frame.outcome.result);
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
@@ -301,8 +306,7 @@ export async function invokeInitialTool(
       frame.tool,
       frame.outcome.result,
       codeRunSlot,
-      declaredFailure,
-      frame.observesResult ? frame.tc.callOccurrenceKey : undefined,
+      nativeReturn,
     );
     if (envelope !== undefined) {
       frame.outcome.toolEnvelope = envelope;

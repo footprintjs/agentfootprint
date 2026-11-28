@@ -2,10 +2,10 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { runToolAfterChain } from '../../../../../tools/runChain.js';
 import { captureNegativeRefusal, keepNegativeResultOut } from '../../../negativeClaims/capture.js';
 import { servedToModel } from '../../../../../semantics/coverage/read.js';
-import { recordDecisions } from '../../../middleware/ledger.js';
+import { recordDecisions, recordResultEffects } from '../../../middleware/ledger.js';
 import { readToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
 import { isJsonFaithful } from '../../../../../lib/jsonFaithful.js';
-import { observeEffectContent } from './effectAdmission.js';
+import { observeEffectContent, type EffectHandoff } from './effectAdmission.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
 
 /** Compose the existing middleware callbacks once for this handler. */
@@ -86,17 +86,25 @@ export function buildToolMiddlewareOperations(
         ? null
         : await proof.settle(delivered, chain, call.signal)
       : undefined;
-    const last = verdict.decisions.at(-1);
-    if (effectAdmission !== undefined && last && call.callOccurrenceKey !== undefined) {
-      verdict.decisions[verdict.decisions.length - 1] = {
-        ...last,
-        resultEffects:
-          effectAdmission && effectAdmission.effects.length > 0
-            ? { disposition: 'admitted', proposalOrdinals: effectAdmission.originalOrdinals }
-            : { disposition: 'suppressed' },
-      };
-    }
-    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
+    const row = recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
+    const key = call.callOccurrenceKey;
+    const effectHandoff: EffectHandoff | undefined =
+      effectAdmission === undefined
+        ? undefined
+        : {
+            admission: effectAdmission,
+            record: (final) => {
+              if (row !== undefined && key !== undefined)
+                recordResultEffects(
+                  scope,
+                  row,
+                  key,
+                  final && final.effects.length > 0
+                    ? { disposition: 'admitted', proposalOrdinals: final.originalOrdinals }
+                    : { disposition: 'suppressed' },
+                );
+            },
+          };
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.
     // A guessed handle must not make the final composer disclose it again.
@@ -113,13 +121,13 @@ export function buildToolMiddlewareOperations(
     if (verdict.kind === 'deny') {
       return {
         modelResult: delivered,
-        ...(proof && { effectAdmission: null }),
+        ...(effectHandoff && { effectHandoff }),
         ...(call.returned && { toolResultDisposition: 'withheld' }),
       };
     }
     return {
       modelResult: delivered,
-      ...(effectAdmission !== undefined && { effectAdmission }),
+      ...(effectHandoff && { effectHandoff }),
       ...(verdict.decisions.some((decision) => decision.changed) && {
         toolResultDisposition: 'rewritten',
       }),

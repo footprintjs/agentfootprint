@@ -320,12 +320,13 @@ export async function recheckResumedCall(
     }
   }
 
-  const record = (rows: readonly MiddlewareDecision[]): void =>
+  const record = (rows: readonly MiddlewareDecision[]): void => {
     recordDecisions(
       scope,
       rows.map((row) => ({ ...row, phase: 'resume' })),
       frame.callOccurrenceKey,
     );
+  };
   const refuse = (why: string, result: string): ResumedAdmission => {
     recordResumedRefusal(scope, { toolName, toolCallId, iteration, ...occurrence }, why);
     return refused({ result, error: true });

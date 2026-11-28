@@ -14,9 +14,7 @@ describe('tool failure captured at the execution boundary', () => {
   it('retains the native declaration while allowing a copy of the payload', () => {
     const native = toolFailure({ rows: [] }, { category: 'timeout', notChecked: 'primary' });
     const captured = captureToolReturn(native, 100, performance.now());
-    expect(
-      readExecutedResult(tool, structuredClone(captured.result), {}, captured.declaredFailure),
-    ).toMatchObject({
+    expect(readExecutedResult(tool, structuredClone(captured.result), {}, captured)).toMatchObject({
       content: { rows: [] },
       status: 'failure',
       declaredFailure: { category: 'timeout', notChecked: 'primary', startedAt: 100 },
@@ -28,6 +26,6 @@ describe('tool failure captured at the execution boundary', () => {
     const copy = structuredClone(toolFailure('ordinary', { category: 'network' }));
     const captured = captureToolReturn(copy, 100, performance.now());
     expect(captured.result).toBe(copy);
-    expect(readExecutedResult(tool, copy, {}, captured.declaredFailure)).toBeUndefined();
+    expect(readExecutedResult(tool, copy, {}, captured)).toBeUndefined();
   });
 });

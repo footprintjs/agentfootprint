@@ -4,7 +4,7 @@ import type { AgentState } from '../../../../types.js';
 import type { Tool } from '../../../../../../tools/tools.js';
 import type { ToolArgs } from '../../../../../../tools/runChain.js';
 import type { ExecutedToolResultEnvelope } from '../callCells.js';
-import type { EffectAdmission } from '../../decorators/effectAdmission.js';
+import type { EffectHandoff } from '../../decorators/effectAdmission.js';
 import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 
 /** Explicit callback contract for existing middleware operations. */
@@ -33,7 +33,7 @@ export interface ToolMiddlewareOperations {
     },
   ) => Promise<{
     readonly modelResult: unknown;
-    readonly effectAdmission?: EffectAdmission;
+    readonly effectHandoff?: EffectHandoff;
     readonly toolResultDisposition?: LLMMessage['toolResultDisposition'];
   }>;
 }

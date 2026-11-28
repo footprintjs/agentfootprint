@@ -18,12 +18,25 @@ export type EffectAdmission =
   | null
   | undefined;
 
+export interface EffectHandoff {
+  readonly admission: Exclude<EffectAdmission, undefined>;
+  readonly record: (final: Exclude<EffectAdmission, undefined>) => void;
+}
+
+/** Retain the record target when final delivery refuses the result. */
+export function refuseEffectHandoff(handoff: EffectHandoff | undefined): EffectHandoff | undefined {
+  return handoff && { ...handoff, admission: null };
+}
+
 export function settledEffects(
   original: ReadToolResultEnvelope | undefined,
-  admission: EffectAdmission,
+  handoff: EffectHandoff | undefined,
+  eligible = true,
 ): ReadToolResultEnvelope | undefined {
-  if (original === undefined || admission === null) return undefined;
-  return admission ?? original;
+  if (handoff === undefined) return eligible ? original : undefined;
+  const admitted = original && eligible ? handoff.admission : null;
+  handoff.record(admitted);
+  return admitted ?? undefined;
 }
 
 /** Invocation-local evidence. Equality is restricted to immutable owned values. */

@@ -81,7 +81,7 @@ export interface CallSkillRoute {
 }
 
 export interface CallDelivery {
-  readonly effectAdmission?: import('../decorators/effectAdmission.js').EffectAdmission;
+  readonly effectHandoff?: import('../decorators/effectAdmission.js').EffectHandoff;
   resultStr: string;
   modelResultCapped: boolean;
   toolResultDisposition?: LLMMessage['toolResultDisposition'];

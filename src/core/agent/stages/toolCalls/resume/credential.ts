@@ -1,4 +1,8 @@
-import { settledEffects, type EffectAdmission } from '../decorators/effectAdmission.js';
+import {
+  refuseEffectHandoff,
+  settledEffects,
+  type EffectHandoff,
+} from '../decorators/effectAdmission.js';
 import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
@@ -108,10 +112,10 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
-      let effectAdmission: EffectAdmission;
+      let effectHandoff: EffectHandoff | undefined;
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        ({ modelResult, toolResultDisposition, effectAdmission } = await links.afterMoment(scope, {
+        ({ modelResult, toolResultDisposition, effectHandoff } = await links.afterMoment(scope, {
           returned:
             scriptSeen.toolResultExecution === 'returned' &&
             error !== true &&
@@ -168,7 +172,7 @@ export function buildResumeCredential(
         consentCapped = finalized.values;
         modelResult = consentCapped.modelResult;
         if (finalized.refused) {
-          if (effectAdmission !== undefined) effectAdmission = null;
+          effectHandoff = refuseEffectHandoff(effectHandoff);
           result = consentCapped.result;
           dispatched.ceilingRefused = true;
           dispatched.envelope = { content: result, effects: [], status: 'invalid', malformed: [] };
@@ -211,7 +215,7 @@ export function buildResumeCredential(
           consentResultStr,
         );
       }
-      const effectEnvelope = settledEffects(consentEnvelope, effectAdmission);
+      const effectEnvelope = settledEffects(consentEnvelope, effectHandoff);
       if (effectEnvelope !== undefined) {
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(

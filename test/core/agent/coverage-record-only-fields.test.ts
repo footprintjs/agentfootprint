@@ -409,7 +409,9 @@ describe('record-only fields — every serving path goes through the one strip',
     // The batch loop + the four resume doors (middleware-ask, check-in,
     // credential-consent, pauseHere/askHuman). A sixth serving path must be
     // added to PATHS above before this count moves.
-    expect(tc.match(/await (?:[\w$]+\.)?afterMoment\(scope, \{/g)).toHaveLength(PATHS.length);
+    expect(tc.match(/await\s+(?:[\w$]+\.)?afterMoment\(\s*scope,\s*\{/g)).toHaveLength(
+      PATHS.length,
+    );
     const middleware = source('core/agent/stages/toolCalls/decorators/middlewareOperations.ts');
     const body = middleware.slice(middleware.indexOf('const afterMoment = async'));
     const strip = body.indexOf('servedToModel(call.result)');

@@ -7,46 +7,54 @@ import {
   type ToolFailureResult,
 } from '../../../../../semantics/toolFailure.js';
 import type { ExecutedToolResultEnvelope, MeasuredToolFailure } from '../contracts/callCells.js';
-import { captureEffectAuthority } from '../decorators/effectAdmission.js';
+import {
+  captureReturnedEffectAuthority,
+  type EffectAuthority,
+} from '../decorators/effectAdmission.js';
 import type { Tool } from '../../../../../tools/tools.js';
 
-/** Take the identity and timing before negative-claim capture can copy the payload. */
+interface NativeToolReturn {
+  readonly result: unknown;
+  readonly declaredFailure?: MeasuredToolFailure;
+  readonly effectAuthority?: EffectAuthority;
+}
+
+/** Snapshot native evidence before resource cleanup and result projection. */
 export function captureToolReturn(
   value: unknown,
   startedAt: number,
   startedMonotonic: number,
   dispatch?: DeclaredDispatch,
-): { readonly result: unknown; readonly declaredFailure?: MeasuredToolFailure } {
+  effectOccurrence?: CallOccurrenceKey,
+): NativeToolReturn {
   const durationMs = performance.now() - startedMonotonic;
   const declaration = readNativeToolFailure(value);
-  if (declaration === undefined) return { result: value };
+  if (declaration === undefined)
+    return {
+      result: value,
+      ...(effectOccurrence && {
+        effectAuthority: captureReturnedEffectAuthority(value, effectOccurrence),
+      }),
+    };
   return {
     result: (value as ToolFailureResult).content,
     declaredFailure: { ...declaration, startedAt, durationMs, dispatch },
   };
 }
 
-/**
- * Admit the code runner's status at the same boundary as other typed tool returns.
+/** Read the delivered value and code-runner status after native capture.
  *
- * The typed effects channel (9.19.0): a recognized envelope is
- * unwrapped at the native return, at the one boundary the raw return crosses —
- * everything downstream (governance rules, the cap, history,
- * `tool_end`) sees the CONTENT, exactly what a bare return
- * would have shown. The effects are judged below, after the
- * gates, in call order.
- *
- * The typed effects channel (9.19.0) — same unwrap as the batch loop,
- * at this path's own execute boundary, so a resumed call's envelope is
- * judged exactly as an inline one's.
+ * Keep content unwrapping here so framework projections still operate on
+ * the existing delivery value. Proposal authority only comes from the
+ * independently captured native return and never from this later read.
  */
 export function readExecutedResult(
   tool: Tool,
   returned: unknown,
   slot: CodeRunSlot,
-  declaredFailure?: MeasuredToolFailure,
-  effectOccurrence?: CallOccurrenceKey,
+  nativeReturn?: NativeToolReturn,
 ): ExecutedToolResultEnvelope | undefined {
+  const { declaredFailure, effectAuthority } = nativeReturn ?? {};
   if (declaredFailure !== undefined) {
     return { content: returned, status: 'failure', effects: [], malformed: [], declaredFailure };
   }
@@ -65,10 +73,5 @@ export function readExecutedResult(
     };
   }
   const envelope = readToolResultEnvelope(returned);
-  if (!effectOccurrence || !envelope || envelope.effects.length + envelope.malformed.length === 0)
-    return envelope;
-  return {
-    ...envelope,
-    effectAuthority: captureEffectAuthority(returned, envelope, effectOccurrence),
-  };
+  return effectAuthority && envelope ? { ...envelope, effectAuthority } : envelope;
 }
