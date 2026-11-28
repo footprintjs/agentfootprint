@@ -15,4 +15,8 @@ An empty declared-coverage list says the admitted turn recorded no coverage decl
 
 For an authorized saved turn that exceeds the reader's recording limit, both readers return a `recording-too-large` gap. For resumed turns, coverage includes verified declarations from before the pause. If the reader cannot establish that coverage, it reports `resumed-turn-coverage-incomplete`.
 
-`why` reads the root scope. When child scopes are present, it reports `scope-boundary` and names unopened subflows so callers can see where the evidence stops.
+A node created with `completed.node(nodeId)` reads the root scope and names unopened subflows. To ask about a node inside a child, pass both the cause-graph node ID and the child's recorded log address from your viewer. Use the full execution address so a repeated mount resolves to the intended occurrence.
+
+<CodeFile path="examples/artifacts/completed-turn-evidence.ts" region="child-why" />
+
+Saved reads require a complete admitted index and open just the selected invocation after checking the host's authority. A legacy, missing, or withheld child returns `subflow-evidence-unavailable`. A readable child can return its recorded local edges with `cause-incomplete` when coverage cannot establish their earlier sources.
