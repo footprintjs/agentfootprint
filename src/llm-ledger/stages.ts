@@ -22,6 +22,7 @@ import { canonicalizeJson } from 'foottrace/canonical-json';
 
 import { citeProblem } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
+import { validDeliveryCoverage } from './omissions/assessment.js';
 import { readerOf } from './reader.js';
 import type { LedgerReader } from './reader.js';
 import { foldReport } from './report.js';
@@ -37,7 +38,13 @@ import type {
 import type { LedgerServed } from './serve.js';
 import { LedgerStoreError } from './store.js';
 import type { LedgerStore } from './store.js';
-import type { LedgerEntry, LedgerNote, LedgerReceipt, LedgerRefusal } from './types.js';
+import type {
+  LedgerDeliveryCoverage,
+  LedgerEntry,
+  LedgerNote,
+  LedgerReceipt,
+  LedgerRefusal,
+} from './types.js';
 
 /** The call kinds: the host's and the agent's. */
 export type LedgerCallKind =
@@ -99,6 +106,7 @@ export interface CallFrame {
   readonly input: Record<string, unknown>;
   /** What `read-call` built: an entry with a provisional stamp, or a refusal word. */
   built?: LedgerEntry;
+  deliveryCoverage?: LedgerDeliveryCoverage;
   /** This attempt's reader. */
   reader?: LedgerReader;
   /** The findings of this attempt's checks, by subject. */
@@ -225,6 +233,12 @@ export function admit(frame: CallFrame) {
         s.unknownReceipt = problem === 'unknown-receipt';
         s.notAReceipt = problem === 'not-a-receipt';
       }
+      if (
+        entry?.kind === 'delivered' &&
+        frame.deliveryCoverage !== undefined &&
+        !validDeliveryCoverage(reader, frame.deliveryCoverage)
+      )
+        s.inputRefusal = 'bad-input';
       if (entry?.kind === 'withdrawal') {
         const target = reader.entry(entry.note);
         s.unknownNote = target === undefined;
@@ -399,42 +413,6 @@ export function fold(frame: CallFrame) {
             checks: frame.findings,
           })
         : foldReport(reader);
-  };
-}
-
-/** `compare` (deliver): does the delivered text match the last submit's draft? */
-export function compare(frame: CallFrame) {
-  return (s: Scope) => {
-    const last = frame.reader?.lastSubmit;
-    const delivered = frame.built as LedgerEntry & { kind: 'delivered' };
-    s.hasSubmit = last !== undefined;
-    s.matches = last !== undefined && last.draftDigest === delivered.digest;
-    return decide(
-      s,
-      [
-        { when: { hasSubmit: { eq: false } }, then: 'no-submit', label: 'nothing was submitted' },
-        { when: { matches: { eq: true } }, then: 'matches', label: 'the checked draft' },
-      ],
-      { branch: 'differs', label: 'not the checked draft' },
-    );
-  };
-}
-
-/** The `deliver` entry, stamped with the comparison `compare` made. */
-export function stampDelivered(frame: CallFrame) {
-  return (s: Scope) => {
-    const delivered = frame.built as LedgerEntry & { kind: 'delivered' };
-    const last = frame.reader?.lastSubmit;
-    const at = frame.clock();
-    frame.batchAt = (first) => [
-      {
-        ...delivered,
-        seq: first,
-        at,
-        submit: last === undefined ? null : last.seq,
-        matches: s.matches === true,
-      } as LedgerEntry,
-    ];
   };
 }
 

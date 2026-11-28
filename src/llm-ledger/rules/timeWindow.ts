@@ -14,34 +14,9 @@
  * inside it. The finding rests on the cited receipts whose windows overlap the claim's.
  */
 import { isIncomplete } from '../entries.js';
-import { instantMs } from '../window.js';
+import { missingRanges, spanOf } from '../window.js';
 import type { LedgerWindow } from '../types.js';
 import type { LedgerTableRule } from './port.js';
-
-/** `[from, to)` in epoch milliseconds. */
-const spanOf = (w: LedgerWindow): readonly [number, number] => [
-  instantMs(w.from) as number,
-  instantMs(w.to) as number,
-];
-
-/** Milliseconds of `[from, to)` that no span in `spans` covers: subtraction of a merged union. */
-function uncovered(
-  from: number,
-  to: number,
-  spans: readonly (readonly [number, number])[],
-): number {
-  let left = to - from;
-  let reach = from;
-  for (const [a, b] of [...spans].sort((x, y) => x[0] - y[0])) {
-    const start = Math.max(a, reach);
-    const end = Math.min(b, to);
-    if (end > start) {
-      left -= end - start;
-      reach = end;
-    }
-  }
-  return left;
-}
 
 export const timeWindow = {
   id: 'time-window',
@@ -65,11 +40,13 @@ export const timeWindow = {
         claimWindow: 1,
         windowed: windowed.length,
         unwindowed: input.receipts.length - windowed.length,
-        uncoveredMs: uncovered(
-          from,
-          to,
-          windowed.map((r) => spanOf(r.window as LedgerWindow)),
-        ),
+        uncoveredMs: missingRanges(
+          [from, to],
+          overlapping.map((receipt) => ({
+            span: spanOf(receipt.window as LedgerWindow),
+            seq: receipt.seq,
+          })),
+        ).reduce((length, gap) => length + gap.span[1] - gap.span[0], 0),
         cutInWindow: overlapping.filter(isIncomplete).length,
       },
       restsOn: overlapping.map((r) => r.seq),
