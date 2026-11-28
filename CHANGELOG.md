@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.6.0] - 2026-11-28
+
+### Added
+
+- **Read recorded model input at an exact child call.** `readInvocationModelInput` uses an authorized saved recording and a native commit address to recover the selected child's Served view and original receipt. It distinguishes a call recorded without a receipt from an unavailable or mismatched position.
+
 ## [20.5.0] - 2026-11-27
 
 ### Added
