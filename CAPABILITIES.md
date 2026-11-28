@@ -22,6 +22,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| explain a node inside one exact child flow of an authorized completed Agent turn, using its live or saved record | `why` | `src/core/Agent.ts` | 20.7.0 |
 | tracing why an Agent produced an answer and what it missed in a specific authorized completed turn, including saved recordings | `why / whatWasNotRead` | `src/core/Agent.ts` | 20.5.0 |
 | Skip time confirmation for a proven standalone look-back | `skipProvenConfirmation` | `src/time/clock.ts` | 20.4.0 |
 | seeing a question's time window in the interpretation zone and a separately labelled viewer zone, without changing the tool's exact interval | `AgentInput` + `timeDisplay` | `src/core/agent/types/input.ts` | 20.3.0 |
