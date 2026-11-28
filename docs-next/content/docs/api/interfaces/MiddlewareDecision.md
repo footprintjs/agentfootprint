@@ -104,7 +104,7 @@ then says which surface the person answered through. Never inferred.
 
 ### from?
 
-> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"default"` \| `"app"`\>\>
+> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"app"` \| `"default"`\>\>
 
 Defined in: [src/core/agent/middleware/types.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L411)
 

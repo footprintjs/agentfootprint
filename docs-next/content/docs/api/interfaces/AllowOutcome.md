@@ -24,7 +24,7 @@ before?".
 
 ### from?
 
-> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"default"` \| `"app"`\>\>
+> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"app"` \| `"default"`\>\>
 
 Defined in: [src/core/agent/middleware/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L102)
 

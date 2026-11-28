@@ -34,7 +34,7 @@ the provider cannot tell for this model id (an id its table cannot place).
 
 ### by
 
-> `readonly` **by**: `"app"` \| `"provider"`
+> `readonly` **by**: `"provider"` \| `"app"`
 
 Defined in: [src/provider-contract/types/provider.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L301)
 
