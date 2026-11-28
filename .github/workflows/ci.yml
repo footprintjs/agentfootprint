@@ -197,6 +197,10 @@ jobs:
         if: matrix.node-version == 24
         run: node scripts/publish-archive/verify-staged-candidate.mjs "$RUNNER_TEMP/af-source-candidate"
 
+      - name: Packed public consumer at the FootPrint peer floor
+        if: matrix.node-version == 24
+        run: node scripts/context-package-contract/consumerFloor.mjs "$RUNNER_TEMP/af-source-candidate"
+
       - name: Four strict native context roots and public producer identities
         id: native_context
         env:

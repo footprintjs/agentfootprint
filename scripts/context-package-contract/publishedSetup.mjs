@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { assertRecord } from './protocol.mjs';
 
 const COHORT = Object.freeze({
-  footprintjs: Object.freeze({ version: '14.3.0', range: '^14.3.0', foottracePeerRange: '^2.3.1' }),
+  footprintjs: Object.freeze({ version: '14.6.0', range: '^14.3.0', foottracePeerRange: '^2.3.1 || ^3.1.0' }),
   foottrace: Object.freeze({ version: '2.3.2', range: '^2.3.2' }),
   contextfootprint: Object.freeze({ version: '0.1.1', range: '0.1.1' }),
 });
