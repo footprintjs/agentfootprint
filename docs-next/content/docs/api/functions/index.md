@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-159 exported from `agentfootprint`.
+160 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -136,6 +136,7 @@ title: Functions
 - [`runbookAsTool`](/docs/api/functions/runbookAsTool)
 - [`s3Artifacts`](/docs/api/functions/s3Artifacts)
 - [`sandboxPath`](/docs/api/functions/sandboxPath)
+- [`sealToolEffectContent`](/docs/api/functions/sealToolEffectContent)
 - [`selectCommentaryKey`](/docs/api/functions/selectCommentaryKey)
 - [`selfConsistency`](/docs/api/functions/selfConsistency)
 - [`semanticsForModel`](/docs/api/functions/semanticsForModel)

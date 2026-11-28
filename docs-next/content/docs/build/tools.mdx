@@ -523,10 +523,11 @@ dev mode warns you about the missing marker so the miss is never silent:
 
 When a result hook withholds the returned content, the framework also
 suppresses its typed proposals. Rewritten content only keeps the proposals
-that one trusted `admitToolResultEffects` policy explicitly selects. Return
-the proposal references from that callback, in place of creating new ones.
-An approved proposal still goes through the graph or instruction lease
-rules. This does not reverse an external operation the tool already ran.
+that one trusted `admitToolResultEffects` policy explicitly selects. The
+`ToolResultEffectPolicyContext` contains the final bounded content and the
+original proposals. Return the supplied `ToolResultEffectProposal`
+references for the proposals you approve. Each approved proposal still
+goes through the graph or instruction lease rules. This does not reverse an external operation the tool already ran.
 
 An unchanged scalar or JSON prepared with `sealToolEffectContent` can keep
 its typed proposals through a pass-through hook. The helper takes bounded
