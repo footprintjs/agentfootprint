@@ -1,18 +1,18 @@
 import { createRecordGraph } from 'foottrace/cause';
 import { expect, it, vi } from 'vitest';
 
-import { Agent, inMemoryArtifacts } from '../../index.js';
-import { mock } from '../../llm-providers.js';
-import { readLogAddress } from '../../recorders/observability/recordingParts/invocations.js';
-import * as savedReader from '../../recorders/observability/recordingParts/open.js';
+import { Agent, inMemoryArtifacts } from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
+import { readLogAddress } from '../../src/recorders/observability/recordingParts/invocations.js';
+import * as savedReader from '../../src/recorders/observability/recordingParts/open.js';
 import type {
   SavedInvocation,
   SavedRecording,
-} from '../../recorders/observability/recordingParts/open.js';
-import { inProcessHost } from '../../../test/hosting/testHost.js';
-import { memorySessions } from '../memorySessions.js';
-import { standingAgent } from '../standingAgent.js';
-import type { HostedCompletedAgentTurn } from './completedTurn.js';
+} from '../../src/recorders/observability/recordingParts/open.js';
+import { inProcessHost } from './testHost.js';
+import { memorySessions } from '../../src/hosting/memorySessions.js';
+import { standingAgent } from '../../src/hosting/standingAgent.js';
+import type { HostedCompletedAgentTurn } from '../../src/hosting/standingAgent/completedTurn.js';
 
 const unknownChild = { gaps: ['subflow-evidence-unavailable'] };
 const { nodeId } = createRecordGraph([]);
@@ -33,7 +33,7 @@ async function readFixtureNode(
 }
 
 it.each([true, { layout: 'whole', packed: true }, { layout: 'parts', packed: true }] as const)(
-  'opens one admitted saved child through the real host without loading sibling invocations (%j)',
+  'selects one admitted saved child through the real host (%j)',
   async (recordings) => {
     const agent = Agent.create({
       provider: mock({ reply: 'Done.' }),

@@ -1,5 +1,7 @@
 import type { LogAddress } from 'foottrace';
 
+import { armDeadline, awaitUnder } from '../../../lib/abort.js';
+
 import { admitCompletedTurn } from './admitCompletedTurn.js';
 import {
   type CompletedTurnChild,
@@ -151,12 +153,15 @@ export async function readCompletedTurn(
     if (source.kind === 'live') {
       result = retainedChildResult(snapshot, mount);
     } else {
+      const controller = new AbortController();
+      const { signal } = controller;
+      const disarm = armDeadline(controller, childTimeoutMs, () => undefined);
       try {
-        const signal = AbortSignal.timeout(childTimeoutMs);
-        const opened = await readChild?.(target.relativePath, signal);
-        if (!signal.aborted) result = opened;
+        result = await awaitUnder(signal, () => readChild?.(target.relativePath, signal));
       } catch {
         // A part that could not be read cannot supply evidence.
+      } finally {
+        disarm();
       }
       if (!(await allowed(scope))) return unavailable;
     }
