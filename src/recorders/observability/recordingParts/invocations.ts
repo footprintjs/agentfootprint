@@ -197,7 +197,7 @@ export function walkRecordedInvocations(snapshot: unknown): RecordingWalk {
   };
 }
 
-function readLogAddress(value: unknown): LogAddress | undefined {
+export function readLogAddress(value: unknown): LogAddress | undefined {
   if (!isPlainObject(value)) return undefined;
   const logRunId = ownValue(value, 'logRunId');
   const drillPath = ownValue(value, 'drillPath');
