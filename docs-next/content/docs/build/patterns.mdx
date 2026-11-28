@@ -450,6 +450,14 @@ Conditional.create({ name: 'triage' })
 
 For dynamic specialist hand-offs inside a loop, use the `swarm()` factory shown above rather than hand-wiring the Conditional + Loop yourself.
 
+### Record a Sequence group assessment
+
+Enable `groupAssessment` for a directly run Sequence. Its final `agentfootprint.composition.exit` event carries the standing and assessment coverage. This option stores zero witness examples.
+
+<CodeFile path="examples/core-flow/07-group-assessment.ts" region="opt-in" title="Opt in to a group assessment" />
+
+The assessment uses the member's committed evidence. A serialized checkpoint restore starts a fresh log and reports incomplete coverage for the missing prefix. If a direct member's evidence is unavailable under its disclosure policy, coverage also stays incomplete. The Sequence returns the last step's answer.
+
 ---
 
 ## Beyond the shipped patterns

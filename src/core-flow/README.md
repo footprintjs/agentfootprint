@@ -36,6 +36,10 @@ core-flow/
 └── childOutcome.ts  How a composition reads a child's own outcome (Decision 11).
 ```
 
+### Sequence group assessment
+
+A directly run Sequence can opt in to a group standing and coverage on its final event. The inline recorder joins a sanctioned Agent terminal to its final branch and owning member settlement. Finalize verifies those positions against one served snapshot when a terminal is available. The summary has zero witness examples. A serialized restore keeps its scope gap even when later member assessments are available.
+
 ## Architectural decisions
 
 ### Decision 1: Four control-flow shapes; six compositions

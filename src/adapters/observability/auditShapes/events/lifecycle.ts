@@ -33,6 +33,12 @@ export function lifecycleShapes() {
       name: str,
       status: oneOf('break', 'budget_exhausted', 'err', 'ok'),
       durationMs: num,
+      groupAssessment: shapeOf<At<PayloadOf<'agentfootprint.composition.exit'>, 'groupAssessment'>>(
+        {
+          standing: oneOf('ask', 'consistent', 'known', 'not-assessed', 'not-sure'),
+          coverage: oneOf('complete', 'incomplete'),
+        },
+      ),
     }),
 
     'agentfootprint.composition.fork_start': eventShape<'agentfootprint.composition.fork_start'>({
