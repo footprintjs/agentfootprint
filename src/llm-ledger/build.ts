@@ -323,6 +323,8 @@ export function noteEntry(
     const f = fieldsOf(input, ['kind', 'text', 'values', 'window', 'cites', 'claimStanding']);
     const base = stamped(stamp);
     if (!oneOf(f.kind, LEDGER_NOTE_KINDS)) throw new Refusal('bad-input');
+    if (f.kind === 'disclosed-gap' && Object.hasOwn(input, 'claimStanding'))
+      throw new Refusal('bad-input');
     const entry: Record<string, unknown> = {
       ...base,
       kind: 'note',

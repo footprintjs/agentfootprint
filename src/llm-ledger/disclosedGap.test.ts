@@ -155,19 +155,128 @@ describe.each(['memory', 'file'])('%s ledger', (kind) => {
   });
 });
 
-it('rejects an own claimStanding field, including present-but-undefined', async () => {
+const coverageRules = ['cited@1', 'traceable-values@2', 'time-window@2'];
+
+it('checks a disclosed gap, a sure claim and the draft under independent rules', async () => {
   const store = memoryLedgerStore();
-  const ledger = createLedger({ store, clock: () => at });
-  const session = accepted(await ledger.host.open({ disclosedGaps: true })).session as string;
-  for (const claimStanding of [undefined, 'qualified', 'sure']) {
-    expect(await ledger.agentFor(session).note({ ...gap, cites: [], claimStanding })).toMatchObject(
-      {
+  const { host } = createLedger({ store, clock: () => at });
+  const session = accepted(
+    await host.open({ rules: coverageRules, disclosedGaps: true, askRunsRules: true }),
+  ).session as string;
+  accepted(await host.record(session, { source: 'collector', text: 'port-1234', window }));
+  accepted(
+    await host.record(session, {
+      source: 'limited',
+      text: 'port-1234',
+      window: observed,
+      limit: { rows: 1, hit: true },
+    }),
+  );
+  const resumed = createLedger({ store, clock: () => at });
+  const agent = resumed.agentFor(session);
+  const gapId = accepted(await agent.note({ ...gap, cites: [2] })).note;
+  const unsupportedId = accepted(
+    await agent.note({ ...gap, text: 'Collector gap for port-5678', cites: [2] }),
+  ).note;
+  const claimId = accepted(
+    await agent.note({
+      kind: 'claim',
+      text: 'port-1234',
+      claimStanding: 'sure',
+      window,
+      cites: [3],
+    }),
+  ).note;
+  const claims = [
+    {
+      note: gapId,
+      kind: 'disclosed-gap',
+      verdict: 'open',
+      checks: [
+        { rule: 'cited@1', disposition: 'checked-pass', restsOn: [2] },
+        { rule: 'traceable-values@2', disposition: 'checked-pass', restsOn: [2] },
+      ],
+    },
+    {
+      note: unsupportedId,
+      kind: 'disclosed-gap',
+      verdict: 'unsupported',
+      checks: [
+        { rule: 'cited@1', disposition: 'checked-pass', restsOn: [2] },
+        { rule: 'traceable-values@2', disposition: 'checked-fail', restsOn: [] },
+      ],
+    },
+    {
+      note: claimId,
+      kind: 'claim',
+      verdict: 'open',
+      checks: expect.arrayContaining([
+        expect.objectContaining({
+          rule: 'time-window@2',
+          disposition: 'unreachable',
+          verdict: 'open',
+          restsOn: [3],
+        }),
+      ]),
+    },
+  ];
+  const before = (await store.load(session)).seq;
+  expect(await agent.ask()).toMatchObject({ report: { preview: true, claims } });
+  expect((await store.load(session)).seq).toBe(before);
+  const report = {
+    claims,
+    draft: {
+      verdict: 'open',
+      checks: [
+        {
+          rule: 'traceable-values@2',
+          disposition: 'unreachable',
+          missing: ['port-9999'],
+        },
+      ],
+    },
+  };
+  expect(
+    await agent.submit({ draft: 'port-9999', claims: [gapId, unsupportedId, claimId] }),
+  ).toMatchObject({ report });
+  expect(await resumed.host.report(session)).toMatchObject({ report });
+});
+
+it('does not let the coverage rule pin opt a restored session into gaps', async () => {
+  const store = memoryLedgerStore();
+  const { host } = createLedger({ store, clock: () => at });
+  const session = accepted(await host.open({ rules: coverageRules })).session as string;
+  const before = await store.load(session);
+  const agent = createLedger({ store, clock: () => at }).agentFor(session);
+  expect(await agent.note({ ...gap, cites: [] })).toMatchObject({
+    ok: false,
+    refused: 'bad-input',
+  });
+  expect(await store.load(session)).toEqual(before);
+  expect(
+    await agent.note({ kind: 'claim', text: 'port-1234', claimStanding: 'sure', cites: [] }),
+  ).toMatchObject({ ok: true });
+});
+
+describe.each([
+  { pin: 'default rules', options: { disclosedGaps: true } },
+  { pin: 'coverage rule', options: { disclosedGaps: true, rules: coverageRules } },
+])('gap note admission with $pin', ({ options }) => {
+  it.each([undefined, 'qualified', 'sure'])(
+    'rejects own claimStanding %s',
+    async (claimStanding) => {
+      const store = memoryLedgerStore();
+      const ledger = createLedger({ store, clock: () => at });
+      const session = accepted(await ledger.host.open(options)).session as string;
+      expect(
+        await ledger.agentFor(session).note({ ...gap, cites: [], claimStanding }),
+      ).toMatchObject({
         ok: false,
         refused: 'bad-input',
-      },
-    );
-  }
-  expect((await store.load(session)).seq).toBe(1);
+      });
+      expect((await store.load(session)).seq).toBe(1);
+    },
+  );
 });
 
 it.each([false, undefined, 'true'])(
@@ -212,7 +321,8 @@ it('keeps unsupported citation or value findings above the gap ceiling', async (
 it('rejects stored gap standing before checking a report', async () => {
   const store = memoryLedgerStore();
   const ledger = createLedger({ store, clock: () => at });
-  const session = accepted(await ledger.host.open({ disclosedGaps: true })).session as string;
+  const session = accepted(await ledger.host.open({ disclosedGaps: true, rules: coverageRules }))
+    .session as string;
   const note = {
     v: 1,
     seq: 2,
