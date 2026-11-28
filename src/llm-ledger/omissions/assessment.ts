@@ -58,7 +58,7 @@ function questionsFor(reader: LedgerReader, notes: readonly LedgerNote[]) {
       if (isLimited(receipt)) recordQuestion(questions, 'row-limit', [receipt.seq], relevant);
       if (receipt.nothingFound) recordQuestion(questions, 'nothing-found', [receipt.seq], relevant);
     }
-    if (claim === undefined || note.noteKind === 'disclosed-gap') continue;
+    if (claim === undefined) continue;
     if (covered.length === 0) unassessed++;
     else
       for (const gap of missingRanges(claim, covered))
@@ -133,6 +133,25 @@ function disclosed(
       ).length === 0;
 }
 
+/** Count each failed subject once, from this submit's claims, rendered gaps, or draft. */
+function failedSubjects(
+  reader: LedgerReader,
+  coverage: LedgerDeliveryCoverage,
+  claims: readonly LedgerNote[],
+): number {
+  const relevantNotes = new Set([
+    ...claims.map((note) => note.seq),
+    ...coverage.disclosures.map((disclosure) => disclosure.note),
+  ]);
+  const subjects = new Set<number | 'draft'>();
+  for (const { subject, why } of reader.checksOf(coverage.submit)) {
+    if (why === undefined) continue;
+    if ('draft' in subject) subjects.add('draft');
+    else if (relevantNotes.has(subject.note)) subjects.add(subject.note);
+  }
+  return subjects.size;
+}
+
 /** Count only admitted questions, and keep unknown coverage distinct from a clean result. */
 export function assessDelivery(
   reader: LedgerReader,
@@ -144,10 +163,13 @@ export function assessDelivery(
   const notes =
     submit?.claims.flatMap((seq) => {
       const note = reader.note(seq);
-      return note === undefined ? [] : [note];
+      return note?.noteKind === 'claim' || note?.noteKind === 'ruled-out' ? [note] : [];
     }) ?? [];
-  const { questions, unassessed } =
+  const projected =
     coverage === undefined ? { questions: [], unassessed: 1 } : questionsFor(reader, notes);
+  const { questions } = projected;
+  const unassessed =
+    projected.unassessed + (coverage === undefined ? 0 : failedSubjects(reader, coverage, notes));
   const bindings = coverage === undefined ? [] : eligibleBindings(reader, coverage);
   const assessed = questions.length;
   const omissions = questions.filter((question) => !disclosed(question, bindings)).length;

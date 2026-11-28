@@ -274,3 +274,96 @@ it('counts cited nothing-found but keeps uncited receipt data outside the assess
   });
   expect(await run('id-5678')).toEqual(first);
 });
+
+it('does not turn an unrendered gap note into a second coverage question', async () => {
+  const ledger = createLedger({ store: memoryLedgerStore(), clock });
+  const opened = await ledger.host.open({ disclosedGaps: true, coverageOmissions: true });
+  const session = opened.session as string;
+  const agent = ledger.agentFor(session);
+  await ledger.host.record(session, {
+    source: 'logs',
+    text: 'ready',
+    window: window('00', '10'),
+    limit: { rows: 1, hit: true },
+  });
+  await agent.note({ kind: 'claim', text: 'ready', window: window('00', '05'), cites: [2] });
+  await agent.note({
+    kind: 'disclosed-gap',
+    text: 'Read limited.',
+    window: window('00', '10'),
+    cites: [2],
+  });
+  await agent.note({
+    kind: 'disclosed-gap',
+    text: 'Read limited.',
+    window: window('00', '05'),
+    cites: [2],
+  });
+  const text = 'Read limited.';
+  const expected = {
+    coverageOmissions: { outcome: 'no-omission-found', assessed: 1, omissions: 0 },
+  };
+  for (const claims of [
+    [3, 5],
+    [3, 4, 5],
+  ]) {
+    const submitted = await agent.submit({ draft: text, claims });
+    expect(submitted.ok).toBe(true);
+    expect(
+      await ledger.host.deliver(session, {
+        text,
+        coverage: {
+          submit: submitted.submit,
+          standing: 'qualified',
+          disclosures: [{ note: 5, kind: 'row-limit', receipts: [2] }],
+        },
+      }),
+    ).toMatchObject(expected);
+  }
+});
+
+it.each([false, true])(
+  'preserves a failed submitted check as uncertainty, with known omission %s',
+  async (limited) => {
+    const ledger = createLedger({
+      store: memoryLedgerStore(),
+      clock,
+      rules: [
+        {
+          id: 'test/coverage',
+          version: 1,
+          appliesTo: ['claim'],
+          decide() {
+            throw new Error('fixture check failure');
+          },
+        },
+      ],
+    });
+    const opened = await ledger.host.open({
+      disclosedGaps: true,
+      coverageOmissions: true,
+      rules: ['cited@1', 'test/coverage@1'],
+    });
+    const session = opened.session as string;
+    const agent = ledger.agentFor(session);
+    await ledger.host.record(session, {
+      source: 'logs',
+      text: 'id-1234',
+      ...(limited ? { limit: { rows: 1, hit: true } } : {}),
+    });
+    const text = 'id-1234';
+    await agent.note({ kind: 'claim', text, cites: [2] });
+    const submitted = await agent.submit({ draft: text, claims: [3] });
+    expect(submitted).toMatchObject({ report: { claims: [{ reason: 'check-unreachable' }] } });
+    expect(
+      await ledger.host.deliver(session, {
+        text,
+        coverage: { submit: submitted.submit, standing: 'sure', disclosures: [] },
+      }),
+    ).toMatchObject({
+      coverageOmissions: limited
+        ? { outcome: 'omitted', assessment: 'partial', omissions: 1, unassessed: 1 }
+        : { outcome: 'not-assessed', assessment: 'none', omissions: 0, unassessed: 1 },
+    });
+  },
+);
