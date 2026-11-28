@@ -16,10 +16,19 @@ import { mock } from '../../../src/providers.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 type Door = 'batch' | 'ask' | 'check-in' | 'credential';
-type Case = 'capture' | 'allow' | 'refuse';
+type Case =
+  | 'capture'
+  | 'allow'
+  | 'refuse'
+  | 'ceiling'
+  | 'columns'
+  | 'unhooked-ceiling'
+  | 'over-budget';
 const DATASET_KIND = 'dataset/effect-handoff-fixture';
 
 async function inspect(door: Door, scenario: Case) {
+  const ceiling = scenario === 'ceiling' || scenario === 'unhooked-ceiling';
+  const earlyRefusal = ceiling || scenario === 'columns';
   let credentialReady = false;
   let entered = 0;
   const history: string[] = [];
@@ -54,7 +63,7 @@ async function inspect(door: Door, scenario: Case) {
     const builder = Agent.create({
       model: 'fixture',
       artifacts: inMemoryArtifacts(),
-      integrityPosture: 'dev',
+      integrityPosture: scenario === 'columns' ? 'observe' : 'dev',
       checkColumnTypes: 'enforce',
       ...(scenario === 'refuse' && { maxToolResultChars: 300 }),
       ...(door === 'credential' && {
@@ -95,7 +104,9 @@ async function inspect(door: Door, scenario: Case) {
           inputSchema: { type: 'object', properties: {} },
           ...(door === 'check-in' && { checkIn: 'always' as const }),
           ...(door === 'credential' && { needs: { credential: 'fixture' } }),
-          ...(scenario !== 'capture' && {
+          ...(ceiling && { resultCeiling: { maxChars: 24 } }),
+          ...(scenario === 'columns' && { resultColumns: { amount: 'number' as const } }),
+          ...((scenario === 'allow' || scenario === 'refuse') && {
             resultRowsets: [
               {
                 key: 'rows',
@@ -126,6 +137,24 @@ async function inspect(door: Door, scenario: Case) {
               order.push('return');
               return { content: 'original fixture', effects: [proposal] };
             }
+            if (scenario === 'over-budget') {
+              return {
+                content: 'fixture result with separate proposal budget',
+                effects: [{ ...proposal, instructionId: 'a'.repeat(65_537) }],
+              };
+            }
+            if (earlyRefusal) {
+              return {
+                content: sealToolEffectContent(
+                  JSON.stringify(
+                    ceiling
+                      ? { fixture: 'inert ceiling control '.repeat(8) }
+                      : [{ amount: 'fixture column is not numeric' }],
+                  ),
+                ),
+                effects: [proposal],
+              };
+            }
             const dataset = await ctx.artifacts.put({
               kind: DATASET_KIND,
               mediaType: 'application/json',
@@ -149,8 +178,8 @@ async function inspect(door: Door, scenario: Case) {
         name: 'fixture approval',
         onToolCall: () => ask({ question: 'Run the fixture?' }),
       });
-    const agent = builder
-      .toolMiddleware({
+    if (scenario !== 'unhooked-ceiling')
+      builder.toolMiddleware({
         name: 'fixture result',
         onToolResult: () => {
           order.push('hook');
@@ -167,8 +196,8 @@ async function inspect(door: Door, scenario: Case) {
             return [];
           },
         }),
-      })
-      .build();
+      });
+    const agent = builder.build();
     agent.on('agentfootprint.tools.effect', (event) => ownerEvents.push(event.payload));
     agent.on('agentfootprint.tools.rowset_checked', (event) => rowChecks.push(event.payload));
 
@@ -213,6 +242,26 @@ describe('native typed effect handoff', () => {
     expect(result.handoffs).toEqual([{ disposition: 'suppressed' }]);
   });
 
+  it.each(['batch', 'ask'] as const)(
+    'keeps %s delivery with unsupported proposal authority',
+    async (door) => {
+      const result = await inspect(door, 'over-budget');
+      expect(result.entered).toBe(1);
+      expect(result.history).toEqual(['fixture result with separate proposal budget']);
+      expect(result.handoffs).toEqual([{ disposition: 'suppressed' }]);
+      expect(result.ownerEvents).toEqual([]);
+    },
+  );
+
+  it('preserves native unhooked handling at the early ceiling', async () => {
+    const result = await inspect('batch', 'unhooked-ceiling');
+    expect(result.entered).toBe(1);
+    expect(result.order).toEqual([]);
+    expect(result.ownerEvents).toHaveLength(1);
+    expect(result.history[0]).toMatch(/^Result too large:/);
+    expect(result.handoffs).toEqual([]);
+  });
+
   describe.each(['batch', 'ask', 'check-in', 'credential'] as const)(
     '%s final delivery',
     (door) => {
@@ -222,6 +271,22 @@ describe('native typed effect handoff', () => {
         expect(result.ownerEvents).toHaveLength(1);
         expect(result.handoffs).toEqual([{ disposition: 'admitted', proposalOrdinals: [0] }]);
       });
+
+      it.each(['ceiling', 'columns'] as const)(
+        'suppresses effects after early %s refusal',
+        async (refusal) => {
+          const result = await inspect(door, refusal);
+          expect(result.entered).toBe(1);
+          expect(result.order).toEqual(['hook']);
+          expect(result.ownerEvents).toEqual([]);
+          expect(result.history).toHaveLength(1);
+          expect(result.history[0]).toMatch(
+            refusal === 'ceiling' ? /^Result too large:/ : /^Result rejected:/,
+          );
+          expect(result.history[0]).toContain('No data was returned.');
+          expect(result.handoffs).toEqual([{ disposition: 'suppressed' }]);
+        },
+      );
 
       it('records suppression when the rowset refuses the final delivered result', async () => {
         const result = await inspect(door, 'refuse');

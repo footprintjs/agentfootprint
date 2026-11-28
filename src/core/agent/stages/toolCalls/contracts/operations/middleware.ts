@@ -21,7 +21,7 @@ export interface ToolMiddlewareOperations {
       readonly args: ToolArgs;
       readonly result: unknown;
       readonly effectEnvelope?: ExecutedToolResultEnvelope;
-      /** The hook received a returned value, including a plain pause answer. */
+      /** The returned value remains eligible after native result checks, including a plain pause answer. */
       readonly returned: boolean;
       readonly error?: boolean;
       readonly negativeResultId?: string;

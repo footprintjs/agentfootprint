@@ -60,8 +60,9 @@ export function buildToolMiddlewareOperations(
     // existed.
     if (!observesResult) return { modelResult: served };
     const envelope = call.effectEnvelope;
+    const hasProposals = envelope && envelope.effects.length + envelope.malformed.length > 0;
     const proof =
-      envelope && envelope.effects.length + envelope.malformed.length > 0
+      hasProposals && call.returned
         ? observeEffectContent(envelope.effectAuthority, call.callOccurrenceKey, served)
         : undefined;
     const verdict = await runToolAfterChain(
@@ -81,11 +82,11 @@ export function buildToolMiddlewareOperations(
       proof?.observe,
     );
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
-    const effectAdmission = proof
-      ? verdict.kind === 'deny'
-        ? null
-        : await proof.settle(delivered, chain, call.signal)
-      : undefined;
+    const effectAdmission = !hasProposals
+      ? undefined
+      : !proof || verdict.kind === 'deny'
+      ? null
+      : await proof.settle(delivered, chain, call.signal);
     const row = recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
     const key = call.callOccurrenceKey;
     const effectHandoff: EffectHandoff | undefined =
