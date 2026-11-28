@@ -1,4 +1,4 @@
-# Delivered-answer coverage
+**Fold** — assesses whether the delivered answer discloses the limits of its cited reads.
 
 The host delivery chart asks this module to count missing disclosures on the
 matched submit. It uses the admitted citation links, the shared interval sweep
