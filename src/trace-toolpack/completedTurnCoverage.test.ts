@@ -105,7 +105,17 @@ it('turns a compact reason without a committed witness into a gap and keeps an i
   });
 });
 
-it('reports a resumed turn with unreadable coverage as gaps without a coverage fact', async () => {
+const committedDeclaration = {
+  kind: 'ledger',
+  checked: ['source'],
+  notChecked: ['older records'],
+  cannotCover: [],
+};
+
+it.each([
+  { case: 'unreadable prefix', turnNumber: 7, rows: [] },
+  { case: 'mismatched turn number', turnNumber: 8, rows: [committedDeclaration] },
+])('reports coverage gaps for $case', async ({ turnNumber, rows }) => {
   const handle = issueCompletedTurn({
     owner,
     scope: { tenant: 'tenant', principal: 'operator', conversation: 'session' },
@@ -131,8 +141,8 @@ it('reports a resumed turn with unreadable coverage as gaps without a coverage f
         snapshot: {
           runId,
           logAddress,
-          initialState: { turnNumber: 7, coverageDeclared: [{ checked: ['source'] }] },
-          sharedState: { turnNumber: 7, coverageDeclared: [] },
+          initialState: { turnNumber: 7, coverageDeclared: [committedDeclaration] },
+          sharedState: { turnNumber, coverageDeclared: rows },
         },
       },
     },

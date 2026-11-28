@@ -236,3 +236,42 @@ it.each(['open', 'root'] as const)(
     }
   },
 );
+
+it('refuses a saved recording with the wrong origin before selecting its root', async () => {
+  const agent = Agent.create({
+    provider: mock({ reply: 'Done.' }),
+    model: 'mock',
+    artifacts: { store: inMemoryArtifacts(), recordings: true },
+  }).build();
+  const host = inProcessHost();
+  const request = { sessionId: 'wrong-origin', headers: { authorization: 'Bearer fixture' } };
+  let completed: HostedCompletedAgentTurn | undefined;
+  const door = await standingAgent({
+    agent,
+    sessions: memorySessions(),
+    host,
+    identity: { verify: async () => ({ userId: 'recording-owner' }) },
+    onCompletedTurn: (turn) => {
+      completed = turn;
+    },
+  });
+  const open = savedRecording.openSavedRecording;
+  const readRoot = vi.fn();
+  const spy = vi.spyOn(savedRecording, 'openSavedRecording').mockImplementation(async (...args) => {
+    const recording = await open(...args);
+    if (recording.status !== 'ready') return recording;
+    return { ...recording, runId: 'different-run', readRoot };
+  });
+  try {
+    await host.deliver({ input: 'Evidence', ...request });
+    if (completed === undefined) throw new Error('Expected a completed turn');
+    const saved = await completed.forRequest(() => request, 'saved');
+    expect(saved).toBeDefined();
+    expect(await agent.whatWasNotRead(saved)).toEqual({ gaps: ['turn-unavailable'] });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(readRoot).not.toHaveBeenCalled();
+  } finally {
+    spy.mockRestore();
+    await door.close();
+  }
+});
