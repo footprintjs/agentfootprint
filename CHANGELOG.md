@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.7.1] - 2026-11-28
+
+### Fixed
+
+- **Keep a failed tool call visible after an unrelated success.** The live and saved answer assessments retain the earlier failure or unfinished work when a later call merely has matching arguments. The later result still reports its own outcome.
+
 ## [20.7.0] - 2026-11-28
 
 ### Added
