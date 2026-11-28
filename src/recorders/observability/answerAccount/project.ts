@@ -6,10 +6,12 @@ type EventEvidence = import('./evidence.js').AccountEventEvidence['event'];
 
 const leaves: Readonly<Partial<Record<string, readonly string[]>>> = Object.freeze({
   'agentfootprint.agent.run_configured': ['window', 'skillGraph', 'llm', 'evidenceGate'],
-  'agentfootprint.agent.turn_start': ['userPrompt'],
+  'agentfootprint.agent.turn_start': ['userPrompt', 'turnIndex'],
   'agentfootprint.agent.turn_end': [
     'finalContent',
-    'iteration',
+    'turnIndex',
+    'iterationCount',
+    'replyAuthor',
     'answerAssessment',
     'answerCoverage',
     'standingLineNames',

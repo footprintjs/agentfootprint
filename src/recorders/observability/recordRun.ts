@@ -253,7 +253,7 @@ export interface RecordingObservation {
   readonly native: CombinedRecorder;
   accepted(event: AgentfootprintEvent, ordinal: number, firstRetainedIndex: number): void;
   seal(
-    snapshot: unknown,
+    snapshot: ReturnType<RecordableRunner['getLastSnapshot']>,
     firstRetainedIndex: number,
     recordingIndex: (ordinal: number) => number | undefined,
   ): void;

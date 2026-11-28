@@ -26,6 +26,7 @@ describe('internal explanation recorder', () => {
       expect(observed.toSnapshot()).toBeUndefined();
       observed.recording.stop();
       const recording = observed.recording.toRecording();
+      expect(runner.getLastSnapshot()?.observerStats?.drops ?? 0).toBe(0);
       const bundle = observed.toSnapshot()!;
       expect(bundle.gaps).toEqual([]);
       expect(bundle.events.map(({ index, event }) => [index, event.type])).toEqual(
@@ -40,6 +41,76 @@ describe('internal explanation recorder', () => {
       );
     },
   );
+
+  it('withholds a bundle when deferred delivery loses events but the model start and terminal survive', async () => {
+    const runner = Agent.create({
+      provider: new MockProvider({ reply: 'I found the answer.' }),
+      model: 'mock',
+      observerDelivery: 'deferred',
+      observerDeliveryOptions: { maxQueue: 1, overflow: 'drop-oldest' },
+    })
+      .system('Be brief.')
+      .build();
+    const observed = recordAnswerAccount(runner, 128 * 1024);
+    await runner.run('What was found?');
+    observed.recording.stop();
+
+    expect(runner.getLastSnapshot()?.observerStats?.drops).toBeGreaterThan(0);
+    expect(observed.recording.droppedEvents).toBe(0);
+    const events = observed.recording.toRecording().events;
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining(['agentfootprint.stream.llm_start', 'agentfootprint.agent.turn_end']),
+    );
+    const bundle = observed.toSnapshot()!;
+    expect(bundle.events.map(({ index, event }) => [index, event.type])).toEqual(
+      events.map((event, index) => [index, event.type]),
+    );
+    expect(bundleView(bundle)).toBeUndefined();
+    expect(bundle.gaps).toContain('observer-loss');
+    expect(bundle.state).toBeUndefined();
+  });
+
+  it('withholds a bundle with the terminal event but no admitted model-start evidence', async () => {
+    const runner = runWith();
+    const observed = recordAnswerAccount(
+      runner,
+      128 * 1024,
+      {},
+      (event) => event.type !== 'agentfootprint.stream.llm_start',
+    );
+    await runner.run('What was found?');
+    observed.recording.stop();
+
+    expect(runner.getLastSnapshot()?.observerStats?.drops ?? 0).toBe(0);
+    expect(observed.recording.droppedEvents).toBe(0);
+    const types = observed.recording.toRecording().events.map((event) => event.type);
+    expect(types).toContain('agentfootprint.agent.turn_end');
+    expect(types).not.toContain('agentfootprint.stream.llm_start');
+    const bundle = observed.toSnapshot()!;
+    expect(bundleView(bundle)).toBeUndefined();
+    expect(bundle.gaps).toContain('missing-answer-evidence');
+    expect(bundle.state).toBeUndefined();
+  });
+
+  it('keeps summarized deferred emits unavailable', async () => {
+    const runner = Agent.create({
+      provider: new MockProvider({ reply: 'I found the answer.' }),
+      model: 'mock',
+      observerDelivery: 'deferred',
+      observerDeliveryOptions: { capture: 'summary' },
+    })
+      .system('Be brief.')
+      .build();
+    const observed = recordAnswerAccount(runner, 128 * 1024);
+    await runner.run('What was found?');
+    observed.recording.stop();
+
+    expect(runner.getLastSnapshot()?.observerStats?.summarizedEmits).toBeGreaterThan(0);
+    const bundle = observed.toSnapshot()!;
+    expect(bundle.gaps).toContain('observer-loss');
+    expect(bundleView(bundle)).toBeUndefined();
+    expect(bundle.state).toBeUndefined();
+  });
 
   it('does not serve an evicted tail with reset coordinates as a whole account', async () => {
     const runner = runWith();
@@ -125,24 +196,31 @@ describe('internal explanation recorder', () => {
     expect(bundleView(bundle)).toBeUndefined();
   });
 
-  it('seals the same withheld bundle under redaction even when input changed the capture budget', async () => {
-    async function coveredBundle(message: string) {
-      const runner = Agent.create({
-        provider: mock({ reply: 'Fixed reply.' }),
-        model: 'mock',
-        redact: { keys: ['userMessage'] },
-      }).build();
-      const observed = recordAnswerAccount(runner, 8 * 1024);
-      await runner.run(message);
-      observed.recording.stop();
-      const bundle = observed.toSnapshot()!;
-      expect(bundle.gaps).toEqual(['redaction']);
-      expect(observed.peakRetainedEventBytes).toBe(0);
-      return JSON.stringify(bundle);
-    }
+  it.each(['inline', 'deferred'] as const)(
+    'seals a constant policy marker with %s delivery even when capture loses evidence',
+    async (observerDelivery) => {
+      async function coveredBundle(message: string) {
+        const runner = Agent.create({
+          provider: mock({ reply: 'Fixed reply.' }),
+          model: 'mock',
+          observerDelivery,
+          ...(observerDelivery === 'deferred' && {
+            observerDeliveryOptions: { maxQueue: 1, overflow: 'drop-oldest' as const },
+          }),
+          redact: { keys: ['userMessage'] },
+        }).build();
+        const observed = recordAnswerAccount(runner, 8 * 1024);
+        await runner.run(message);
+        observed.recording.stop();
+        const bundle = observed.toSnapshot()!;
+        expect(bundle.gaps).toEqual(['redaction']);
+        expect(observed.peakRetainedEventBytes).toBe(0);
+        return JSON.stringify(bundle);
+      }
 
-    expect(await coveredBundle('Short prompt.')).toBe(await coveredBundle('x'.repeat(12_000)));
-  });
+      expect(await coveredBundle('Short prompt.')).toBe(await coveredBundle('x'.repeat(12_000)));
+    },
+  );
 
   it('keeps a late attachment unavailable', async () => {
     const runner = runWith();

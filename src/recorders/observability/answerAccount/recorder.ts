@@ -13,6 +13,7 @@ import type {
   AccountEventEvidence,
   AnswerAccountEvidence,
 } from './evidence.js';
+import { hasAnswerWitnesses, lostObserverEvidence } from './coverage.js';
 import {
   containsToolHistory,
   ownValue,
@@ -60,10 +61,6 @@ export function recordAnswerAccount(
   };
 
   const finish: RecordingObservation['seal'] = (snapshot, first, recordingIndex) => {
-    if (!started) gaps.add('no-start');
-    if (!finished || !committed || !hasTerminalAnswer || snapshot === undefined)
-      gaps.add('no-terminal-commit');
-    if (first > 0) gaps.add('retained-events-dropped');
     if (servedUnderPolicy(snapshot)) {
       discard();
       peakRetainedEventBytes = 0;
@@ -75,9 +72,20 @@ export function recordAnswerAccount(
       });
       return;
     }
+    if (!started) gaps.add('no-start');
+    if (!finished || !committed || !hasTerminalAnswer || snapshot === undefined)
+      gaps.add('no-terminal-commit');
+    if (first > 0) gaps.add('retained-events-dropped');
+    if (lostObserverEvidence(snapshot?.observerStats)) gaps.add('observer-loss');
     if (ownValue(ownValue(snapshot, 'initialState'), 'history') !== undefined)
       gaps.add('resumed-state');
     if (containsToolHistory(snapshot)) gaps.add('tool-results');
+    if (gaps.has('no-start') || gaps.has('multiple-runs')) discard();
+    const retained = [...events].flatMap(([ordinal, row]) => {
+      const index = recordingIndex(ordinal);
+      return index === undefined ? [] : [Object.freeze({ index, event: row.event })];
+    });
+    if (gaps.size === 0 && !hasAnswerWitnesses(retained)) gaps.add('missing-answer-evidence');
     let state: AnswerAccountEvidence['state'];
     if (gaps.size === 0) {
       try {
@@ -86,17 +94,11 @@ export function recordAnswerAccount(
         gaps.add('budget');
       }
     }
-    if (gaps.has('no-start') || gaps.has('multiple-runs')) discard();
     evidence = Object.freeze({
       version: 1,
       gaps: Object.freeze([...gaps].sort()),
       firstRetainedIndex: first,
-      events: Object.freeze(
-        [...events].flatMap(([ordinal, row]) => {
-          const index = recordingIndex(ordinal);
-          return index === undefined ? [] : [Object.freeze({ index, event: row.event })];
-        }),
-      ),
+      events: Object.freeze(retained),
       ...(state === undefined ? {} : { state }),
     });
     discard();

@@ -14,6 +14,8 @@ export type AccountEvidenceGap =
   | 'no-terminal-commit'
   | 'multiple-runs'
   | 'retained-events-dropped'
+  | 'observer-loss'
+  | 'missing-answer-evidence'
   | 'redaction'
   | 'tool-results'
   | 'resumed-state'
