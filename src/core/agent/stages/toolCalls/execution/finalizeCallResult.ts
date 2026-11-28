@@ -1,4 +1,3 @@
-import { refuseEffectHandoff } from '../decorators/effectAdmission.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -164,10 +163,7 @@ export async function finalizeCallResult(
     modelResult,
     modelResultCapped,
     toolResultDisposition: delivery?.toolResultDisposition,
-    effectHandoff:
-      refusal === undefined
-        ? delivery?.effectHandoff
-        : refuseEffectHandoff(delivery?.effectHandoff),
+    suppressResultEffects: delivery?.suppressResultEffects,
     toolSkillBody:
       landedSkillBody &&
       originalBody !== undefined &&

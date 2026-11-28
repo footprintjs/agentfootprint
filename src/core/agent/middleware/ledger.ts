@@ -1,8 +1,4 @@
-import {
-  callOccurrenceField,
-  readCallOccurrenceKey,
-  type CallOccurrenceKey,
-} from '../../../lib/callOccurrence.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 /**
  * middleware/ledger — INTERNAL. Where a chain's decisions become record.
  *
@@ -63,8 +59,8 @@ export function recordDecisions(
   scope: LedgerScope,
   rows: readonly MiddlewareDecision[],
   callOccurrenceKey?: CallOccurrenceKey,
-): number | undefined {
-  if (rows.length === 0) return undefined;
+): void {
+  if (rows.length === 0) return;
   const prev = (scope.middlewareDecisions as readonly MiddlewareDecision[] | undefined) ?? [];
   // Spread into a plain local array first: a TypedScope array read is a live
   // deep-proxy view, and both the commit and the event payloads below must be
@@ -73,8 +69,7 @@ export function recordDecisions(
     callOccurrenceKey === undefined
       ? rows
       : rows.map((row) => ({ ...row, ...callOccurrenceField(callOccurrenceKey) }));
-  const updated = [...prev, ...stamped];
-  scope.middlewareDecisions = updated;
+  scope.middlewareDecisions = [...prev, ...stamped];
   for (const row of stamped) {
     typedEmit(scope, 'agentfootprint.middleware.decision', {
       middleware: row.middleware,
@@ -92,27 +87,4 @@ export function recordDecisions(
       ...(row.componentId !== undefined && { componentId: row.componentId }),
     });
   }
-  return updated.length - 1;
-}
-
-/** Final delivery may attach private effect evidence to the already-recorded row. */
-export function recordResultEffects(
-  scope: LedgerScope,
-  rowIndex: number,
-  callOccurrenceKey: CallOccurrenceKey,
-  resultEffects: NonNullable<MiddlewareDecision['resultEffects']>,
-): void {
-  const rows = scope.middlewareDecisions;
-  const row = rows?.[rowIndex];
-  if (
-    !rows ||
-    !row ||
-    row.moment !== 'after-tool' ||
-    row.resultEffects !== undefined ||
-    readCallOccurrenceKey(row) !== readCallOccurrenceKey({ callOccurrenceKey })
-  )
-    return;
-  const updated = [...rows];
-  updated[rowIndex] = { ...row, resultEffects };
-  scope.middlewareDecisions = updated;
 }

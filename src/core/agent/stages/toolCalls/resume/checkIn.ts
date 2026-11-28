@@ -1,8 +1,3 @@
-import {
-  refuseEffectHandoff,
-  settledEffects,
-  type EffectHandoff,
-} from '../decorators/effectAdmission.js';
 import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
@@ -135,7 +130,7 @@ export function buildResumeCheckIn(
     let result: unknown;
     /** What the model reads — see the ask path above. */
     let modelResult: unknown;
-    let effectHandoff: EffectHandoff | undefined;
+    let suppressResultEffects: true | undefined;
     let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
@@ -184,7 +179,7 @@ export function buildResumeCheckIn(
         // Consent moved the execution to this side of the pause; the rules
         // about results move with it.
         if (dispatched.executed === true) {
-          ({ modelResult, toolResultDisposition, effectHandoff } = await links.afterMoment(scope, {
+          const delivery = await links.afterMoment(scope, {
             returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
             ...occurrence,
             ...(tool && { tool }),
@@ -202,7 +197,8 @@ export function buildResumeCheckIn(
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
             ...(env.signal && { signal: env.signal }),
-          }));
+          });
+          ({ modelResult, toolResultDisposition, suppressResultEffects } = delivery);
         }
       } else {
         result = declinedResult(decision.note);
@@ -236,7 +232,6 @@ export function buildResumeCheckIn(
         decisionCapped = finalized.values;
         modelResult = decisionCapped.modelResult;
         if (finalized.refused) {
-          effectHandoff = refuseEffectHandoff(effectHandoff);
           result = decisionCapped.result;
           stepToolRan = false;
           resumeEnvelope = { content: result, effects: [], status: 'invalid', malformed: [] };
@@ -268,13 +263,12 @@ export function buildResumeCheckIn(
       }
       // Typed tool effects (9.19.0) — an approved consequential call may
       // carry them too; judged exactly as inline.
-      const effectEnvelope = settledEffects(resumeEnvelope, effectHandoff);
-      if (effectEnvelope !== undefined) {
+      if (resumeEnvelope !== undefined && !suppressResultEffects) {
         const decisionTransition: TransitionBatchState = { losers: [] };
         decisionResultStr += links.applyToolEffects(
           scope,
           { toolName, toolCallId, iteration, ...occurrence },
-          effectEnvelope,
+          resumeEnvelope,
           decisionTransition,
         );
         links.emitTransitionConflict(scope, iteration, decisionTransition);

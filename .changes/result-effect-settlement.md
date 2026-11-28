@@ -1,6 +1,6 @@
 ---
 type: breaking
 ---
-**Tool result middleware now governs typed result effects.** Withholding a result also suppresses its framework transition and instruction proposals. A rewrite, or a hooked result whose unchanged content cannot be proven, suppresses these proposals by default. A trusted result policy can explicitly select original proposals against bounded final content. External operations an executed tool already performed remain separate.
+**Result hooks suppress typed tool proposals.** If an after-tool hook runs, transition and instruction proposals from that occurrence are withheld from the graph and lease owners. This applies to pass-through, rewritten and denied results in batch and resume. Content still follows the result hook decision. An external operation already performed by the tool has its own outcome.
 
-Migration: Result hooks that must preserve typed effects should pass through unchanged scalar content or use `sealToolEffectContent` to prepare immutable bounded JSON before returning it. For a rewrite, use `admitToolResultEffects` on one registered result policy and return only the proposal references it explicitly authorizes. Review flows that previously relied on effects from withheld results. A decision to withhold takes precedence over effect admission.
+Migration: Review tools that rely on typed proposals while an after-tool hook is installed. A raw result envelope or immutable inner content does not authorize a proposal through a result hook. Preserve the hook where it is required and express any required transition or instruction through the application's graph or instruction configuration instead. Calls without a result hook retain the existing proposal handling.

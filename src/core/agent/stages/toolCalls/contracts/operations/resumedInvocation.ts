@@ -65,7 +65,6 @@ export interface ResumedInvocation {
 
 /** The existing ports through which a resumed call is prepared and settled. */
 export interface ResumedInvocationLinks {
-  readonly observesResult: boolean;
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
   readonly unmountedRules: ToolCatalogOperations['unmountedRules'];
   readonly parkedNow: ToolCatalogOperations['parkedNow'];

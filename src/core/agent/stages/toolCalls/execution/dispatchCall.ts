@@ -336,7 +336,6 @@ export function buildCallDispatch(
         }
         if (!authorization.credentialBlocked && !wanted.wantsBlocked) {
           const pause = await invokeInitialTool(scope, deps, {
-            observesResult: operations.observesResult,
             tool,
             resolved,
             tc,
@@ -469,7 +468,7 @@ export function buildCallDispatch(
         modelResultCapped,
         toolResultDisposition,
         toolSkillBody,
-        effectHandoff,
+        suppressResultEffects,
       } = await finalizeCallResult(scope, operations, {
         tool,
         tc,
@@ -503,7 +502,7 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
-        effectHandoff,
+        suppressResultEffects,
         ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
       recordServedLimits(

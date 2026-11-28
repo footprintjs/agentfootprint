@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-419 exported from `agentfootprint`.
+417 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -389,8 +389,6 @@ title: Interfaces
 - [`ToolRegistryEntry`](/docs/api/interfaces/ToolRegistryEntry)
 - [`ToolResultCeiling`](/docs/api/interfaces/ToolResultCeiling)
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
-- [`ToolResultEffectPolicyContext`](/docs/api/interfaces/ToolResultEffectPolicyContext)
-- [`ToolResultEffectProposal`](/docs/api/interfaces/ToolResultEffectProposal)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
 - [`ToolResultRowset`](/docs/api/interfaces/ToolResultRowset)

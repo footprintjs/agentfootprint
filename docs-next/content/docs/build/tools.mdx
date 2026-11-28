@@ -521,22 +521,12 @@ dev mode warns you about the missing marker so the miss is never silent:
 
 <CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="tool-effects" title="examples/context-engineering/17-brains-and-tool-effects.ts (region: tool-effects)" />
 
-When a result hook withholds the returned content, the framework also
-suppresses its typed proposals. Rewritten content only keeps the proposals
-that one trusted `admitToolResultEffects` policy explicitly selects. The
-`ToolResultEffectPolicyContext` contains the final bounded content and the
-original proposals. Return the supplied `ToolResultEffectProposal`
-references for the proposals you approve. Each approved proposal still
-goes through the graph or instruction lease rules. This does not reverse an external operation the tool already ran.
-
-An unchanged scalar or JSON prepared with `sealToolEffectContent` can keep
-its typed proposals through a pass-through hook. The helper takes bounded
-JSON text and returns immutable data. Use a replacement when a result hook
-needs to edit it. The framework cannot use an arbitrary unowned object to
-prove that a hook left it unchanged. Effect admission remains separate from
-the result's visibility and from evidence that the effect later took hold.
-
-<CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="result-effect-policy" title="Keep one approved instruction after a rewrite" />
+When an after-tool hook runs, the framework suppresses that call's typed
+transition and instruction proposals. This applies when the hook passes through,
+rewrites or withholds the content, including when the inner content is immutable.
+The model still receives the content or refusal selected by the hook. An external
+operation the tool already performed has its own outcome. Calls without a result
+hook still send their proposals through the graph and instruction lease rules.
 
 **Two effect kinds, deliberately:**
 

@@ -58,7 +58,7 @@ The anchor for this turn — the app's `now`, else the turn's start.
 
 ### nowSource
 
-> `readonly` **nowSource**: `"app"` \| `"default"`
+> `readonly` **nowSource**: `"default"` \| `"app"`
 
 Defined in: [src/time/clock.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L63)
 

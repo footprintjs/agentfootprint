@@ -60,7 +60,6 @@ type DispatchContext = ReturnType<
 >;
 
 interface InvokeInitialToolFrame {
-  readonly observesResult: boolean;
   readonly tool: CallStartFacts['tool'];
   readonly resolved: CallStartFacts['resolved'];
   readonly tc: DispatchCall;
@@ -250,7 +249,7 @@ export async function invokeInitialTool(
       frame.callArguments.callArgs,
     );
     let returned = false;
-    let nativeReturn: ReturnType<typeof captureToolReturn> | undefined;
+    let declaredFailure: ReturnType<typeof captureToolReturn>['declaredFailure'];
     try {
       markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
@@ -263,14 +262,9 @@ export async function invokeInitialTool(
       const { outcome } = frame;
       outcome.result = await frame.tool.execute(callArgs, executionContext);
       returned = true;
-      nativeReturn = captureToolReturn(
-        outcome.result,
-        startedAt,
-        startedMonotonic,
-        dispatch,
-        frame.observesResult ? frame.tc.callOccurrenceKey : undefined,
-      );
-      frame.outcome.result = nativeReturn.result;
+      const captured = captureToolReturn(outcome.result, startedAt, startedMonotonic, dispatch);
+      frame.outcome.result = captured.result;
+      declaredFailure = captured.declaredFailure;
       frame.execution.resultFinalizer?.captureReturned?.(frame.outcome.result);
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
@@ -302,11 +296,17 @@ export async function invokeInitialTool(
       takeListed: true,
       callOccurrenceKey: frame.tc.callOccurrenceKey,
     });
+    // The typed effects channel (9.19.0): a recognized envelope is
+    // unwrapped HERE, at the one boundary the raw return crosses —
+    // everything downstream (governance rules, the cap, history,
+    // `tool_end`) sees the CONTENT, exactly what a bare return
+    // would have shown. The effects are judged below, after the
+    // gates, in call order.
     const envelope = readExecutedResult(
       frame.tool,
       frame.outcome.result,
       codeRunSlot,
-      nativeReturn,
+      declaredFailure,
     );
     if (envelope !== undefined) {
       frame.outcome.toolEnvelope = envelope;

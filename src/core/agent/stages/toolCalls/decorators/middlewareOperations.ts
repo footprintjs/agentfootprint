@@ -2,18 +2,15 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { runToolAfterChain } from '../../../../../tools/runChain.js';
 import { captureNegativeRefusal, keepNegativeResultOut } from '../../../negativeClaims/capture.js';
 import { servedToModel } from '../../../../../semantics/coverage/read.js';
-import { recordDecisions, recordResultEffects } from '../../../middleware/ledger.js';
+import { recordDecisions } from '../../../middleware/ledger.js';
 import { readToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
 import { isJsonFaithful } from '../../../../../lib/jsonFaithful.js';
-import { observeEffectContent, type EffectHandoff } from './effectAdmission.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
 
 /** Compose the existing middleware callbacks once for this handler. */
 export function buildToolMiddlewareOperations(
   deps: Pick<ToolCallsHandlerDeps, 'negativeClaimsArmed' | 'toolMiddleware'>,
 ): ToolMiddlewareOperations {
-  const chain = deps.toolMiddleware ?? [];
-  const observesResult = chain.some((entry) => typeof entry.onToolResult === 'function');
   /**
    * The after-tool moment: the chain's last word, on a call that RAN.
    *
@@ -54,58 +51,38 @@ export function buildToolMiddlewareOperations(
     if (deps.negativeClaimsArmed === true && call.error)
       captureNegativeRefusal(scope, call.toolName, call.result, call.args);
     const served = servedToModel(call.result);
+    const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!observesResult) return { modelResult: served };
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return { modelResult: served };
+    const verdict = await runToolAfterChain(chain, {
+      toolName: call.toolName,
+      ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      args: call.args,
+      result: served,
+      ...(call.error === true && { error: true as const }),
+      history: call.history,
+      ...(call.identity && { identity: call.identity }),
+      ...(call.signal && { signal: call.signal }),
+    });
+    const resultHookRan = verdict.decisions.length > 0;
     const envelope = call.effectEnvelope;
-    const hasProposals = envelope && envelope.effects.length + envelope.malformed.length > 0;
-    const proof =
-      hasProposals && call.returned
-        ? observeEffectContent(envelope.effectAuthority, call.callOccurrenceKey, served)
-        : undefined;
-    const verdict = await runToolAfterChain(
-      chain,
-      {
-        toolName: call.toolName,
-        ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
-        toolCallId: call.toolCallId,
-        iteration: call.iteration,
-        args: call.args,
-        result: served,
-        ...(call.error === true && { error: true as const }),
-        history: call.history,
-        ...(call.identity && { identity: call.identity }),
-        ...(call.signal && { signal: call.signal }),
-      },
-      proof?.observe,
-    );
+    // The delivery reader can recognize proposals, but the native result owner
+    // supplies no original classification that could authorize hooked effects.
+    const decisions =
+      resultHookRan && envelope && (envelope.effects.length > 0 || envelope.malformed.length > 0)
+        ? verdict.decisions.map((decision, index, all) =>
+            index === all.length - 1
+              ? { ...decision, resultEffects: { disposition: 'suppressed' as const } }
+              : decision,
+          )
+        : verdict.decisions;
+    recordDecisions(scope, decisions, call.callOccurrenceKey);
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
-    const effectAdmission = !hasProposals
-      ? undefined
-      : !proof || verdict.kind === 'deny'
-      ? null
-      : await proof.settle(delivered, chain, call.signal);
-    const row = recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
-    const key = call.callOccurrenceKey;
-    const effectHandoff: EffectHandoff | undefined =
-      effectAdmission === undefined
-        ? undefined
-        : {
-            admission: effectAdmission,
-            record: (final) => {
-              if (row !== undefined && key !== undefined)
-                recordResultEffects(
-                  scope,
-                  row,
-                  key,
-                  final && final.effects.length > 0
-                    ? { disposition: 'admitted', proposalOrdinals: final.originalOrdinals }
-                    : { disposition: 'suppressed' },
-                );
-            },
-          };
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.
     // A guessed handle must not make the final composer disclose it again.
@@ -119,21 +96,20 @@ export function buildToolMiddlewareOperations(
       if (verdict.kind === 'deny' || notRead)
         captureNegativeRefusal(scope, call.toolName, delivered, call.args);
     }
+    const result = {
+      modelResult: delivered,
+      ...(resultHookRan ? { suppressResultEffects: true as const } : {}),
+    };
     if (verdict.kind === 'deny') {
-      return {
-        modelResult: delivered,
-        ...(effectHandoff && { effectHandoff }),
-        ...(call.returned && { toolResultDisposition: 'withheld' }),
-      };
+      return call.returned ? { ...result, toolResultDisposition: 'withheld' } : result;
     }
     return {
-      modelResult: delivered,
-      ...(effectHandoff && { effectHandoff }),
+      ...result,
       ...(verdict.decisions.some((decision) => decision.changed) && {
         toolResultDisposition: 'rewritten',
       }),
     };
   };
 
-  return { afterMoment, observesResult };
+  return { afterMoment };
 }

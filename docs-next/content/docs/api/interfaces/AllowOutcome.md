@@ -4,7 +4,7 @@ title: AllowOutcome<T>
 
 # Interface: AllowOutcome\<T\>
 
-Defined in: [src/core/agent/middleware/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L88)
+Defined in: [src/core/agent/middleware/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L87)
 
 Let the call through — optionally with a replacement for what the chain
 carries forward.
@@ -24,9 +24,9 @@ before?".
 
 ### from?
 
-> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"app"` \| `"default"`\>\>
+> `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"default"` \| `"app"`\>\>
 
-Defined in: [src/core/agent/middleware/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L102)
+Defined in: [src/core/agent/middleware/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L101)
 
 WHERE the rewritten arguments' values came from, per argument name — the
 middleware's own declaration (`allow(args, why, { from })`), recorded on
@@ -41,7 +41,7 @@ Declared, never inferred. Present only when the middleware declared it.
 
 > `readonly` **kind**: `"allow"`
 
-Defined in: [src/core/agent/middleware/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L89)
+Defined in: [src/core/agent/middleware/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L88)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [src/core/agent/middleware/types.ts:89](https://github.com/footprint
 
 > `readonly` `optional` **value?**: `T`
 
-Defined in: [src/core/agent/middleware/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L91)
+Defined in: [src/core/agent/middleware/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L90)
 
 The replacement value. Absent = pass through unchanged.
 
@@ -59,6 +59,6 @@ The replacement value. Absent = pass through unchanged.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L93)
+Defined in: [src/core/agent/middleware/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L92)
 
 Why the value changed. Present whenever `value` is.

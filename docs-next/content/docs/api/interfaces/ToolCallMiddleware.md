@@ -4,7 +4,7 @@ title: ToolCallMiddleware
 
 # Interface: ToolCallMiddleware
 
-Defined in: [src/core/agent/middleware/types.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L274)
+Defined in: [src/core/agent/middleware/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L257)
 
 A link that decides about the CALL, and may also decide about the result.
 
@@ -18,7 +18,7 @@ A link that decides about the CALL, and may also decide about the result.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L270)
+Defined in: [src/core/agent/middleware/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L253)
 
 Identifies this middleware in every ledger row and event it produces.
 
@@ -28,35 +28,11 @@ Identifies this middleware in every ledger row and event it produces.
 
 ## Methods
 
-### admitToolResultEffects()?
-
-> `optional` **admitToolResultEffects**(`result`): readonly [`ToolResultEffectProposal`](/docs/api/interfaces/ToolResultEffectProposal)[] \| `Promise`\<readonly [`ToolResultEffectProposal`](/docs/api/interfaces/ToolResultEffectProposal)[]\>
-
-Defined in: [src/core/agent/middleware/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L265)
-
-Approve exact original proposals against bounded, final rewritten content.
-
-#### Parameters
-
-##### result
-
-[`ToolResultEffectPolicyContext`](/docs/api/interfaces/ToolResultEffectPolicyContext)
-
-#### Returns
-
-readonly [`ToolResultEffectProposal`](/docs/api/interfaces/ToolResultEffectProposal)[] \| `Promise`\<readonly [`ToolResultEffectProposal`](/docs/api/interfaces/ToolResultEffectProposal)[]\>
-
-#### Inherited from
-
-`ToolMiddlewareIdentity.admitToolResultEffects`
-
-***
-
 ### onToolCall()
 
 > **onToolCall**(`call`): [`ToolOutcome`](/docs/api/type-aliases/ToolOutcome) \| `Promise`\<[`ToolOutcome`](/docs/api/type-aliases/ToolOutcome)\>
 
-Defined in: [src/core/agent/middleware/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L275)
+Defined in: [src/core/agent/middleware/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L258)
 
 #### Parameters
 
@@ -74,7 +50,7 @@ Defined in: [src/core/agent/middleware/types.ts:275](https://github.com/footprin
 
 > `optional` **onToolResult**(`call`): [`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome) \| `Promise`\<[`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome)\>
 
-Defined in: [src/core/agent/middleware/types.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L276)
+Defined in: [src/core/agent/middleware/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L259)
 
 #### Parameters
 

@@ -82,7 +82,7 @@ Defined in: [src/core/agent/arguments/rows.ts:114](https://github.com/footprintj
 
 ### coincides?
 
-> `readonly` `optional` **coincides?**: `"person"` \| `"result"` \| `"app"`
+> `readonly` `optional` **coincides?**: `"person"` \| `"app"` \| `"result"`
 
 Defined in: [src/core/agent/arguments/rows.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/arguments/rows.ts#L137)
 

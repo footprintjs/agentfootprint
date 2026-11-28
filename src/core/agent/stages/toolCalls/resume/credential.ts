@@ -1,8 +1,3 @@
-import {
-  refuseEffectHandoff,
-  settledEffects,
-  type EffectHandoff,
-} from '../decorators/effectAdmission.js';
 import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
@@ -112,10 +107,10 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
-      let effectHandoff: EffectHandoff | undefined;
+      let suppressResultEffects: true | undefined;
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        ({ modelResult, toolResultDisposition, effectHandoff } = await links.afterMoment(scope, {
+        const delivery = await links.afterMoment(scope, {
           returned:
             scriptSeen.toolResultExecution === 'returned' &&
             error !== true &&
@@ -136,7 +131,8 @@ export function buildResumeCredential(
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
           ...(env.signal && { signal: env.signal }),
-        }));
+        });
+        ({ modelResult, toolResultDisposition, suppressResultEffects } = delivery);
       }
       if (modelResult === undefined) modelResult = result;
       // Placement then the truncation net — the batch loop's precedence.
@@ -172,7 +168,6 @@ export function buildResumeCredential(
         consentCapped = finalized.values;
         modelResult = consentCapped.modelResult;
         if (finalized.refused) {
-          effectHandoff = refuseEffectHandoff(effectHandoff);
           result = consentCapped.result;
           dispatched.ceilingRefused = true;
           dispatched.envelope = { content: result, effects: [], status: 'invalid', malformed: [] };
@@ -215,13 +210,12 @@ export function buildResumeCredential(
           consentResultStr,
         );
       }
-      const effectEnvelope = settledEffects(consentEnvelope, effectHandoff);
-      if (effectEnvelope !== undefined) {
+      if (consentEnvelope !== undefined && !suppressResultEffects) {
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(
           scope,
           { toolName, toolCallId, iteration, ...occurrence },
-          effectEnvelope,
+          consentEnvelope,
           consentTransition,
         );
         links.emitTransitionConflict(scope, iteration, consentTransition);
