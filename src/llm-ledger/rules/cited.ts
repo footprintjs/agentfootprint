@@ -11,7 +11,7 @@ import type { LedgerTableRule } from './port.js';
 export const cited: LedgerTableRule = {
   id: 'cited',
   version: 1,
-  appliesTo: ['claim', 'ruled-out'],
+  appliesTo: ['claim', 'ruled-out', 'disclosed-gap'],
   facts: (input) => {
     const cites = input.subject.kind === 'draft' ? [] : input.subject.note.cites;
     return { facts: { cites: cites.length }, restsOn: cites };

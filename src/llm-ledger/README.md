@@ -163,6 +163,13 @@ receipts (number, source, how, at, window, nothingFound, incomplete, externalId)
 with `askRunsRules: true` it is a dry run of the rules over every live claim (`preview: true`), still
 appending nothing.
 
+**Disclosed gaps.** A host can opt in when opening a new internal ledger with `disclosedGaps: true`.
+That opening record is the only source of consent after reload. Existing sessions keep their original
+note kinds. A `disclosed-gap` note still needs its citations and supported values. Its optional
+window identifies the gap being disclosed and does not assert receipt coverage. The report leaves
+the disclosure open unless a check has found it unsupported. The draft and other notes keep their
+own checks. An opted-in log requires a reader that understands that opening record.
+
 **The only pause** is `await-person`, for a session opened with `confirm: true`. Its payload is
 `{ submit, standing, counts }`, with no values. The host's `confirm` port answers and the run resumes
 in this process; the checkpoint is never stored or sent. The resumed leg appends `released`. Without a

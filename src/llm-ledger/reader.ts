@@ -8,8 +8,9 @@
  *          fold. It never writes and never loads.
  * Emits:   N/A.
  */
+import { gapNoteAllowed } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
-import type { LedgerLog } from './store.js';
+import { LedgerStoreError, type LedgerLog } from './store.js';
 import type {
   LedgerCheck,
   LedgerDelivered,
@@ -62,6 +63,10 @@ export function readerOf(log: LedgerLog): LedgerReader {
   const submits = byKind('submit');
   const delivered = byKind('delivered');
   const first = entries[0];
+  const opened = first?.kind === 'opened' ? first : undefined;
+  const notes = byKind('note');
+  if (notes.some((note) => !gapNoteAllowed(opened, note)))
+    throw new LedgerStoreError('malformed', 'noteKind');
   const entry = (seq: number): LedgerEntry | undefined =>
     Number.isSafeInteger(seq) && seq >= 1 ? entries[seq - 1] : undefined;
   const as =
@@ -72,7 +77,7 @@ export function readerOf(log: LedgerLog): LedgerReader {
     };
   return Object.freeze({
     seq: log.seq,
-    opened: first?.kind === 'opened' ? first : undefined,
+    opened,
     full: log.seq >= L.maxEntries,
     entry,
     receipt: as('receipt'),
@@ -80,7 +85,7 @@ export function readerOf(log: LedgerLog): LedgerReader {
     withdrawalOf: (note: number) => withdrawals.get(note),
     receipts,
     supplied: byKind('supplied'),
-    notes: byKind('note'),
+    notes,
     lastSubmit: submits[submits.length - 1],
     checksOf: (submit: number) => checks.get(submit) ?? [],
     releasedOf: (submit: number) => released.get(submit),

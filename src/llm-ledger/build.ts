@@ -46,6 +46,7 @@ import {
 } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { readTokens, tokensOf, utf8Bytes } from './tokens.js';
+import { LEDGER_NOTE_KINDS } from './types.js';
 import type {
   LedgerDelivered,
   LedgerEntry,
@@ -167,10 +168,13 @@ export function openedEntry(
     readonly rules?: readonly string[];
     readonly confirm?: boolean;
     readonly askRunsRules?: boolean;
+    readonly disclosedGaps?: true;
   },
 ): LedgerBuilt<LedgerOpened> {
   return built(() => {
-    const f = fieldsOf(input, ['rules', 'confirm', 'askRunsRules']);
+    const f = fieldsOf(input, ['rules', 'confirm', 'askRunsRules', 'disclosedGaps']);
+    if (Object.hasOwn(input, 'disclosedGaps') && f.disclosedGaps !== true)
+      throw new Refusal('bad-input');
     const rules = f.rules === undefined ? [] : listField(f.rules, L.maxRules);
     if (!rules.every(isRuleName) || new Set(rules).size !== rules.length)
       throw new Refusal('bad-input');
@@ -184,6 +188,7 @@ export function openedEntry(
       rules: rules as string[],
       confirm: f.confirm === true,
       askRunsRules: f.askRunsRules === true,
+      ...(f.disclosedGaps === true && { disclosedGaps: true }),
     };
   });
 }
@@ -310,7 +315,7 @@ export function noteEntry(
   return built(() => {
     const f = fieldsOf(input, ['kind', 'text', 'values', 'window', 'cites']);
     const base = stamped(stamp);
-    if (!oneOf(f.kind, ['claim', 'ruled-out', 'question'])) throw new Refusal('bad-input');
+    if (!oneOf(f.kind, LEDGER_NOTE_KINDS)) throw new Refusal('bad-input');
     const entry: Record<string, unknown> = {
       ...base,
       kind: 'note',

@@ -27,7 +27,8 @@
 import { isDigest } from './digest.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { isToken } from './tokens.js';
-import type { LedgerEntry, LedgerKind, LedgerReceipt } from './types.js';
+import { LEDGER_NOTE_KINDS } from './types.js';
+import type { LedgerEntry, LedgerKind, LedgerNote, LedgerOpened, LedgerReceipt } from './types.js';
 import { isUtcInstant, readWindow } from './window.js';
 
 // ── field checks ─────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
       confirm: bool,
       askRunsRules: bool,
     },
-    optional: {},
+    optional: { disclosedGaps: (v) => v === true },
   },
   receipt: {
     writers: ['host/observed', 'host/reported'],
@@ -155,7 +156,9 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
   note: {
     writers: ['agent/observed', 'host/reported'],
     required: {
-      noteKind: (v) => oneOf(v, ['claim', 'ruled-out', 'question']),
+      noteKind: (v, _seq, entry) =>
+        oneOf(v, LEDGER_NOTE_KINDS) &&
+        (v !== 'disclosed-gap' || !Object.hasOwn(entry, 'claimStanding')),
       text: (v) => text(v, L.maxNoteChars),
       cites: (v, seq) => seqSet(v, seq, L.maxCites),
     },
@@ -271,6 +274,16 @@ export function entryFault(value: unknown): string | undefined {
     if (Object.hasOwn(value, key) && !ok(value[key], seq, value)) return key;
   }
   return undefined;
+}
+
+/** Gap notes require the session's original opt-in and cannot carry claim standing. */
+export function gapNoteAllowed(opened: LedgerOpened | undefined, note: LedgerNote): boolean {
+  return (
+    note.noteKind !== 'disclosed-gap' ||
+    (opened !== undefined &&
+      Object.getOwnPropertyDescriptor(opened, 'disclosedGaps')?.value === true &&
+      !Object.hasOwn(note, 'claimStanding'))
+  );
 }
 
 // ── judgement helpers the later stages call ──────────────────────────────

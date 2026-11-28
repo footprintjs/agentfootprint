@@ -63,7 +63,7 @@ export interface LedgerSubjectReport {
 /** A named claim (or ruled-out note) in the report. */
 export interface LedgerClaimReport extends LedgerSubjectReport {
   readonly note: number;
-  readonly kind: 'claim' | 'ruled-out';
+  readonly kind: Exclude<LedgerNote['noteKind'], 'question'>;
   /** The agent's own words: served only through `serve.ts`. */
   readonly text: string;
 }
@@ -120,10 +120,16 @@ const valueLawRan = (checks: readonly LedgerCheckView[]): boolean =>
   checks.some((c) => isValueLaw(c.rule));
 
 /** One subject's line, from its checks: at most `open` without a value-law record. */
-function subjectOf(reader: LedgerReader, checks: readonly LedgerCheckView[]): LedgerSubjectReport {
+function subjectOf(
+  reader: LedgerReader,
+  checks: readonly LedgerCheckView[],
+  disclosedGap = false,
+): LedgerSubjectReport {
   const found = weakest(checks.map((c) => c.verdict));
   const lawless = !valueLawRan(checks);
-  const verdict = lawless && found !== undefined ? weakest([found, 'open']) : found;
+  // Checking the cited values does not establish that a disclosed gap actually occurred.
+  const verdict =
+    (lawless || disclosedGap) && found !== undefined ? weakest([found, 'open']) : found;
   const reason: LedgerSubjectReport['reason'] =
     verdict !== 'open'
       ? undefined
@@ -167,7 +173,7 @@ export function foldReport(
     const note = reader.note(seq);
     if (note === undefined || note.noteKind === 'question') continue;
     const own = checks.filter((c) => 'note' in c.subject && c.subject.note === seq);
-    const line = subjectOf(reader, own);
+    const line = subjectOf(reader, own, note.noteKind === 'disclosed-gap');
     if (!isLive(reader, note)) {
       withdrawnAfterCheck.push({ note: seq, ...(line.verdict ? { verdict: line.verdict } : {}) });
       continue;
