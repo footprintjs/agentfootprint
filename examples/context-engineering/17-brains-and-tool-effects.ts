@@ -148,7 +148,6 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .route(triage, refund, { onToolReturn: 'check_account' })
     // Route on MEANING: only a DENIED issue_refund moves to the desk.
     .route(refund, escalation, { onToolReturn: 'issue_refund', onToolStatus: 'denied' })
-    .toolMiddleware(refundResultPolicy)
     .build();
   // #endregion define-brains
 
@@ -193,6 +192,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       },
     })
     .injection(denialPlaybook)
+    .toolMiddleware(refundResultPolicy)
     .build();
 
   const answer = await agent.run({ message: input });
