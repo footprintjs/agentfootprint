@@ -123,7 +123,10 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
       confirm: bool,
       askRunsRules: bool,
     },
-    optional: { disclosedGaps: (v) => v === true },
+    optional: {
+      disclosedGaps: (v) => v === true,
+      coverageOmissions: (v, _seq, opening) => v === true && opening.disclosedGaps === true,
+    },
   },
   receipt: {
     writers: ['host/observed', 'host/reported'],
@@ -244,7 +247,34 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
       submit: (v, seq) => v === null || earlier(v, seq),
       matches: (v, _seq, e) => bool(v) && (v === false || e.submit !== null),
     },
-    optional: {},
+    optional: {
+      coverageOmissions: (v, _seq, e) =>
+        e.matches === true &&
+        exactly(v, [
+          'answerStanding',
+          'outcome',
+          'assessment',
+          'assessed',
+          'omissions',
+          'unassessed',
+          'decision',
+        ]) &&
+        (oneOf(v.answerStanding, ['sure', 'qualified']) ||
+          (v.answerStanding === null && v.assessed === 0 && (v.unassessed as number) > 0)) &&
+        count(v.assessed) &&
+        count(v.omissions) &&
+        count(v.unassessed) &&
+        (v.omissions as number) <= (v.assessed as number) &&
+        v.assessment === (v.unassessed === 0 ? 'full' : v.assessed === 0 ? 'none' : 'partial') &&
+        v.outcome ===
+          ((v.omissions as number) > 0
+            ? 'omitted'
+            : v.unassessed === 0
+            ? 'no-omission-found'
+            : 'not-assessed') &&
+        isObject(v.decision) &&
+        v.decision.strategy === v.outcome,
+    },
   },
 };
 

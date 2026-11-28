@@ -8,7 +8,12 @@
  *          fold. It never writes and never loads.
  * Emits:   N/A.
  */
-import { COVERAGE_RULE_KEY, gapNoteAllowed, mixesTimeWindowVersions } from './entries.js';
+import {
+  COVERAGE_RULE_KEY,
+  entryFault,
+  gapNoteAllowed,
+  mixesTimeWindowVersions,
+} from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { LedgerStoreError } from './store.js';
 import type { LedgerLog } from './store.js';
@@ -69,6 +74,17 @@ export function readerOf(log: LedgerLog): LedgerReader {
   const opened = first?.kind === 'opened' ? first : undefined;
   if (opened !== undefined && mixesTimeWindowVersions(opened.rules))
     throw new LedgerStoreError('malformed', 'rules');
+  for (const delivery of delivered) {
+    if (delivery.coverageOmissions === undefined) continue;
+    const submit = delivery.submit === null ? undefined : entries[delivery.submit - 1];
+    if (
+      opened?.coverageOmissions !== true ||
+      entryFault(delivery) !== undefined ||
+      submit?.kind !== 'submit' ||
+      submit.draftDigest !== delivery.digest
+    )
+      throw new LedgerStoreError('malformed', 'coverageOmissions');
+  }
   const admitsClaimStanding = opened?.rules.includes(COVERAGE_RULE_KEY) === true;
   function noteAdmissionFault(note: LedgerNote): 'noteKind' | 'claimStanding' | undefined {
     if (!gapNoteAllowed(opened, note)) return 'noteKind';

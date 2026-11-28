@@ -20,7 +20,7 @@ import { LEDGER_LIMITS as L } from './limits.js';
 import type { LedgerReader } from './reader.js';
 import { REPORT_SENTENCES } from './report.js';
 import type { LedgerCheckView, LedgerReport, LedgerSubjectReport } from './report.js';
-import type { LedgerRefusal } from './types.js';
+import type { LedgerCoverageOmissions, LedgerRefusal } from './types.js';
 
 /** What every served value is: JSON. */
 export type LedgerServed =
@@ -77,10 +77,29 @@ function subject(s: LedgerSubjectReport, within: string | undefined, o: LedgerSe
   };
 }
 
+/** Serve bounded answer-coverage counts and a fixed reason, without exposing evidence inputs. */
+export function serveCoverageOmissions(
+  result: LedgerCoverageOmissions | undefined,
+): Record<string, LedgerServed> {
+  if (result === undefined) return {};
+  const { outcome, assessment, assessed, omissions, unassessed } = result;
+  return {
+    coverageOmissions: {
+      outcome,
+      assessment,
+      assessed,
+      omissions,
+      unassessed,
+      ...(outcome === 'omitted' ? { reason: 'did not say what it could not see' } : {}),
+    },
+  };
+}
+
 /** The served report. */
 export function serveReport(report: LedgerReport, o: LedgerServeOptions): LedgerServed {
   return {
     standing: report.standing,
+    ...serveCoverageOmissions(report.coverageOmissions),
     reasons: [...report.reasons],
     submit: report.submit,
     ...(report.draftDigest === undefined ? {} : { draftDigest: report.draftDigest }),

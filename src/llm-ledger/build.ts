@@ -51,6 +51,8 @@ import { LEDGER_NOTE_KINDS } from './types.js';
 import type {
   LedgerClaimStanding,
   LedgerDelivered,
+  LedgerDeliveryCoverage,
+  LedgerLimitationKind,
   LedgerEntry,
   LedgerNote,
   LedgerNoteKind,
@@ -171,10 +173,22 @@ export function openedEntry(
     readonly confirm?: boolean;
     readonly askRunsRules?: boolean;
     readonly disclosedGaps?: true;
+    readonly coverageOmissions?: true;
   },
 ): LedgerBuilt<LedgerOpened> {
   return built(() => {
-    const f = fieldsOf(input, ['rules', 'confirm', 'askRunsRules', 'disclosedGaps']);
+    const f = fieldsOf(input, [
+      'rules',
+      'confirm',
+      'askRunsRules',
+      'disclosedGaps',
+      'coverageOmissions',
+    ]);
+    if (
+      Object.hasOwn(input, 'coverageOmissions') &&
+      (f.coverageOmissions !== true || f.disclosedGaps !== true)
+    )
+      throw new Refusal('bad-input');
     if (Object.hasOwn(input, 'disclosedGaps') && f.disclosedGaps !== true)
       throw new Refusal('bad-input');
     const rules = f.rules === undefined ? [] : listField(f.rules, L.maxRules);
@@ -195,6 +209,7 @@ export function openedEntry(
       confirm: f.confirm === true,
       askRunsRules: f.askRunsRules === true,
       ...(f.disclosedGaps === true && { disclosedGaps: true }),
+      ...(f.coverageOmissions === true && { coverageOmissions: true }),
     };
   });
 }
@@ -394,16 +409,43 @@ export function submitEntry(
   });
 }
 
+/** Copy host attestations without reading accessors or retaining input objects. */
+function deliveryCoverage(value: unknown, seq: number): LedgerDeliveryCoverage {
+  const f = fieldsOf(value, ['submit', 'standing', 'disclosures']);
+  if (!earlier(f.submit, seq) || !oneOf(f.standing, ['sure', 'qualified']))
+    throw new Refusal('bad-input');
+  const disclosures = listField(f.disclosures, L.maxClaims).map((row) => {
+    const { note, kind, receipts } = fieldsOf(row, ['note', 'kind', 'receipts']);
+    if (!earlier(note, seq) || !oneOf(kind, ['cut', 'row-limit', 'nothing-found', 'window-gap']))
+      throw new Refusal('bad-input');
+    const refs = seqsField(receipts, seq, L.maxCites);
+    if (refs.length === 0) throw new Refusal('bad-input');
+    return { note: note as number, kind: kind as LedgerLimitationKind, receipts: refs };
+  });
+  if (
+    new Set(disclosures.map((d) => JSON.stringify([d.note, d.kind, d.receipts]))).size !==
+    disclosures.length
+  )
+    throw new Refusal('bad-input');
+  return deepFreeze({
+    submit: f.submit as number,
+    standing: f.standing as LedgerDeliveryCoverage['standing'],
+    disclosures,
+  });
+}
+
 /** What the host delivered, compared with the last submit's draft digest (`undefined`: no submit yet). */
-export function deliveredEntry(
+export async function deliveredEntry(
   stamp: LedgerStamp,
-  input: { readonly text: string },
+  input: { readonly text: string; readonly coverage?: LedgerDeliveryCoverage },
   lastSubmit: { readonly seq: number; readonly draftDigest: string } | undefined,
-): Promise<LedgerBuilt<LedgerDelivered>> {
-  return builtAsync(async () => {
-    const f = fieldsOf(input, ['text']);
+): Promise<LedgerBuilt<LedgerDelivered> & { readonly coverage?: LedgerDeliveryCoverage }> {
+  let coverage: LedgerDeliveryCoverage | undefined;
+  const result = await builtAsync<LedgerDelivered>(async () => {
+    const f = fieldsOf(input, ['text', 'coverage']);
     const base = stamped(stamp);
     if (typeof f.text !== 'string' || !wellFormed(f.text)) throw new Refusal('bad-input');
+    if (Object.hasOwn(input, 'coverage')) coverage = deliveryCoverage(f.coverage, base.seq);
     const delivered = f.text;
     const digest = await digestOf(delivered);
     const bytes = utf8Bytes(delivered);
@@ -420,4 +462,5 @@ export function deliveredEntry(
       matches,
     });
   });
+  return result.ok && coverage !== undefined ? { ...result, coverage } : result;
 }

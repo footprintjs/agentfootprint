@@ -23,7 +23,13 @@ import type { LedgerReader } from './reader.js';
 import { weakest } from './rules/port.js';
 import type { LedgerCheckCounts } from './rules/port.js';
 import { isValueLaw } from './rules/traceableValues.js';
-import type { LedgerCheckWhy, LedgerDisposition, LedgerNote, LedgerVerdict } from './types.js';
+import type {
+  LedgerCoverageOmissions,
+  LedgerCheckWhy,
+  LedgerDisposition,
+  LedgerNote,
+  LedgerVerdict,
+} from './types.js';
 
 /** The report's standing, in AgentFootprint's words. */
 export type LedgerStanding = 'ask' | 'not-sure' | 'consistent' | 'not-assessed';
@@ -75,6 +81,7 @@ export interface LedgerReport {
   readonly submit: number | null;
   readonly draftDigest?: string;
   readonly preview: boolean;
+  readonly coverageOmissions?: LedgerCoverageOmissions;
   readonly claims: readonly LedgerClaimReport[];
   readonly draft?: LedgerSubjectReport;
   /** Kept apart, never summed. */
@@ -233,6 +240,11 @@ export function foldReport(
     submit: preview !== undefined || submit === undefined ? null : submit.seq,
     ...(preview === undefined && submit !== undefined ? { draftDigest: submit.draftDigest } : {}),
     preview: preview !== undefined,
+    ...(preview === undefined &&
+    delivery === 'matches' &&
+    delivered?.coverageOmissions !== undefined
+      ? { coverageOmissions: delivered.coverageOmissions }
+      : {}),
     claims,
     ...(draft === undefined ? {} : { draft }),
     counts: {

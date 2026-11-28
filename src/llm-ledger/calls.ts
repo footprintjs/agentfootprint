@@ -32,9 +32,10 @@ import { isObject } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import type { LedgerReader } from './reader.js';
 import type { LedgerReport, LedgerStanding } from './report.js';
+import { compare, stampDelivered } from './delivery.js';
 import type { LedgerRule } from './rules/port.js';
 import { withValueLaw } from './rules/traceableValues.js';
-import { serveReceipts, serveReport } from './serve.js';
+import { serveCoverageOmissions, serveReceipts, serveReport } from './serve.js';
 import type { LedgerServed } from './serve.js';
 import { isSessionId } from './session.js';
 import {
@@ -46,18 +47,16 @@ import {
   awaitPerson,
   checkClaims,
   checkDraft,
-  compare,
   fold,
   loadLog,
   refuse,
   refuseAppend,
   release,
   stampBuilt,
-  stampDelivered,
 } from './stages.js';
 import type { CallFrame, CallState, LedgerCallKind } from './stages.js';
 import type { LedgerStore } from './store.js';
-import type { LedgerEntry } from './types.js';
+import type { LedgerDelivered, LedgerEntry } from './types.js';
 
 /** What the person is asked: no values, only the submit, its standing and its counts. */
 export interface LedgerConfirmAsk {
@@ -111,9 +110,12 @@ function readCall(frame: CallFrame) {
       case 'supply':
         built = await suppliedEntry(stamp, i);
         break;
-      case 'deliver':
-        built = await deliveredEntry(stamp, i, undefined);
+      case 'deliver': {
+        const delivery = await deliveredEntry(stamp, i, undefined);
+        built = delivery;
+        if (delivery.coverage !== undefined) frame.deliveryCoverage = delivery.coverage;
         break;
+      }
       case 'note':
         built = noteEntry(stamp, i);
         break;
@@ -169,6 +171,9 @@ function reply(frame: CallFrame, ctx: LedgerCallContext) {
           ok: true,
           submit: frame.reader?.lastSubmit?.seq ?? null,
           matches: s.matches === true,
+          ...serveCoverageOmissions(
+            (frame.after?.at(-1) as LedgerDelivered | undefined)?.coverageOmissions,
+          ),
         };
         return;
       case 'note':

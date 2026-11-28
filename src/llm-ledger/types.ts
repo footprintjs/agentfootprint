@@ -115,6 +115,7 @@ export interface LedgerOpened extends LedgerEntryBase<'opened'> {
   readonly confirm: boolean;
   readonly askRunsRules: boolean;
   readonly disclosedGaps?: true;
+  readonly coverageOmissions?: true;
 }
 
 /** What one read was told to have returned — tokens, never the text. */
@@ -206,12 +207,35 @@ export interface LedgerReleased extends LedgerEntryBase<'released'> {
   readonly why?: 'no-person-channel';
 }
 
+export type LedgerLimitationKind = 'cut' | 'row-limit' | 'nothing-found' | 'window-gap';
+
+export interface LedgerDeliveryCoverage {
+  readonly submit: number;
+  readonly standing: LedgerClaimStanding;
+  readonly disclosures: readonly {
+    readonly note: number;
+    readonly kind: LedgerLimitationKind;
+    readonly receipts: readonly number[];
+  }[];
+}
+
+export interface LedgerCoverageOmissions {
+  readonly answerStanding: LedgerClaimStanding | null;
+  readonly outcome: 'omitted' | 'not-assessed' | 'no-omission-found';
+  readonly assessment: 'full' | 'partial' | 'none';
+  readonly assessed: number;
+  readonly omissions: number;
+  readonly unassessed: number;
+  readonly decision: LedgerDecisionRecord;
+}
+
 /** What the host delivered, compared with the last submit's draft. */
 export interface LedgerDelivered extends LedgerEntryBase<'delivered'> {
   readonly digest: LedgerDigest;
   readonly bytes: number;
   readonly submit: number | null;
   readonly matches: boolean;
+  readonly coverageOmissions?: LedgerCoverageOmissions;
 }
 
 /** Any entry. */

@@ -58,3 +58,39 @@ export function readWindow(value: unknown): LedgerWindow | undefined {
   if (from === undefined || to === undefined || from >= to) return undefined;
   return Object.freeze({ from: fromField?.value as string, to: toField?.value as string });
 }
+
+export type TimeSpan = readonly [from: number, to: number];
+
+interface CitedSpan {
+  readonly span: TimeSpan;
+  readonly seq: number;
+}
+
+/** Convert an admitted typed window to a half-open interval. */
+export function spanOf(window: LedgerWindow): TimeSpan {
+  return [instantMs(window.from) as number, instantMs(window.to) as number];
+}
+
+/** Missing ranges in order, with one deterministic receipt for each witnessed side. */
+export function missingRanges(
+  [from, to]: TimeSpan,
+  cited: readonly CitedSpan[],
+): readonly { readonly span: TimeSpan; readonly receipts: readonly number[] }[] {
+  const gaps: { span: TimeSpan; receipts: number[] }[] = [];
+  const ordered = cited
+    .map(({ span: [a, b], seq }) => ({ start: Math.max(from, a), end: Math.min(to, b), seq }))
+    .filter(({ start, end }) => start < end)
+    .sort((a, b) => a.start - b.start || a.seq - b.seq);
+  let reach = from;
+  let left: number | undefined;
+  for (const { start, end, seq } of ordered) {
+    if (start > reach)
+      gaps.push({ span: [reach, start], receipts: left === undefined ? [seq] : [left, seq] });
+    if (end > reach || (end === reach && left !== undefined && seq < left)) {
+      reach = end;
+      left = seq;
+    }
+  }
+  if (reach < to) gaps.push({ span: [reach, to], receipts: left === undefined ? [] : [left] });
+  return gaps;
+}
