@@ -65,6 +65,8 @@ export interface EmptinessReading {
  * makes each reading at capture. The app selects a field only at read time.
  */
 export interface ToolResultShape {
+  /** Present only for a proved event-level rewrite. History shapes have no channel. */
+  readonly view?: 'model-result';
   readonly defaultReading: EmptinessReading;
   readonly absentKeyReading?: EmptinessReading;
   readonly keys: readonly (readonly [string, EmptinessReading])[];

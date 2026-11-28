@@ -1,22 +1,45 @@
 import { capturePlainResultShape } from '../core/agent/plainResultShape.js';
+import { copyJson, jsonBytes } from '../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../lib/callOccurrence.js';
 import type { CaptureToolEvidence } from '../recorders/observability/answerAccount/evidence.js';
 import { recordAnswerAccount } from '../recorders/observability/answerAccount/recorder.js';
 
+import { modelResultView } from './resultView.js';
+import { linkToolRewrite, projectRewriteDecision } from './rewriteEvidence.js';
+
 const capture: CaptureToolEvidence = {
+  projectDecision: projectRewriteDecision,
+  linkRewrite: linkToolRewrite,
   captureHistory: capturePlainResultShape,
-  captureEvent(payload) {
+  captureEvent(payload, budget, admitsRewrite) {
     if (
       typeof readCallOccurrenceKey(payload) !== 'string' ||
       payload.entered !== true ||
       payload.error === true ||
       payload.notExecuted === true ||
       payload.notDispatched !== undefined ||
-      payload.status === 'absent' ||
-      'modelResult' in payload
+      payload.status === 'absent'
     )
       return { kind: 'tool-results' };
-    return capturePlainResultShape(payload.result);
+    if (!('modelResult' in payload)) return capturePlainResultShape(payload.result);
+    if (!admitsRewrite) return { kind: 'tool-results' };
+    // The recorded channel comparison is exact on bounded plain data. The copies
+    // are scratch only and unreachable from the sealed bundle.
+    const original = copyJson(
+      Object.getOwnPropertyDescriptor(payload, 'result')?.value,
+      budget,
+      false,
+    );
+    const served = copyJson(
+      Object.getOwnPropertyDescriptor(payload, 'modelResult')?.value,
+      budget - jsonBytes(original),
+      false,
+    );
+    if (modelResultView(original, served) !== 'model-result') return { kind: 'tool-results' };
+    const result = capturePlainResultShape(served);
+    return result.kind === 'ready'
+      ? { kind: 'ready', shape: { ...result.shape, view: 'model-result' } }
+      : result;
   },
 };
 

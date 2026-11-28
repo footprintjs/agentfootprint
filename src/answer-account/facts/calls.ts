@@ -41,12 +41,12 @@ import {
   type CallOccurrence,
   type HistoryCall,
 } from '../../core/agent/recordedCalls.js';
-import { strip } from '../../semantics/coverage/read.js';
 import { readResultShape } from '../../semantics/resultShape.js';
 import { deliveredDeclarationDoor } from '../../core/agent/emptiness.js';
 import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
+import { modelResultView } from '../resultView.js';
 import { outcomeOf } from './callOutcome.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
@@ -146,18 +146,6 @@ export interface CallsRead {
 }
 
 const SECTIONS: readonly CoverageSectionKey[] = ['checked', 'notChecked', 'cannotCover'];
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  const ka = Object.keys(a as object);
-  const kb = Object.keys(b as object);
-  if (ka.length !== kb.length) return false;
-  return ka.every((k) =>
-    deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
-  );
-}
 
 /** One declaration as a reader meets it: its fields, and where each leaf of it is on the record. */
 interface DeclarationSource {
@@ -329,9 +317,7 @@ function resultIsKeptOut(end: ViewEvent): boolean {
 
 function viewOf(end: ViewEvent): ToolCallFact['view'] {
   if (!('modelResult' in end.payload)) return 'result';
-  return deepEqual(strip(end.payload.result), end.payload.modelResult)
-    ? 'model-result-record-only'
-    : 'model-result';
+  return modelResultView(end.payload.result, end.payload.modelResult);
 }
 
 function readOne(
@@ -416,7 +402,7 @@ function readOne(
     ...(emptiness.described !== undefined && { described: emptiness.described }),
     ...(emptiness.bounded === true && { bounded: true as const }),
     ...(judged &&
-      !resultKeptOut && { view: evidence === undefined ? viewOf(end) : ('result' as const) }),
+      !resultKeptOut && { view: evidence === undefined ? viewOf(end) : evidence.view ?? 'result' }),
     ...(coverage !== undefined && {
       coverage: {
         kind: coverage.kind,

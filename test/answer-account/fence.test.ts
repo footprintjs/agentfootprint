@@ -136,6 +136,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
       'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result
+      'recorders/observability/answerAccount/evidence.ts', // only private capture recognizes the accepted rewrite decision
       'recorders/observability/answerAccount/recorder.ts', // only the private capture entry attaches a recorder
       'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
       'semantics/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings

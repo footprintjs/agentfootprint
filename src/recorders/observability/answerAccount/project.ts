@@ -3,7 +3,11 @@ import type { AgentfootprintEvent } from '../../../events/registry.js';
 import { copyJson, jsonBytes, readOwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import type { AccountHistoryResult, CaptureToolEvidence } from './evidence.js';
+import type {
+  AccountEventEvidence,
+  AccountHistoryResult,
+  CaptureToolEvidence,
+} from './evidence.js';
 import { isInitialRoutingEvent, projectInitialRouting } from './routingEvidence.js';
 
 type EventEvidence = import('./evidence.js').AccountEventEvidence['event'];
@@ -61,7 +65,6 @@ const toolStateKeys = [
   'enteredToolCallsComplete',
   'settledToolCalls',
   'settledToolCallsComplete',
-  'middlewareDecisions',
   'coverageDeclared',
   'placedTickets',
   'stoppedEarly',
@@ -105,14 +108,20 @@ function pick(value: unknown, names: readonly string[]): Record<string, unknown>
 }
 
 /** No user data or result is inferred from a projected event. */
-export function projectEvent(event: AgentfootprintEvent, budget: number): EventEvidence {
+export function projectEvent(
+  event: AgentfootprintEvent,
+  budget: number,
+  decision?: Readonly<Record<string, unknown>>,
+): EventEvidence {
   const fields = Object.hasOwn(leaves, event.type) ? leaves[event.type] : undefined;
   return copyJson(
     {
       type: event.type,
       meta: pick(event.meta, ['runId', 'sessionId', 'runtimeStageId', 'sourcePosition']),
       payload:
-        projectInitialRouting(event.type, event.payload) ?? pick(event.payload, fields ?? []),
+        decision ??
+        projectInitialRouting(event.type, event.payload) ??
+        pick(event.payload, fields ?? []),
     },
     budget,
     true,
@@ -123,6 +132,7 @@ export function projectState(
   snapshot: unknown,
   budget: number,
   capture: CaptureToolEvidence | undefined,
+  events: readonly AccountEventEvidence[],
 ):
   | {
       readonly kind: 'ready';
@@ -138,6 +148,14 @@ export function projectState(
   if (list === undefined) return { kind: 'tool-results' };
   if (list.unread > 0) return { kind: 'budget' };
 
+  const rewrite = capture.linkRewrite(
+    events,
+    ownValue(shared, 'middlewareDecisions'),
+    list.entries,
+  );
+  if (rewrite.kind === 'unproven') return { kind: 'tool-results' };
+  if (rewrite.kind === 'linked') state.middlewareDecisions = [rewrite.decision];
+
   let remaining = budget;
   const historyResults: AccountHistoryResult[] = [];
   const history = [...list.entries];
@@ -148,7 +166,8 @@ export function projectState(
       message === null ||
       typeof message !== 'object' ||
       typeof readCallOccurrenceKey(message) !== 'string' ||
-      ownValue(message, 'toolResultDisposition') === 'rewritten'
+      (ownValue(message, 'toolResultDisposition') === 'rewritten' &&
+        !(rewrite.kind === 'linked' && rewrite.historyIndex === index))
     )
       return { kind: 'tool-results' };
     const result = capture.captureHistory(

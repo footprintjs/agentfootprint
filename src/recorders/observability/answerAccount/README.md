@@ -12,3 +12,11 @@ accepted composition events. A graph needs both witnesses before the first model
 Other skill events, rules-only graphs without that verdict and incomplete witnesses
 still withhold. Graph descriptions and edges, scorer details outside the consumed
 leaves and offered ids are excluded. Each routing list has at most 256 entries.
+
+A single allowed after-tool rewrite can prove a fresh served result. The
+collector holds a bounded shape provisionally after the accepted decision and links it
+to the accepted decision, committed ledger row and retained tool history under
+the same occurrence. The sealed metadata carries the served channel and original
+ledger position. Result bodies and middleware explanations stay out. Additional
+middleware, missing or conflicting evidence and other unsupported families
+still withhold the view and discard provisional rewrite data.

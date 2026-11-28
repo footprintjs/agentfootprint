@@ -14,6 +14,7 @@ import type {
   AnswerAccountEvidence,
   CaptureToolEvidence,
 } from './evidence.js';
+import { TOOL_REWRITE_DECISION } from './evidence.js';
 import { hasAnswerWitnesses, lostObserverEvidence } from './coverage.js';
 import {
   containsToolHistory,
@@ -56,6 +57,7 @@ export function recordAnswerAccount(
   let committed = false;
   let finished = false;
   let hasTerminalAnswer = false;
+  let rewriteStage: 'none' | 'decision' | 'result' = 'none';
   let evidence: AnswerAccountEvidence | undefined;
 
   const discard = () => {
@@ -95,7 +97,7 @@ export function recordAnswerAccount(
     let historyResults: AnswerAccountEvidence['historyResults'];
     if (gaps.size === 0) {
       try {
-        const projected = projectState(snapshot, maxBytes - bytes, capture);
+        const projected = projectState(snapshot, maxBytes - bytes, capture, retained);
         if (projected.kind === 'ready') {
           state = projected.state;
           historyResults = projected.historyResults;
@@ -104,11 +106,12 @@ export function recordAnswerAccount(
         gaps.add('budget');
       }
     }
+    if (state === undefined && rewriteStage !== 'none') gaps.add('tool-results');
     evidence = Object.freeze({
       version: 1,
       gaps: Object.freeze([...gaps].sort()),
       firstRetainedIndex: first,
-      events: Object.freeze(retained),
+      events: Object.freeze(state === undefined ? retained.map(withoutUnprovenRewrite) : retained),
       ...(state === undefined ? {} : { state }),
       ...(historyResults === undefined ? {} : { historyResults }),
     });
@@ -151,20 +154,30 @@ export function recordAnswerAccount(
       )
         gaps.add('tool-results');
       if (event.type === 'agentfootprint.pause.resume') gaps.add('resumed-state');
-      else if (requiresMoreEvidence(event.type)) gaps.add('unsupported-evidence');
-
       try {
-        const eventEvidence = projectEvent(event, maxBytes - bytes);
+        const decision =
+          event.type === TOOL_REWRITE_DECISION && rewriteStage === 'none' && gaps.size === 0
+            ? capture?.projectDecision(event.payload)
+            : undefined;
+        if (requiresMoreEvidence(event.type) && decision === undefined)
+          gaps.add('unsupported-evidence');
+        const eventEvidence = projectEvent(event, maxBytes - bytes, decision);
+        if (decision !== undefined) rewriteStage = 'decision';
         let toolResult: AccountEventEvidence['toolResult'];
         if (capture !== undefined && event.type === 'agentfootprint.stream.tool_end') {
-          const result = capture.captureEvent(event.payload as unknown as Record<string, unknown>);
-          if (result.kind === 'ready')
+          const result = capture.captureEvent(
+            event.payload as unknown as Record<string, unknown>,
+            maxBytes - bytes,
+            rewriteStage === 'decision' && gaps.size === 0,
+          );
+          if (result.kind === 'ready') {
             toolResult = copyJson(
               result.shape,
               maxBytes - bytes,
               true,
             ) as AccountEventEvidence['toolResult'];
-          else gaps.add(result.kind);
+            if (result.shape.view === 'model-result') rewriteStage = 'result';
+          } else gaps.add(result.kind);
         }
         const row = { event: eventEvidence, ...(toolResult === undefined ? {} : { toolResult }) };
         const rowBytes = 1 + jsonBytes({ index: ordinal, ...row });
@@ -187,4 +200,16 @@ export function recordAnswerAccount(
       return evidence === undefined ? 0 : peakRetainedEventBytes;
     },
   };
+}
+
+/** Candidate contents are never returned when their committed pair did not seal. */
+function withoutUnprovenRewrite(row: AccountEventEvidence): AccountEventEvidence {
+  if (row.event.type === TOOL_REWRITE_DECISION && Object.keys(row.event.payload).length > 0)
+    return Object.freeze({
+      index: row.index,
+      event: Object.freeze({ ...row.event, payload: Object.freeze({}) }),
+    });
+  if (row.toolResult?.view === 'model-result')
+    return Object.freeze({ index: row.index, event: row.event });
+  return row;
 }

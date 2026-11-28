@@ -12,9 +12,29 @@ export interface AccountEventEvidence {
   };
 }
 
+export const TOOL_REWRITE_DECISION = 'agentfootprint.middleware.decision';
+
+export type CommittedToolRewrite =
+  | { readonly kind: 'none' | 'unproven' }
+  | {
+      readonly kind: 'linked';
+      readonly historyIndex: number;
+      readonly decision: Readonly<Record<string, unknown>>;
+    };
+
 export interface CaptureToolEvidence {
   captureHistory(value: unknown): ResultShapeCapture;
-  captureEvent(payload: Readonly<Record<string, unknown>>): ResultShapeCapture;
+  captureEvent(
+    payload: Readonly<Record<string, unknown>>,
+    budget: number,
+    admitsRewrite: boolean,
+  ): ResultShapeCapture;
+  projectDecision(payload: unknown): Readonly<Record<string, unknown>> | undefined;
+  linkRewrite(
+    events: readonly AccountEventEvidence[],
+    ledger: unknown,
+    history: readonly unknown[],
+  ): CommittedToolRewrite;
 }
 
 export interface AccountHistoryResult {
