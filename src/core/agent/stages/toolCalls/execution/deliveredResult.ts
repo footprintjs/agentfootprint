@@ -138,6 +138,7 @@ export function landCallResult(
   // through `tools.effect` on the record.
   if (
     frame.outcome.toolEnvelope !== undefined &&
+    !frame.delivery.suppressResultEffects &&
     frame.execution.executed &&
     !frame.outcome.error &&
     !frame.execution.denied

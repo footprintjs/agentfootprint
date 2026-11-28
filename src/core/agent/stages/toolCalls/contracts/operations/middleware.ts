@@ -3,6 +3,7 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { Tool } from '../../../../../../tools/tools.js';
 import type { ToolArgs } from '../../../../../../tools/runChain.js';
+import type { ReadToolResultEnvelope } from '../../../../../../semantics/toolEffects.js';
 import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 
 /** Explicit callback contract for existing middleware operations. */
@@ -17,6 +18,7 @@ export interface ToolMiddlewareOperations {
       readonly iteration: number;
       readonly args: ToolArgs;
       readonly result: unknown;
+      readonly effectEnvelope?: ReadToolResultEnvelope;
       /** The hook received a returned value, including a plain pause answer. */
       readonly returned: boolean;
       readonly error?: boolean;
@@ -29,6 +31,7 @@ export interface ToolMiddlewareOperations {
     },
   ) => Promise<{
     readonly modelResult: unknown;
+    readonly suppressResultEffects?: true;
     readonly toolResultDisposition?: LLMMessage['toolResultDisposition'];
   }>;
 }

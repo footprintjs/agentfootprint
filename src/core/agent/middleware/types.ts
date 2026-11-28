@@ -395,4 +395,6 @@ export interface MiddlewareDecision {
    * rewrite of a RULED argument with no declared origin as assumed.
    */
   readonly changedKeys?: readonly string[];
+  /** The result hook prevented the observed typed proposals from reaching the graph or lease owner. */
+  readonly resultEffects?: { readonly disposition: 'suppressed' };
 }

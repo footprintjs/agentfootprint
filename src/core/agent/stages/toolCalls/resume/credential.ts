@@ -107,9 +107,10 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
+      let suppressResultEffects: true | undefined;
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+        const delivery = await links.afterMoment(scope, {
           returned:
             scriptSeen.toolResultExecution === 'returned' &&
             error !== true &&
@@ -121,6 +122,7 @@ export function buildResumeCredential(
           iteration,
           args,
           result,
+          effectEnvelope: dispatched.envelope,
           negativeResultId: dispatched.negativeResultId,
           ...(scriptSeen.resultFinalizer && {
             onSourceWithheld: scriptSeen.resultFinalizer.withheld,
@@ -129,7 +131,8 @@ export function buildResumeCredential(
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
           ...(env.signal && { signal: env.signal }),
-        }));
+        });
+        ({ modelResult, toolResultDisposition, suppressResultEffects } = delivery);
       }
       if (modelResult === undefined) modelResult = result;
       // Placement then the truncation net — the batch loop's precedence.
@@ -207,7 +210,7 @@ export function buildResumeCredential(
           consentResultStr,
         );
       }
-      if (consentEnvelope !== undefined) {
+      if (consentEnvelope !== undefined && !suppressResultEffects) {
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(
           scope,

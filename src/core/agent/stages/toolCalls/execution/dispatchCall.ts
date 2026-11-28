@@ -462,18 +462,24 @@ export function buildCallDispatch(
         if (!presented.ok) outcome.error = true;
       }
 
-      const { capped, modelResult, modelResultCapped, toolResultDisposition, toolSkillBody } =
-        await finalizeCallResult(scope, operations, {
-          tool,
-          tc,
-          batch,
-          callArguments,
-          execution,
-          outcome,
-          skillRejected: skillRoute.skillRejected,
-          sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
-          libraryBody: listedSkillReader,
-        });
+      const {
+        capped,
+        modelResult,
+        modelResultCapped,
+        toolResultDisposition,
+        toolSkillBody,
+        suppressResultEffects,
+      } = await finalizeCallResult(scope, operations, {
+        tool,
+        tc,
+        batch,
+        callArguments,
+        execution,
+        outcome,
+        skillRejected: skillRoute.skillRejected,
+        sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
+        libraryBody: listedSkillReader,
+      });
 
       const durationMs = Date.now() - startMs;
       recordCallSettlement(scope, {
@@ -496,6 +502,7 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
+        suppressResultEffects,
         ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
       recordServedLimits(

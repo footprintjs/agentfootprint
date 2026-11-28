@@ -111,6 +111,7 @@ export function buildResumeAsk(
     /** What the model reads. Differs from `result` only when a rule at the
      *  after-tool moment transformed or withheld it. */
     let modelResult: unknown;
+    let suppressResultEffects: true | undefined;
     let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** The call REALLY ran, clean — the step-advance eligibility this
@@ -222,7 +223,7 @@ export function buildResumeAsk(
         // last word here too — a rule about results cannot be skipped by
         // routing a call through a human.
         if (dispatched.executed === true) {
-          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          const delivery = await links.afterMoment(scope, {
             returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
             ...occurrence,
             ...(tool && { tool }),
@@ -231,6 +232,7 @@ export function buildResumeAsk(
             iteration,
             args: runArgs,
             result,
+            effectEnvelope: resumeEnvelope,
             negativeResultId,
             ...(scriptSeen.resultFinalizer && {
               onSourceWithheld: scriptSeen.resultFinalizer.withheld,
@@ -239,7 +241,8 @@ export function buildResumeAsk(
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
             ...(env.signal && { signal: env.signal }),
-          }));
+          });
+          ({ modelResult, toolResultDisposition, suppressResultEffects } = delivery);
         }
       }
 
@@ -308,7 +311,7 @@ export function buildResumeAsk(
       }
       // Typed tool effects (9.19.0) — a resumed call's envelope is judged
       // exactly as an inline one's (fresh single-call batch state).
-      if (resumeEnvelope !== undefined) {
+      if (resumeEnvelope !== undefined && !suppressResultEffects) {
         const askTransition: TransitionBatchState = { losers: [] };
         askResultStr += links.applyToolEffects(
           scope,

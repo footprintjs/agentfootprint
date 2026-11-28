@@ -179,6 +179,20 @@ Message boundary phase, or `resume` when a tool gate is asked again.
 
 ***
 
+### resultEffects?
+
+> `readonly` `optional` **resultEffects?**: `object`
+
+Defined in: [src/core/agent/middleware/types.ts:399](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L399)
+
+The result hook prevented the observed typed proposals from reaching the graph or lease owner.
+
+#### disposition
+
+> `readonly` **disposition**: `"suppressed"`
+
+***
+
 ### toolCallId?
 
 > `readonly` `optional` **toolCallId?**: `string`

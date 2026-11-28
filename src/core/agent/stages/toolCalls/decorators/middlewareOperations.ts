@@ -69,7 +69,19 @@ export function buildToolMiddlewareOperations(
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
     });
-    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
+    const resultHookRan = verdict.decisions.length > 0;
+    const envelope = call.effectEnvelope;
+    // The delivery reader can recognize proposals, but the native result owner
+    // supplies no original classification that could authorize hooked effects.
+    const decisions =
+      resultHookRan && envelope && (envelope.effects.length > 0 || envelope.malformed.length > 0)
+        ? verdict.decisions.map((decision, index, all) =>
+            index === all.length - 1
+              ? { ...decision, resultEffects: { disposition: 'suppressed' as const } }
+              : decision,
+          )
+        : verdict.decisions;
+    recordDecisions(scope, decisions, call.callOccurrenceKey);
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.
@@ -84,12 +96,15 @@ export function buildToolMiddlewareOperations(
       if (verdict.kind === 'deny' || notRead)
         captureNegativeRefusal(scope, call.toolName, delivered, call.args);
     }
+    const result = {
+      modelResult: delivered,
+      ...(resultHookRan ? { suppressResultEffects: true as const } : {}),
+    };
     if (verdict.kind === 'deny') {
-      if (!call.returned) return { modelResult: delivered };
-      return { modelResult: delivered, toolResultDisposition: 'withheld' };
+      return call.returned ? { ...result, toolResultDisposition: 'withheld' } : result;
     }
     return {
-      modelResult: delivered,
+      ...result,
       ...(verdict.decisions.some((decision) => decision.changed) && {
         toolResultDisposition: 'rewritten',
       }),

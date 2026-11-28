@@ -82,6 +82,7 @@ export interface CallSkillRoute {
 export interface CallDelivery {
   resultStr: string;
   modelResultCapped: boolean;
+  suppressResultEffects?: true;
   toolResultDisposition?: LLMMessage['toolResultDisposition'];
   toolSkillBody?: LLMMessage['toolSkillBody'];
 }

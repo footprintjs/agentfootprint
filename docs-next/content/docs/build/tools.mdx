@@ -521,6 +521,13 @@ dev mode warns you about the missing marker so the miss is never silent:
 
 <CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="tool-effects" title="examples/context-engineering/17-brains-and-tool-effects.ts (region: tool-effects)" />
 
+When an after-tool hook runs, the framework suppresses that call's typed
+transition and instruction proposals. This applies when the hook passes through,
+rewrites or withholds the content, including when the inner content is immutable.
+The model still receives the content or refusal selected by the hook. An external
+operation the tool already performed has its own outcome. Calls without a result
+hook still send their proposals through the graph and instruction lease rules.
+
 **Two effect kinds, deliberately:**
 
 - **`{ kind: 'propose-transition', targetSkillId, reason }`** — the typed

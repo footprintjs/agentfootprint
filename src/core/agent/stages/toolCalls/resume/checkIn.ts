@@ -130,6 +130,7 @@ export function buildResumeCheckIn(
     let result: unknown;
     /** What the model reads — see the ask path above. */
     let modelResult: unknown;
+    let suppressResultEffects: true | undefined;
     let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
@@ -178,7 +179,7 @@ export function buildResumeCheckIn(
         // Consent moved the execution to this side of the pause; the rules
         // about results move with it.
         if (dispatched.executed === true) {
-          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          const delivery = await links.afterMoment(scope, {
             returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
             ...occurrence,
             ...(tool && { tool }),
@@ -187,6 +188,7 @@ export function buildResumeCheckIn(
             iteration,
             args,
             result,
+            effectEnvelope: resumeEnvelope,
             negativeResultId,
             ...(scriptSeen.resultFinalizer && {
               onSourceWithheld: scriptSeen.resultFinalizer.withheld,
@@ -195,7 +197,8 @@ export function buildResumeCheckIn(
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
             ...(env.signal && { signal: env.signal }),
-          }));
+          });
+          ({ modelResult, toolResultDisposition, suppressResultEffects } = delivery);
         }
       } else {
         result = declinedResult(decision.note);
@@ -260,7 +263,7 @@ export function buildResumeCheckIn(
       }
       // Typed tool effects (9.19.0) — an approved consequential call may
       // carry them too; judged exactly as inline.
-      if (resumeEnvelope !== undefined) {
+      if (resumeEnvelope !== undefined && !suppressResultEffects) {
         const decisionTransition: TransitionBatchState = { losers: [] };
         decisionResultStr += links.applyToolEffects(
           scope,
