@@ -132,11 +132,16 @@ for (const mounted of [false, true]) {
                   request: door === 'check-in' ? paused.checkIn! : paused.ask!,
                   by: 'fixture',
                 });
-          await expect(current.resume(paused.checkpoint, answer)).resolves.toBe('done');
+          await expect(current.resume(paused.checkpoint, answer)).resolves.toBe(
+            'done\n\n---\n\nNot sure — a call did not run.',
+          );
           expect(ran).toEqual(['target', 'sibling']);
           expect(
-            s.requests[1]!.messages.find((message) => message.toolName === 'sibling')?.content,
+            s.requests[1]!.messages.find((message) => message.toolCallId === '1-1')?.content,
           ).toContain('without executing the calls that followed');
+          expect(
+            s.requests[2]!.messages.find((message) => message.toolCallId === '2-0')?.content,
+          ).toBe('ran');
         });
       }
     }

@@ -102,7 +102,6 @@ export async function assessment(
   return assessLive(
     snapshot,
     declarations,
-    () => retained()?.history,
     (key) => retained()?.[key],
     selected?.value.sourceConsultation?.checksOmission,
   );

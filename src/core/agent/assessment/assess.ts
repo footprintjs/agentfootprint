@@ -103,7 +103,6 @@ export function assessAnswer(
     declarations,
     servedUnderPolicy(record.snapshot),
     undefined,
-    undefined,
     record.events,
     undefined,
     checkOmission,
@@ -121,7 +120,6 @@ export function assessAnswer(
 export function assessLive(
   snapshot: unknown,
   declarations?: AssessmentDeclarations,
-  retainedHistory?: (history: readonly unknown[]) => unknown,
   retainedReasonState?: RetainedReasonState,
   checkOmission?: OmissionCheck,
 ): AnswerAssessment {
@@ -130,7 +128,6 @@ export function assessLive(
     stateOf({ snapshot }),
     declarations,
     false,
-    retainedHistory,
     undefined,
     undefined,
     retainedReasonState ?? (() => undefined),

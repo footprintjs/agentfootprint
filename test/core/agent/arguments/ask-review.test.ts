@@ -16,7 +16,7 @@ import {
  * found untested, and fail on the mutations that would break it.
  *
  * Test types (Convention 3):
- *   - FUNCTIONAL  — the SAME call needs the library's ask AND a second human
+ *   - FUNCTIONAL  — the same tool needs the library's ask AND a second human
  *                   step (its own check-in, a middleware `ask`, the tool's own
  *                   `requestInput`, a credential consent): the batch that asked
  *                   has no second pause to give, so the step is refused — and
@@ -126,6 +126,20 @@ const libraryAsks = (seen: readonly Event[]): Event[] =>
 const toolMessage = (req: LLMRequest | undefined, toolCallId: string) =>
   req?.messages.find((msg) => msg.role === 'tool' && msg.toolCallId === toolCallId);
 
+async function expectEarlierIncomplete(
+  agent: Agent,
+  result: unknown,
+  answerText: string,
+  line: string,
+): Promise<void> {
+  expect(result).toBe(`${answerText}\n\n---\n\nNot sure — ${line}`);
+  const reason = (await agent.assessment())?.reasons.find(
+    (entry) => entry.reason === 'call-not-completed',
+  );
+  // The successful second proposal leaves the first occurrence's reason intact.
+  expect(reason?.witness).toEqual([expect.objectContaining({ kind: 'history', toolCallId: 'c1' })]);
+}
+
 /** The clause a refusal gains when the call carried the person's answer (`serve/refusals.ts` · `keptAnswersNote`). */
 const keptWindow = (tool: string): string =>
   `The person's answer for window was kept for the next ${tool} call that leaves it out, ` +
@@ -135,9 +149,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ─── BLOCKING 1 — the same call needs the ask AND a second human step ───
+// ─── BLOCKING 1 — the same tool needs the ask AND a second human step ───
 
-describe('the SAME call needs the ask and a second human step — asked once, the answer kept', () => {
+describe('the same tool needs the ask and a second human step — asked once, the answer kept', () => {
   for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
     it(`its own check-in: refused after the ask, then paused on the next proposal, and it runs (${reactMode})`, async () => {
       const ran: Record<string, unknown>[] = [];
@@ -175,7 +189,7 @@ describe('the SAME call needs the ask and a second human step — asked once, th
         stored(second),
         checkInApproved({ request: pausedRequest(second), by: 'ops' }),
       );
-      expect(done).toBe('Purged.');
+      await expectEarlierIncomplete(agent, done, 'Purged.', 'a call was refused.');
       expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
       // Asked ONCE; three model calls, none for the resume of either pause.
       expect(libraryAsks(seen)).toHaveLength(1);
@@ -215,7 +229,7 @@ describe('the SAME call needs the ask and a second human step — asked once, th
       stored(second),
       checkInApproved({ request: pausedRequest(second), by: 'ops' }),
     );
-    expect(done).toBe('No errors.');
+    await expectEarlierIncomplete(agent, done, 'No errors.', 'a call was refused.');
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(libraryAsks(seen)).toHaveLength(1);
   });
@@ -263,7 +277,7 @@ describe('the SAME call needs the ask and a second human step — asked once, th
       requestId: second.awaitingInput.requestId,
       values: { format: 'csv' },
     });
-    expect(done).toBe('Exported.');
+    await expectEarlierIncomplete(agent, done, 'Exported.', 'a call failed.');
     expect(libraryAsks(seen)).toHaveLength(1);
   });
 
@@ -325,7 +339,7 @@ describe('the SAME call needs the ask and a second human step — asked once, th
     ).toBe('billing');
     vault.granted = true; // the person consented, out of band
     const done = await agent.resume(stored(second), undefined as never);
-    expect(done).toBe('Paid by wire.');
+    await expectEarlierIncomplete(agent, done, 'Paid by wire.', 'a call was refused.');
     expect(ran).toEqual([{ id: 'INV-42', method: 'wire' }]);
     expect(libraryAsks(seen)).toHaveLength(1);
   });

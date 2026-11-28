@@ -104,7 +104,6 @@ describe('recorded source consultation', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       (ref, callable, label) =>
         ref.series === 'call-a' && callable === 2 && label === 'the archive',
     );
@@ -151,7 +150,6 @@ describe('recorded source consultation', () => {
       false,
       undefined,
       undefined,
-      undefined,
       (key, value) => (key === 'settledToolCalls' ? 'REDACTED' : value),
     );
     expect(retained.reasons.map(({ reason }) => reason)).not.toContain('source-not-consulted');
@@ -171,7 +169,7 @@ describe('recorded source consultation', () => {
       assess(unrelated),
     );
     expect(
-      foldState(baseline, undefined, false, undefined, undefined, undefined, (key, value) =>
+      foldState(baseline, undefined, false, undefined, undefined, (key, value) =>
         key === 'sourceConsultation' ? 'REDACTED' : value,
       ),
     ).toEqual(assess(unrelated));
@@ -213,16 +211,7 @@ describe('recorded source consultation', () => {
     });
     expect(assess(state(omission)).reasons).toEqual([]);
     const withReceipt = (row: object) =>
-      foldState(
-        state(row),
-        undefined,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        () => true,
-      );
+      foldState(state(row), undefined, false, undefined, undefined, undefined, () => true);
     expect(withReceipt(omission).reasons[0]?.detail).toEqual({ unavailableTools: ['archive'] });
     for (const row of [
       { ...omission, iteration: 2 },

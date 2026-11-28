@@ -57,6 +57,10 @@
       "before": "Two failures on host-103; none found for host-999.",
       "after": "Two failures on host-103; none found for host-999.\n\n---\n\nNot sure — a tool said nothing matched; a tool's data does not reach the time the question asked about."
     },
+    "agent-scoped-provider": {
+      "before": "done",
+      "after": "done\n\n---\n\nNot sure — a call was refused."
+    },
     "agent-stepped-skill": {
       "before": "done",
       "after": "done\n\n---\n\nNot sure — the answer came before the skill's declared steps finished."

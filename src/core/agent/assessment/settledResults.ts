@@ -10,7 +10,7 @@ import { hasOwnDeclarationWitness } from './results/coverage/declarations.js';
 
 type Settlements = NonNullable<ReturnType<typeof standingAdmission>['settlements']>;
 
-/** Retained messages can place a witness or prove equal-argument recovery. */
+/** A retained message can locate the witness of its own settlement. */
 export function placeSettledResults(
   settlements: Settlements,
   results: readonly TurnResult[],
@@ -18,7 +18,6 @@ export function placeSettledResults(
 ) {
   const keyAt = new Map(current.map((call) => [call.index, call.occurrenceKey]));
   const byKey = new Map<string, TurnResult>();
-  const byIndex = new Map<number, NonNullable<ReturnType<Settlements['byKey']['get']>>['fact']>();
   const retained = results.flatMap((result) => {
     if (result.batchRefusal) return [result];
     const key = keyAt.get(result.index);
@@ -39,10 +38,9 @@ export function placeSettledResults(
       ...(fact.reportedStatus !== undefined && { reportedStatus: fact.reportedStatus }),
     };
     byKey.set(key, kept);
-    byIndex.set(result.index, fact);
     return [kept];
   });
-  return { retained, byKey, byIndex };
+  return { retained, byKey };
 }
 
 /** Settlement owns the reason. History gives it a location only when the message survives. */
@@ -50,7 +48,6 @@ export function readSettledResults(
   settlements: Settlements,
   placed: ReturnType<typeof placeSettledResults>,
   coverage: readonly CoverageRow[],
-  recovered: ReadonlySet<number>,
   periodReasons: Readonly<Record<string, AssessmentReason>>,
   g: Gathered,
 ): void {
@@ -59,7 +56,7 @@ export function readSettledResults(
     coverage.filter((row) => row.kind === 'absence').map((row) => row.occurrenceKey),
   );
   const gapCalls = new Set(coverage.filter((row) => row.gap).map((row) => row.occurrenceKey));
-  readCallOutcomes(placed.retained, recovered, g);
+  readCallOutcomes(placed.retained, g);
   for (const [key, { index, fact }] of settlements.byKey) {
     if (fact.delivery === 'withheld') continue;
     const result = placed.byKey.get(key);

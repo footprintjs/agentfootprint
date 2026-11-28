@@ -159,7 +159,6 @@ export async function assessAnswerStage(
   const assessed = assessLive(
     { sharedState: record },
     undefined,
-    (history) => retainedStateValue(scope, 'history', history),
     (key, value) => retainedStateValue(scope, key, value),
     deps.checkOmission,
   );

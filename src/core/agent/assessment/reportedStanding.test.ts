@@ -47,12 +47,12 @@ describe('standing over a committed reported status', () => {
   });
 
   it.each([
-    { label: 'same recorded arguments', retry: { item: 'a' }, status: undefined, clears: true },
-    { label: 'different arguments', retry: { item: 'b' }, status: undefined, clears: false },
-    { label: 'hidden arguments', retry: { item: 'REDACTED' }, status: undefined, clears: false },
-    { label: 'missing arguments', retry: undefined, status: undefined, clears: false },
-    { label: 'unfinished retry', retry: { item: 'a' }, status: 'partial' as const, clears: false },
-  ])('decides recovery with $label', ({ retry, status, clears }) => {
+    { label: 'same recorded arguments', retry: { item: 'a' }, status: undefined },
+    { label: 'different arguments', retry: { item: 'b' }, status: undefined },
+    { label: 'hidden arguments', retry: { item: 'REDACTED' }, status: undefined },
+    { label: 'missing arguments', retry: undefined, status: undefined },
+    { label: 'unfinished retry', retry: { item: 'a' }, status: 'partial' as const },
+  ])('keeps earlier unfinished work with $label', ({ retry, status }) => {
     const history = [
       user,
       proposed('c1', { item: 'a' }),
@@ -60,10 +60,10 @@ describe('standing over a committed reported status', () => {
       proposed('c2', retry),
       landed('c2', status),
     ];
-    expect(reasonCodes(history).some((r) => r.reason === 'work-not-finished')).toBe(!clears);
+    expect(reasonCodes(history).some((r) => r.reason === 'work-not-finished')).toBe(true);
   });
 
-  it('clears only the occurrence retried with matching arguments under a reused id', () => {
+  it('keeps unfinished witnesses for both occurrences under a reused id', () => {
     const id = 'c1';
     const history = [
       user,
@@ -77,11 +77,10 @@ describe('standing over a committed reported status', () => {
     expect(reasonCodes(history)).toMatchObject([
       {
         reason: 'work-not-finished',
-        source: {
-          kind: 'calls',
-          calls: [{ toolCallId: id, toolName: tool, reportedStatus: 'partial' }],
-        },
-        witness: [{ kind: 'history', index: 4, path: '/reportedStatus' }],
+        witness: [
+          { kind: 'history', index: 2, path: '/reportedStatus' },
+          { kind: 'history', index: 4, path: '/reportedStatus' },
+        ],
       },
     ]);
   });

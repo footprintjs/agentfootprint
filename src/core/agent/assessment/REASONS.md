@@ -16,7 +16,7 @@ complete witness table in `reasonClasses.ts`.
 | `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
 | `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
 | `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `inputs/stage.ts` · `firstRowOfTurn`) |
-| `call-not-completed` | 3 | `history`: a recorded refusal, failure or settled call of this turn. A malformed batch carries a refusal frame with no fabricated tool-result correlation. A later completed call of the same tool with equal recorded arguments clears the reason for that call. If the arguments are absent or kept out of the record, the reason fires. |
+| `call-not-completed` | 3 | `history`: a recorded refusal, failure or settled call of this turn. A malformed batch carries a refusal frame with no fabricated tool-result correlation. A later completion proves the outcome of its own occurrence. The earlier reason stays when recovery is unproven. |
 | `result-withheld` | 3 | This turn's record proves a host rule denied a returned result. The standing gives no number, call name, witness or result facts. |
 | `result-cut` | 3 | `libraryResultLimits`: a tool result was cut. |
 | `placed-unread` | 3 | `libraryResultLimits`: a tool result was stored by reference and not read. |
@@ -24,7 +24,7 @@ complete witness table in `reasonClasses.ts`.
 | `result-dropped-from-window` | 3 | `libraryResultLimits` receipts joined to `settledToolCalls` by occurrence. The standing counts delivered results removed by an applied window change in the current turn. |
 | `memory-retrieval-timeout` | 3 | A current-turn `retrieval-request` row in `findingsLedger` retains a typed timeout. All relevant requests have proved zero recall inclusion, and the final provider response committed. |
 | `memory-retrieval-excluded` | 3 | The same request proof accompanies a recorded candidate pool that the selection stages fully excluded. The source row supplies the exclusion counts. |
-| `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The same completed-retry rule applies. |
+| `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The reason stays when recovery is unproven. |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
 | `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, the app's `rowsAt` key, or the dataset ticket left where those rows were, counting 0) whose call has no coverage row |

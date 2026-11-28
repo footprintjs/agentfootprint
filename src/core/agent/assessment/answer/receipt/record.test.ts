@@ -83,7 +83,6 @@ describe('committed execution claim assessments', () => {
     const live = assessLive(
       { sharedState: { answerExecutionClaims: reportOf(contradicted) } },
       undefined,
-      undefined,
       (key, value) => rule.retain([key], value),
     );
     const saved = fold(
@@ -136,7 +135,6 @@ describe('committed execution claim assessments', () => {
       const rule = new RedactionRule({ fields: { answerExecutionClaims: [path] } });
       const live = assessLive(
         { sharedState: { answerExecutionClaims: confirmed } },
-        undefined,
         undefined,
         (key, value) => rule.retain([key], value),
       );

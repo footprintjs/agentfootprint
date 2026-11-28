@@ -190,7 +190,7 @@ describe('argument standing from a recorded call key', () => {
       coverageDeclared: [{ ...declaration, callOccurrenceKey: firstKey }],
     };
     const assessment = foldState(state, undefined, false);
-    const recorded = foldState(state, undefined, false, undefined, new Map([[0, 2]]));
+    const recorded = foldState(state, undefined, false, new Map([[0, 2]]));
     expect(recorded).toEqual(assessment);
     expect(assessment.reasons.find((row) => row.reason === 'coverage-gap')).toBeUndefined();
     const matched = foldState(

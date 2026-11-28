@@ -1,6 +1,6 @@
 /**
  * SCENARIO — the standing reads how this turn's calls settled, in the answer
- * and from its saved recording. BOUNDARY — the retry needs comparable arguments.
+ * and from its saved recording. BOUNDARY — a later success cannot settle an earlier call.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Agent, checkInDeclined, defineTool, deny, isCheckInPause } from '../../../index.js';
 import { mock } from '../../../llm-providers.js';
 import { assessAnswer, recordRun, type AnswerAssessment } from '../../../observe.js';
+import { buildRecordingEnvelope } from '../../../recorders/observability/recordingEnvelope.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { assessmentDataOf } from './compose.js';
 
@@ -63,7 +64,12 @@ async function leg(agent: Agent, drive = () => agent.run({ message: 'Read the in
       expect(event?.payload).toMatchObject(projection);
       expect(turnEnd?.payload).toMatchObject({ answerAssessment: projection });
     }
-    return { result, assessment, history: recording.snapshot.sharedState.history as LLMMessage[] };
+    return {
+      result,
+      assessment,
+      recording,
+      history: recording.snapshot.sharedState.history as LLMMessage[],
+    };
   } finally {
     recorder.stop();
   }
@@ -191,28 +197,87 @@ describe('the standing for a committed call outcome', () => {
   });
 });
 
-describe('retrying a call in the standing', () => {
+describe('separate call outcomes in the standing', () => {
   const firstArgs = { item: 'amber', options: { include: ['tags', 'notes'], limit: 2 } };
   const equalArgs = { options: { limit: 2, include: ['tags', 'notes'] }, item: 'amber' };
   const differentArgs = { ...equalArgs, item: 'green' };
 
-  function retry(secondArgs = equalArgs, earlierFailure = true, hideItem = false) {
+  function successiveCalls(
+    secondArgs = equalArgs,
+    earlierFailure = true,
+    hideItem = false,
+    statement = '',
+  ) {
     const execute = vi.fn<() => unknown>(earlierFailure ? () => 'Available' : failed);
     execute.mockImplementationOnce(earlierFailure ? failed : () => 'Available');
-    return agentFor([call('read-1', firstArgs), call('read-2', secondArgs), answered], hideItem)
+    return agentFor(
+      [call('read-1', firstArgs), { ...call('read-2', secondArgs), content: statement }, answered],
+      hideItem,
+    )
       .tool(inventory(execute))
       .build();
   }
 
-  it('clears a failure when the later call completes with structurally equal arguments', async () => {
-    const run = await leg(retry());
-    expectOutcome(run.history, 'read-1', 'failed');
-    expectOutcome(run.history, 'read-2');
-    expect(run.assessment.reasons).toEqual([]);
-    expect(run.assessment.standing).toBe('not-assessed');
+  it.each(['An independent lookup.', 'I am retrying the lookup.'])(
+    'keeps the exact earlier failure after an equal-input success described as %s',
+    async (statement) => {
+      const run = await leg(successiveCalls(equalArgs, true, false, statement));
+      expectOutcome(run.history, 'read-1', 'failed');
+      expectOutcome(run.history, 'read-2');
+      expectIncomplete(run.assessment);
+      expectLine(run.result, 'failed');
+    },
+  );
+
+  it('keeps the failure for a bare recording and after re-export with a new package stamp', async () => {
+    const run = await leg(successiveCalls());
+    const imported = {
+      producer: { agentfootprintVersion: '20.6.0' },
+      recording: run.recording,
+    };
+    const { recording: bare } = JSON.parse(JSON.stringify(imported));
+    const recreated = buildRecordingEnvelope(bare, { run: { complete: true, droppedEvents: 0 } });
+    expect(typeof recreated.producer.agentfootprintVersion).toBe('string');
+    const saved = JSON.parse(JSON.stringify(recreated)).recording;
+    expectIncomplete(assessAnswer(saved));
+    expect(assessAnswer(saved)).toEqual(assessAnswer(bare));
   });
 
-  it('clears only the matching failure when retries reuse the call id', async () => {
+  it.each(['withheld', 'partial', 'missing'] as const)(
+    'keeps the earlier reason when the later settlement is %s',
+    async (later) => {
+      const { recording, history } = await leg(successiveCalls());
+      const snapshot = recording.snapshot;
+      const rows = snapshot.sharedState.settledToolCalls;
+      expect(rows).toHaveLength(2);
+      const laterRow =
+        later === 'withheld'
+          ? { ...rows[1], delivery: 'withheld' }
+          : { ...rows[1], reportedStatus: 'partial' };
+      const changed = {
+        ...recording,
+        snapshot: {
+          ...snapshot,
+          sharedState: {
+            ...snapshot.sharedState,
+            history: history.map((message) =>
+              message.toolCallId === 'read-2'
+                ? { ...message, content: later === 'withheld' ? 'REDACTED' : message.content }
+                : message,
+            ),
+            settledToolCalls: later === 'missing' ? rows.slice(0, 1) : [rows[0], laterRow],
+            settledToolCallsComplete: later !== 'missing',
+          },
+        },
+      };
+      const earlier = assessAnswer(changed).reasons.find((item) => item.reason === NOT_COMPLETED);
+      expect(earlier?.witness).toEqual([
+        expect.objectContaining({ kind: 'history', path: '/outcome', toolCallId: 'read-1' }),
+      ]);
+    },
+  );
+
+  it('keeps both distinct failures when a later success reuses their provider id', async () => {
     const id = 'lookup';
     const differentFailure = 'The green item could not be read.';
     const execute = vi
@@ -233,15 +298,14 @@ describe('retrying a call in the standing', () => {
       [id, 'failed'],
       [id, undefined],
     ]);
-    expectIncomplete(run.assessment, id);
-    expect(run.assessment.reasons[0]?.witness).toEqual([
-      {
-        kind: 'history',
-        index: run.history.findIndex((message) => message.content === differentFailure),
-        path: '/outcome',
-        toolCallId: id,
-      },
-    ]);
+    const earlierFailures = run.history.flatMap((message, index) =>
+      message.outcome === 'failed'
+        ? [{ kind: 'history', index, path: '/outcome', toolCallId: id }]
+        : [],
+    );
+    expect(earlierFailures).toHaveLength(2);
+    const reason = run.assessment.reasons.find((entry) => entry.reason === NOT_COMPLETED);
+    expect(reason?.witness).toEqual(earlierFailures);
   });
 
   it('keeps the failure when the matching completion was proposed in the same batch', async () => {
@@ -256,7 +320,7 @@ describe('retrying a call in the standing', () => {
   });
 
   it('leaves a failure when the later call completes with different arguments', async () => {
-    const run = await leg(retry(differentArgs));
+    const run = await leg(successiveCalls(differentArgs));
     expectOutcome(run.history, 'read-1', 'failed');
     expectOutcome(run.history, 'read-2');
     expectIncomplete(run.assessment);
@@ -264,7 +328,7 @@ describe('retrying a call in the standing', () => {
   });
 
   it('leaves a failure when only an earlier call completed with equal arguments', async () => {
-    const run = await leg(retry(equalArgs, false));
+    const run = await leg(successiveCalls(equalArgs, false));
     expectOutcome(run.history, 'read-1');
     expectOutcome(run.history, 'read-2', 'failed');
     expectIncomplete(run.assessment, 'read-2');
@@ -274,7 +338,7 @@ describe('retrying a call in the standing', () => {
   it.each(['masked', 'missing'] as const)(
     'leaves a failure when the saved arguments are %s',
     async (keptOut) => {
-      const run = await leg(retry());
+      const run = await leg(successiveCalls());
       const history = run.history.map((message) => {
         if (message.toolCalls?.length !== 1) return message;
         const { args, ...request } = message.toolCalls[0]!;
@@ -291,7 +355,7 @@ describe('retrying a call in the standing', () => {
   );
 
   it('leaves a failure when the record policy hides part of otherwise equal arguments', async () => {
-    const run = await leg(retry(equalArgs, true, true));
+    const run = await leg(successiveCalls(equalArgs, true, true));
     const proposals = run.history.flatMap((message) => message.toolCalls ?? []);
     expect(proposals.map((proposal) => proposal.args.item)).toEqual(['REDACTED', 'REDACTED']);
     expectIncomplete(run.assessment);
