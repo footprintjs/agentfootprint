@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.7.0] - 2026-11-28
+
+### Added
+
+- **Open one child's recorded evidence in Agent `why`.** A verified host can supply the finished turn's exact child log address alongside a cause-graph node. The reader reports local evidence and explicit gaps for incomplete or unavailable child logs.
+
+- **Record group standing for a Sequence.** Opt in to a standing and coverage summary when a directly run Sequence finishes. The summary uses recorded member assessments and reports incomplete coverage when earlier evidence is unavailable.
+
 ## [20.6.0] - 2026-11-28
 
 ### Added
