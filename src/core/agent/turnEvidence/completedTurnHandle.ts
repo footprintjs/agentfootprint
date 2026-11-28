@@ -1,6 +1,15 @@
 import type { LogAddress } from 'foottrace';
 
+import { armDeadline, awaitUnder } from '../../../lib/abort.js';
+
 import { admitCompletedTurn } from './admitCompletedTurn.js';
+import {
+  type CompletedTurnChild,
+  completedTurnChild,
+  completedTurnTarget,
+  retainedChildResult,
+  sameCompletedLog,
+} from './completedTurnScope.js';
 import { isRecord, type RecordedTurn } from './source.js';
 import type { TurnEvidenceSource } from './types.js';
 
@@ -30,17 +39,20 @@ interface CompletedTurnOrigin {
   readonly logAddress: LogAddress;
 }
 
+interface ResolvedSource {
+  readonly recording: TurnEvidenceSource;
+  readonly readChild?: (path: readonly string[], signal: AbortSignal) => Promise<unknown>;
+}
+
 type Source =
   | { readonly kind: 'live'; readonly recording: TurnEvidenceSource }
   | {
       readonly kind: 'saved';
       readonly receiptRef: string;
-      readonly redeem: (ref: string) => Promise<
-        | {
-            readonly ref: string;
-            readonly originRunId: string;
-            readonly recording: TurnEvidenceSource;
-          }
+      readonly redeem: (
+        ref: string,
+      ) => Promise<
+        | (ResolvedSource & { readonly ref: string; readonly originRunId: string })
         | { readonly ref: string; readonly status: 'too-large' }
         | undefined
       >;
@@ -75,31 +87,32 @@ export function issueCompletedTurn(binding: TurnBinding): CompletedAgentTurn {
   return handle;
 }
 
-function sameLog(candidate: unknown, expected: LogAddress): boolean {
-  if (!isRecord(candidate) || candidate.logRunId !== expected.logRunId) return false;
-  const path = candidate.drillPath;
-  return (
-    Array.isArray(path) &&
-    path.length === expected.drillPath.length &&
-    expected.drillPath.every((segment, index) => segment === path[index])
-  );
-}
-
 type TurnRead =
-  | { readonly status: 'ready'; readonly turn: RecordedTurn }
-  | { readonly status: 'turn-unavailable' | 'coverage-work-limit' | 'recording-too-large' };
+  | {
+      readonly status: 'ready';
+      readonly turn: RecordedTurn;
+      readonly nodeId?: string;
+      readonly child?: CompletedTurnChild;
+    }
+  | {
+      readonly status:
+        | 'turn-unavailable'
+        | 'coverage-work-limit'
+        | 'recording-too-large'
+        | 'subflow-evidence-unavailable';
+    };
 
 const unavailable = Object.freeze({ status: 'turn-unavailable' } as const);
 
 async function redeemExact(
   source: Source,
   runId: string,
-): Promise<TurnEvidenceSource | 'too-large' | undefined> {
-  if (source.kind === 'live') return source.recording;
+): Promise<ResolvedSource | 'too-large' | undefined> {
+  if (source.kind === 'live') return source;
   const redeemed = await source.redeem(source.receiptRef);
   if (redeemed?.ref !== source.receiptRef) return undefined;
   if ('status' in redeemed) return redeemed.status;
-  return redeemed.originRunId === runId ? redeemed.recording : undefined;
+  return redeemed.originRunId === runId ? redeemed : undefined;
 }
 
 /** @internal The only reader of a held turn. Refusals carry no facts about the turn. */
@@ -107,28 +120,55 @@ export async function readCompletedTurn(
   owner: object,
   handle: CompletedAgentTurn | undefined,
   node?: CompletedTurnNode,
+  childTimeoutMs = 1000,
 ): Promise<TurnRead> {
   const binding = handle === undefined ? undefined : bindings.get(handle);
   if (binding === undefined || binding.owner !== owner) return unavailable;
   const { origin, scope, source, allowed } = binding;
   try {
-    if (
-      node !== undefined &&
-      (node.runId !== origin.runId || !sameLog(node.logAddress, origin.logAddress))
-    )
-      return unavailable;
+    const target =
+      node === undefined ? undefined : completedTurnTarget(node, origin.runId, origin.logAddress);
+    if (node !== undefined && target === undefined) return unavailable;
     if (!(await allowed(scope))) return unavailable;
-    const recording = await redeemExact(source, origin.runId);
-    if (recording === undefined || !(await allowed(scope))) return unavailable;
-    if (recording === 'too-large') return { status: 'recording-too-large' };
+    const sourceRead = await redeemExact(source, origin.runId);
+    if (sourceRead === undefined || !(await allowed(scope))) return unavailable;
+    if (sourceRead === 'too-large') return { status: 'recording-too-large' };
+    const { recording, readChild } = sourceRead;
     const { snapshot } = recording;
     if (
       !isRecord(snapshot) ||
       snapshot.runId !== origin.engineRunId ||
-      !sameLog(snapshot.logAddress, origin.logAddress)
+      !sameCompletedLog(snapshot.logAddress, origin.logAddress)
     )
       return unavailable;
-    return admitCompletedTurn({ events: recording.events, snapshot }, origin.runId, origin.resumed);
+    const admitted = admitCompletedTurn(
+      { events: recording.events, snapshot },
+      origin.runId,
+      origin.resumed,
+    );
+    if (admitted.status !== 'ready' || target === undefined) return admitted;
+    const mount = target.relativePath.at(-1);
+    if (mount === undefined) return { ...admitted, nodeId: target.id };
+    let result: unknown;
+    if (source.kind === 'live') {
+      result = retainedChildResult(snapshot, mount);
+    } else {
+      const controller = new AbortController();
+      const { signal } = controller;
+      const disarm = armDeadline(controller, childTimeoutMs, () => undefined);
+      try {
+        result = await awaitUnder(signal, () => readChild?.(target.relativePath, signal));
+      } catch {
+        // A part that could not be read cannot supply evidence.
+      } finally {
+        disarm();
+      }
+      if (!(await allowed(scope))) return unavailable;
+    }
+    const child = completedTurnChild(result, mount, target.address);
+    return child === undefined
+      ? { status: 'subflow-evidence-unavailable' }
+      : { ...admitted, nodeId: target.id, child };
   } catch {
     return unavailable;
   }

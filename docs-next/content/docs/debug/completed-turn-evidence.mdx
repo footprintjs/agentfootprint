@@ -15,4 +15,10 @@ An empty declared-coverage list says the admitted turn recorded no coverage decl
 
 For an authorized saved turn that exceeds the reader's recording limit, both readers return a `recording-too-large` gap. For resumed turns, coverage includes verified declarations from before the pause. If the reader cannot establish that coverage, it reports `resumed-turn-coverage-incomplete`.
 
-`why` reads the root scope. When child scopes are present, it reports `scope-boundary` and names unopened subflows so callers can see where the evidence stops.
+A node created with `completed.node(nodeId)` reads the root scope and names unopened subflows. To ask about a node inside a child, pass both the cause-graph node ID and the child's recorded log address from your viewer. Use the full execution address so a repeated mount resolves to the intended occurrence.
+
+<CodeFile path="examples/artifacts/completed-turn-evidence.ts" region="child-why" />
+
+Saved reads require a complete admitted index and select one invocation after checking the host's authority. With indexed parts, the reader fetches the root and the part containing the selected child. Whole recordings load the entire saved artifact before selecting the child in memory. The cause query uses only the selected child's evidence.
+
+A missing, withheld, legacy, or timed-out child read returns `subflow-evidence-unavailable` while the host still authorizes the request. Reading an earlier child after a pause requires FootPrint to have retained that child's history. FootPrint 14.6.0 can do this when the same engine instance resumes and its effective redaction policy remains provably unchanged. A readable child can return its recorded local edges with `cause-incomplete` when coverage cannot establish their earlier sources.

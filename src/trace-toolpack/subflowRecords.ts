@@ -22,6 +22,7 @@
 
 import { getSubtreeSnapshot } from 'footprintjs';
 import type { RuntimeSnapshot } from 'footprintjs';
+import type { CompletedTurnChild } from '../core/agent/turnEvidence/completedTurnScope.js';
 
 /** The subflow results map, when the snapshot carries one as a map. */
 export function subflowResultsOf(snapshot: RuntimeSnapshot): Record<string, unknown> | undefined {
@@ -170,4 +171,45 @@ export function openSubflow(snapshot: RuntimeSnapshot, mount: string): RuntimeSn
     ...(logAddress !== undefined && { logAddress }),
     ...(writeProvenance !== undefined && { writeProvenance }),
   } as unknown as RuntimeSnapshot;
+}
+
+/** Open just the admitted result. No ancestor tree, live state or root capture enters this view. */
+export function completedChildCauseView(
+  root: unknown,
+  { mount, address, result }: CompletedTurnChild,
+) {
+  const tree = capturedField<unknown>(result, 'treeContext');
+  const executionTree = capturedField<unknown>(tree, 'stageContexts');
+  const history = capturedField<unknown>(tree, 'history');
+  if (
+    executionTree === null ||
+    typeof executionTree !== 'object' ||
+    Array.isArray(executionTree) ||
+    !Array.isArray(history)
+  )
+    return undefined;
+
+  // Supply only the retained native child's own fields to the existing open operation.
+  const subtree = getSubtreeSnapshot(
+    {
+      subflowResults: {
+        [mount]: {
+          treeContext: {
+            stageContexts: executionTree,
+            history,
+            initialState: capturedField<unknown>(tree, 'initialState'),
+          },
+        },
+      },
+    } as RuntimeSnapshot,
+    mount,
+  );
+  if (subtree === undefined) return undefined;
+  return {
+    logAddress: address,
+    executionTree: subtree.executionTree,
+    commitLog: subtree.history,
+    initialState: subtree.initialState,
+    commitValues: capturedField<unknown>(root, 'commitValues'),
+  };
 }

@@ -6,7 +6,10 @@ import {
   issueCompletedTurn,
 } from '../../core/agent/turnEvidence/completedTurnHandle.js';
 import { captureAddress } from '../../trace-toolpack/causeCapture.js';
-import { openSavedRecording } from '../../recorders/observability/recordingParts/open.js';
+import {
+  openSavedRecording,
+  type SavedRecording,
+} from '../../recorders/observability/recordingParts/open.js';
 import { verifyRequestIdentity } from '../identityVerification.js';
 import type { ArtifactsForRequestInput } from '../types.js';
 import type { ArtifactAccess } from './artifacts/access.js';
@@ -17,8 +20,8 @@ import { repeatsAuthorization, singleValuedHeaders } from './identity/request.js
 export interface HostedCompletedAgentTurn {
   readonly agent: Agent;
   readonly runId: string;
-  /** Scope an existing cause-graph node ID to this completed turn. */
-  node(id: string): CompletedTurnNode;
+  /** Scope an existing cause-graph node ID to the root or an exact recorded child of this turn. */
+  node(id: string, logAddress?: CompletedTurnNode['logAddress']): CompletedTurnNode;
   /** The callback supplies the current host request each time authorization is checked. */
   forRequest(
     request: () => ArtifactsForRequestInput,
@@ -36,6 +39,29 @@ interface OfferOptions {
   readonly identity: NonNullable<Configuration['identityOptions']>;
   readonly access: ArtifactAccess;
   readonly active: (agent: Agent) => boolean;
+}
+
+function samePath(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && right.every((part, index) => part === left[index]);
+}
+
+async function readSavedChild(
+  saved: SavedRecording,
+  engineRunId: string,
+  path: readonly string[],
+  signal: AbortSignal,
+): Promise<unknown> {
+  if (!saved.complete || saved.snapshotRunId !== engineRunId) return undefined;
+  const key = path.at(-1);
+  const mount = saved.invocations.find((entry) => entry.key === key);
+  if (!mount?.recorded || !samePath(mount.path, path)) return undefined;
+  const child = await saved.readInvocation(mount.key, { signal });
+  return child.status === 'ready' &&
+    child.invocation.key === mount.key &&
+    child.invocation.subflowId === mount.subflowId &&
+    samePath(child.invocation.path, path)
+    ? child.result
+    : undefined;
 }
 
 export function completedTurnOffer({ observe, identity, access, active }: OfferOptions) {
@@ -91,7 +117,7 @@ export function completedTurnOffer({ observe, identity, access, active }: OfferO
     const offer: HostedCompletedAgentTurn = {
       agent,
       runId,
-      node: (id) => ({ id, runId, logAddress }),
+      node: (id, address = logAddress) => ({ id, runId, logAddress: address }),
       async forRequest(request, source = 'live') {
         try {
           if (source !== 'live' && source !== 'saved') return undefined;
@@ -128,7 +154,12 @@ export function completedTurnOffer({ observe, identity, access, active }: OfferO
                 const root = await saved.readRoot();
                 if (root.status !== 'ready')
                   return root.reason === 'too-large' ? { ref, status: 'too-large' } : undefined;
-                return { ref, originRunId: saved.runId, recording: root.recording };
+                return {
+                  ref,
+                  originRunId: saved.runId,
+                  recording: root.recording,
+                  readChild: (path, signal) => readSavedChild(saved, engineRunId, path, signal),
+                };
               },
             },
           });

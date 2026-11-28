@@ -11,6 +11,7 @@ import { causeLimits } from './causeLimits.js';
 import { projectCauseBasis } from './causeProjection.js';
 import { readCauseOfNode } from './causeReader.js';
 import { indexCauseStages } from './storedCauseProjection.js';
+import { completedChildCauseView } from './subflowRecords.js';
 
 const limits = causeLimits({
   includeBackward: true,
@@ -41,17 +42,21 @@ export async function explainCompletedTurn(
   node: CompletedTurnNode,
   handle: CompletedAgentTurn | undefined,
 ) {
-  if (node === undefined || typeof node.id !== 'string' || node.id.length === 0)
-    return { gaps: ['turn-unavailable'] };
-  const admitted = await readCompletedTurn(owner, handle, node);
+  if (node === undefined) return { gaps: ['turn-unavailable'] };
+  const admitted = await readCompletedTurn(owner, handle, node, limits.timeoutMs);
   if (admitted.status !== 'ready') return { gaps: [admitted.status] };
-  const { snapshot, terminal } = admitted.turn;
+  const { child, nodeId, turn } = admitted;
+  if (nodeId === undefined) return { gaps: ['turn-unavailable'] };
+  const { snapshot: root, terminal } = turn;
   const runId = terminal.meta.runId;
   const missingChannels = ['unchanged-writes-not-collected', 'skipped-writers-not-collected'];
   const unavailable = (reason: string) =>
     boundTurnEvidence({ runId, facts: [], gaps: [reason, ...missingChannels] });
   const deadline = performance.now() + limits.timeoutMs;
   try {
+    const snapshot = child === undefined ? root : completedChildCauseView(root, child);
+    if (child !== undefined && snapshot === undefined)
+      return { gaps: ['subflow-evidence-unavailable'] };
     const { nodes } = indexCauseStages(captureOwn(snapshot, 'executionTree'));
     missingChannels.push(...unopenedSubflowGaps(nodes.values()));
     const basis = projectCauseBasis(snapshot, nodes);
@@ -60,7 +65,7 @@ export async function explainCompletedTurn(
 
     const remaining = Math.floor(deadline - performance.now());
     if (remaining < 1) return unavailable('cause-timeout');
-    const finding = await readCauseOfNode(basis.graph, node.id, limits, remaining);
+    const finding = await readCauseOfNode(basis.graph, nodeId, limits, remaining);
     const backward = finding.backward;
     const facts =
       backward?.edges.map(({ from, to, kind, attribution, evidence }: TraversedEdge) => ({

@@ -23,6 +23,7 @@
  */
 
 import { isExecutionKey } from 'foottrace';
+import { readOwnList } from '../../../lib/boundedJson.js';
 import {
   RECORDING_PARTS_LIMITS,
   isCanonicalExecutionKey,
@@ -200,11 +201,11 @@ export function walkRecordedInvocations(snapshot: unknown): RecordingWalk {
 export function readLogAddress(value: unknown): LogAddress | undefined {
   if (!isPlainObject(value)) return undefined;
   const logRunId = ownValue(value, 'logRunId');
-  const drillPath = ownValue(value, 'drillPath');
-  if (!isName(logRunId) || !Array.isArray(drillPath)) return undefined;
-  if (!drillPath.every((segment) => isCanonicalExecutionKey(segment))) return undefined;
-  if (!withinPathBounds(drillPath as string[])) return undefined;
-  return { logRunId, drillPath: drillPath as string[] };
+  const path = readOwnList(ownValue(value, 'drillPath'), RECORDING_PARTS_LIMITS.pathSegments);
+  if (!isName(logRunId) || path === undefined || path.unread !== 0) return undefined;
+  if (!path.entries.every(isCanonicalExecutionKey) || !withinPathBounds(path.entries))
+    return undefined;
+  return { logRunId, drillPath: path.entries };
 }
 
 /** The viewer's path bounds: at most 128 segments and 8,192 characters. */
