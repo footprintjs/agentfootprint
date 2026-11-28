@@ -40,6 +40,7 @@ import {
   hasControl,
   isObject,
   isRuleName,
+  mixesTimeWindowVersions,
   oneOf,
   positive,
   wellFormed,
@@ -48,6 +49,7 @@ import { LEDGER_LIMITS as L } from './limits.js';
 import { readTokens, tokensOf, utf8Bytes } from './tokens.js';
 import { LEDGER_NOTE_KINDS } from './types.js';
 import type {
+  LedgerClaimStanding,
   LedgerDelivered,
   LedgerEntry,
   LedgerNote,
@@ -176,7 +178,11 @@ export function openedEntry(
     if (Object.hasOwn(input, 'disclosedGaps') && f.disclosedGaps !== true)
       throw new Refusal('bad-input');
     const rules = f.rules === undefined ? [] : listField(f.rules, L.maxRules);
-    if (!rules.every(isRuleName) || new Set(rules).size !== rules.length)
+    if (
+      !rules.every(isRuleName) ||
+      new Set(rules).size !== rules.length ||
+      mixesTimeWindowVersions(rules)
+    )
       throw new Refusal('bad-input');
     for (const flag of [f.confirm, f.askRunsRules])
       if (flag !== undefined && !bool(flag)) throw new Refusal('bad-input');
@@ -305,6 +311,7 @@ export function noteEntry(
   stamp: LedgerStamp,
   input: {
     readonly kind: LedgerNoteKind;
+    readonly claimStanding?: LedgerClaimStanding;
     readonly text: string;
     readonly values?: readonly string[];
     readonly window?: { readonly from: string; readonly to: string };
@@ -313,7 +320,7 @@ export function noteEntry(
   by: 'agent' | 'host' = 'agent',
 ): LedgerBuilt<LedgerNote> {
   return built(() => {
-    const f = fieldsOf(input, ['kind', 'text', 'values', 'window', 'cites']);
+    const f = fieldsOf(input, ['kind', 'text', 'values', 'window', 'cites', 'claimStanding']);
     const base = stamped(stamp);
     if (!oneOf(f.kind, LEDGER_NOTE_KINDS)) throw new Refusal('bad-input');
     const entry: Record<string, unknown> = {
@@ -324,6 +331,11 @@ export function noteEntry(
       noteKind: f.kind,
       text: textField(f.text, L.maxNoteChars),
     };
+    if (f.claimStanding !== undefined) {
+      if (f.kind === 'question' || !oneOf(f.claimStanding, ['sure', 'qualified']))
+        throw new Refusal('bad-input');
+      entry.claimStanding = f.claimStanding;
+    }
     if (f.values !== undefined) {
       const values = listField(f.values, L.maxValues).map((v) => textField(v, L.maxValueChars));
       if (values.length > 0) entry.values = values;

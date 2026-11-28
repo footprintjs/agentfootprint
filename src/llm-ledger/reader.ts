@@ -8,9 +8,10 @@
  *          fold. It never writes and never loads.
  * Emits:   N/A.
  */
-import { gapNoteAllowed } from './entries.js';
+import { COVERAGE_RULE_KEY, gapNoteAllowed, mixesTimeWindowVersions } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
-import { LedgerStoreError, type LedgerLog } from './store.js';
+import { LedgerStoreError } from './store.js';
+import type { LedgerLog } from './store.js';
 import type {
   LedgerCheck,
   LedgerDelivered,
@@ -37,6 +38,8 @@ export interface LedgerReader {
   note(seq: number): LedgerNote | undefined;
   /** The withdrawal of `note`, when there is one. */
   withdrawalOf(note: number): LedgerWithdrawal | undefined;
+  readonly entries: readonly LedgerEntry[];
+  noteAdmissionFault(note: LedgerNote): 'noteKind' | 'claimStanding' | undefined;
   readonly receipts: readonly LedgerReceipt[];
   readonly supplied: readonly LedgerSupplied[];
   readonly notes: readonly LedgerNote[];
@@ -64,9 +67,19 @@ export function readerOf(log: LedgerLog): LedgerReader {
   const delivered = byKind('delivered');
   const first = entries[0];
   const opened = first?.kind === 'opened' ? first : undefined;
+  if (opened !== undefined && mixesTimeWindowVersions(opened.rules))
+    throw new LedgerStoreError('malformed', 'rules');
+  const admitsClaimStanding = opened?.rules.includes(COVERAGE_RULE_KEY) === true;
+  function noteAdmissionFault(note: LedgerNote): 'noteKind' | 'claimStanding' | undefined {
+    if (!gapNoteAllowed(opened, note)) return 'noteKind';
+    if (note.claimStanding !== undefined && !admitsClaimStanding) return 'claimStanding';
+    return undefined;
+  }
   const notes = byKind('note');
-  if (notes.some((note) => !gapNoteAllowed(opened, note)))
-    throw new LedgerStoreError('malformed', 'noteKind');
+  for (const note of notes) {
+    const fault = noteAdmissionFault(note);
+    if (fault !== undefined) throw new LedgerStoreError('malformed', fault);
+  }
   const entry = (seq: number): LedgerEntry | undefined =>
     Number.isSafeInteger(seq) && seq >= 1 ? entries[seq - 1] : undefined;
   const as =
@@ -78,6 +91,8 @@ export function readerOf(log: LedgerLog): LedgerReader {
   return Object.freeze({
     seq: log.seq,
     opened,
+    noteAdmissionFault,
+    entries,
     full: log.seq >= L.maxEntries,
     entry,
     receipt: as('receipt'),

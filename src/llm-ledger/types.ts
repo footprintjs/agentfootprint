@@ -41,6 +41,7 @@ export const LEDGER_NOTE_KINDS = Object.freeze([
   'disclosed-gap',
 ] as const);
 export type LedgerNoteKind = (typeof LEDGER_NOTE_KINDS)[number];
+export type LedgerClaimStanding = 'sure' | 'qualified';
 
 /** Who supplied a value the agent did not read. */
 export type LedgerSupplier = 'person' | 'app' | 'system';
@@ -156,6 +157,7 @@ export interface LedgerSupplied extends LedgerEntryBase<'supplied'> {
 /** What the agent noted, and which receipts it cites. */
 export interface LedgerNote extends LedgerEntryBase<'note'> {
   readonly noteKind: LedgerNoteKind;
+  readonly claimStanding?: LedgerClaimStanding;
   readonly text: string;
   readonly values?: readonly string[];
   readonly window?: LedgerWindow;

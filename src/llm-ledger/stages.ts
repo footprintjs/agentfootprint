@@ -20,7 +20,7 @@ import { decide } from 'footprintjs';
 import type { DecideRule, DecisionRecord, TypedScope } from 'footprintjs';
 import { canonicalizeJson } from 'foottrace/canonical-json';
 
-import { citeProblem, gapNoteAllowed } from './entries.js';
+import { citeProblem } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { readerOf } from './reader.js';
 import type { LedgerReader } from './reader.js';
@@ -220,8 +220,8 @@ export function admit(frame: CallFrame) {
       if (APPENDS.includes(frame.kind)) s.full = reader.full;
       const entry = frame.built;
       if (entry?.kind === 'note') {
-        if (!gapNoteAllowed(reader.opened, entry)) s.inputRefusal = 'bad-input';
-        const problem = citeProblem(allOf(reader), entry.cites);
+        if (reader.noteAdmissionFault(entry) !== undefined) s.inputRefusal = 'bad-input';
+        const problem = citeProblem(reader.entries, entry.cites);
         s.unknownReceipt = problem === 'unknown-receipt';
         s.notAReceipt = problem === 'not-a-receipt';
       }
@@ -244,13 +244,6 @@ export function admit(frame: CallFrame) {
     }
     return decide(s, admitTable(), { branch: 'go', label: 'admitted' });
   };
-}
-
-/** Every entry of `reader`, in seq order. */
-function allOf(reader: LedgerReader): LedgerEntry[] {
-  const out: LedgerEntry[] = [];
-  for (let seq = 1; seq <= reader.seq; seq++) out.push(reader.entry(seq) as LedgerEntry);
-  return out;
 }
 
 /** A refusal branch: the word into scope, the reply into the frame (with `submit`, when its batch
@@ -391,7 +384,7 @@ export function checkDraft(frame: CallFrame) {
 /** The log this attempt would leave: its entries and this call's batch at the next seqs. */
 function withBatch(frame: CallFrame): LedgerEntry[] {
   const reader = frame.reader as LedgerReader;
-  return [...allOf(reader), ...(frame.batchAt?.(reader.seq + 1) ?? [])];
+  return [...reader.entries, ...(frame.batchAt?.(reader.seq + 1) ?? [])];
 }
 
 /** `fold`: the report, over the log as this call leaves it (a dry `ask` folds its findings instead). */
@@ -465,7 +458,7 @@ export function append(frame: CallFrame) {
       }
       s.outcome = 'appended';
       s.appendedSeq = got;
-      frame.after = [...allOf(reader), ...batch];
+      frame.after = [...reader.entries, ...batch];
     } catch (error) {
       if (!(error instanceof LedgerStoreError)) throw error;
       if (error.code === 'lock-lost') {
@@ -479,7 +472,7 @@ export function append(frame: CallFrame) {
         if (stood) {
           s.outcome = 'appended';
           s.appendedSeq = reader.seq + batch.length;
-          frame.after = [...allOf(reader), ...batch];
+          frame.after = [...reader.entries, ...batch];
           return;
         }
       }

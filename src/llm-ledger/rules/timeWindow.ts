@@ -43,7 +43,7 @@ function uncovered(
   return left;
 }
 
-export const timeWindow: LedgerTableRule = {
+export const timeWindow = {
   id: 'time-window',
   version: 1,
   appliesTo: ['claim', 'ruled-out'],
@@ -103,4 +103,4 @@ export const timeWindow: LedgerTableRule = {
     },
   ],
   default: { branch: 'checked-pass', label: "the cited receipts cover the claim's window" },
-};
+} satisfies LedgerTableRule;
