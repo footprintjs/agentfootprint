@@ -15,6 +15,7 @@ import {
 } from '../recorders/observability/answerAccount/evidence.js';
 
 const START = 'agentfootprint.stream.tool_start';
+const ITERATION_END = 'agentfootprint.agent.iteration_end';
 const CONFIGURED = 'agentfootprint.agent.run_configured';
 
 const own = (source: object, key: string): unknown =>
@@ -39,7 +40,9 @@ export function projectRewriteDecision(
     typeof middleware !== 'string' ||
     middleware.trim().length === 0 ||
     typeof toolName !== 'string' ||
+    toolName.length === 0 ||
     typeof toolCallId !== 'string' ||
+    toolCallId.length === 0 ||
     typeof iteration !== 'number' ||
     !Number.isSafeInteger(iteration) ||
     iteration < 1 ||
@@ -95,15 +98,45 @@ export function linkToolRewrite(
       readCallOccurrenceKey(event.payload) === key,
   );
   const [start, terminal] = bracket;
+  const stage = end.event.meta.runtimeStageId;
+  const { toolName, toolCallId, iteration } = decision.event.payload;
+  const terminalToolName = end.event.payload.toolName;
+  const startIteration = start?.event.payload.iteration;
+  const terminalIteration = end.event.payload.iteration;
   if (
     bracket.length !== 2 ||
     start?.event.type !== START ||
     terminal !== end ||
     start.event.meta.runId !== runId ||
+    typeof stage !== 'string' ||
+    stage.length === 0 ||
+    stage === 'unknown#0' ||
+    start.event.meta.runtimeStageId !== stage ||
+    decision.event.meta.runtimeStageId !== stage ||
     start.index >= decision.index ||
-    start.event.payload.toolName !== decision.event.payload.toolName ||
-    start.event.payload.toolCallId !== decision.event.payload.toolCallId ||
-    end.event.payload.toolCallId !== decision.event.payload.toolCallId
+    start.event.payload.toolName !== toolName ||
+    (terminalToolName !== undefined && terminalToolName !== toolName) ||
+    start.event.payload.toolCallId !== toolCallId ||
+    end.event.payload.toolCallId !== toolCallId ||
+    (startIteration !== undefined && startIteration !== iteration) ||
+    (terminalIteration !== undefined && terminalIteration !== iteration)
+  )
+    return unproven;
+
+  // Native tool brackets omit the iteration. The same stage closes the batch
+  // with the iteration it actually ran, independently of the middleware ledger.
+  const completions = events.filter(
+    ({ event }) =>
+      event.type === ITERATION_END &&
+      event.meta.runId === runId &&
+      event.meta.runtimeStageId === stage,
+  );
+  const [completion] = completions;
+  if (
+    completions.length !== 1 ||
+    completion === undefined ||
+    completion.index <= end.index ||
+    completion.event.payload.iterIndex !== iteration
   )
     return unproven;
 

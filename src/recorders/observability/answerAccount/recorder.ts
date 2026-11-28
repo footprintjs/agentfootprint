@@ -57,7 +57,8 @@ export function recordAnswerAccount(
   let committed = false;
   let finished = false;
   let hasTerminalAnswer = false;
-  let rewriteStage: 'none' | 'decision' | 'result' = 'none';
+  let rewrite: 'none' | 'decision' | Pick<AgentfootprintEvent['meta'], 'runId' | 'runtimeStageId'> =
+    'none';
   let evidence: AnswerAccountEvidence | undefined;
 
   const discard = () => {
@@ -106,7 +107,7 @@ export function recordAnswerAccount(
         gaps.add('budget');
       }
     }
-    if (state === undefined && rewriteStage !== 'none') gaps.add('tool-results');
+    if (state === undefined && rewrite !== 'none') gaps.add('tool-results');
     evidence = Object.freeze({
       version: 1,
       gaps: Object.freeze([...gaps].sort()),
@@ -156,19 +157,26 @@ export function recordAnswerAccount(
       if (event.type === 'agentfootprint.pause.resume') gaps.add('resumed-state');
       try {
         const decision =
-          event.type === TOOL_REWRITE_DECISION && rewriteStage === 'none' && gaps.size === 0
+          event.type === TOOL_REWRITE_DECISION && rewrite === 'none' && gaps.size === 0
             ? capture?.projectDecision(event.payload)
             : undefined;
         if (requiresMoreEvidence(event.type) && decision === undefined)
           gaps.add('unsupported-evidence');
-        const eventEvidence = projectEvent(event, maxBytes - bytes, decision);
-        if (decision !== undefined) rewriteStage = 'decision';
+        const eventEvidence = projectEvent(
+          event,
+          maxBytes - bytes,
+          decision,
+          typeof rewrite === 'object' &&
+            rewrite.runId === event.meta.runId &&
+            rewrite.runtimeStageId === event.meta.runtimeStageId,
+        );
+        if (decision !== undefined) rewrite = 'decision';
         let toolResult: AccountEventEvidence['toolResult'];
         if (capture !== undefined && event.type === 'agentfootprint.stream.tool_end') {
           const result = capture.captureEvent(
             event.payload as unknown as Record<string, unknown>,
             maxBytes - bytes,
-            rewriteStage === 'decision' && gaps.size === 0,
+            rewrite === 'decision' && gaps.size === 0,
           );
           if (result.kind === 'ready') {
             toolResult = copyJson(
@@ -176,7 +184,10 @@ export function recordAnswerAccount(
               maxBytes - bytes,
               true,
             ) as AccountEventEvidence['toolResult'];
-            if (result.shape.view === 'model-result') rewriteStage = 'result';
+            if (result.shape.view === 'model-result') {
+              const { runId, runtimeStageId } = event.meta;
+              rewrite = { runId, runtimeStageId };
+            }
           } else gaps.add(result.kind);
         }
         const row = { event: eventEvidence, ...(toolResult === undefined ? {} : { toolResult }) };

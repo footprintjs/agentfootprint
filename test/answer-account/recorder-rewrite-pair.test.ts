@@ -12,6 +12,8 @@ import type { Recording } from '../../src/recorders/observability/recordRun.js';
 
 const declared = { tools: { lookup_data: { rowsAt: 'rows' } } };
 const DECISION = 'agentfootprint.middleware.decision';
+const START = 'agentfootprint.stream.tool_start';
+const ITERATION_END = 'agentfootprint.agent.iteration_end';
 const END = 'agentfootprint.stream.tool_end';
 const BUDGET = 128 * 1024;
 
@@ -140,6 +142,16 @@ describe('one bounded in-memory rewritten result', () => {
     'committed row missing',
     'committed key differs',
     'duplicate terminal',
+    'native start missing',
+    'native tool name missing',
+    'terminal tool name differs',
+    'terminal call ID differs',
+    'terminal stage differs',
+    'accepted and committed iterations differ from native iteration',
+    'explicit start iteration differs',
+    'explicit terminal iteration differs',
+    'native iteration end missing',
+    'native iteration end duplicated',
     'competing decision',
     'later blocked decision',
     'record-only model projection',
@@ -154,6 +166,10 @@ describe('one bounded in-memory rewritten result', () => {
     const state = snapshot.sharedState;
     const decision = source.events.find((e) => e.type === DECISION)!;
     const end = source.events.find((e) => e.type === END)!;
+    const start = source.events.find((e) => e.type === START)!;
+    const iterationEnd = source.events.find(
+      (e) => e.type === ITERATION_END && e.meta.runtimeStageId === end.meta.runtimeStageId,
+    )!;
     const history = state.history.find((m) => m.role === 'tool')!;
     switch (missing) {
       case 'decision filtered':
@@ -173,6 +189,58 @@ describe('one bounded in-memory rewritten result', () => {
         break;
       case 'duplicate terminal':
         events.splice(events.indexOf(end), 0, end);
+        break;
+      case 'native start missing':
+        events = events.filter((e) => e !== start);
+        break;
+      case 'native tool name missing':
+        events[events.indexOf(start)] = {
+          ...start,
+          payload: { ...start.payload, toolName: undefined },
+        } as AgentfootprintEvent;
+        break;
+      case 'terminal tool name differs':
+        events[events.indexOf(end)] = {
+          ...end,
+          payload: { ...end.payload, toolName: 'different_tool' },
+        } as AgentfootprintEvent;
+        break;
+      case 'terminal call ID differs':
+        events[events.indexOf(end)] = {
+          ...end,
+          payload: { ...end.payload, toolCallId: 'different-id' },
+        };
+        break;
+      case 'terminal stage differs':
+        events[events.indexOf(end)] = {
+          ...end,
+          meta: { ...end.meta, runtimeStageId: 'other-stage#99' },
+        };
+        break;
+      case 'accepted and committed iterations differ from native iteration':
+        events[events.indexOf(decision)] = {
+          ...decision,
+          payload: { ...decision.payload, iteration: 99 },
+        } as AgentfootprintEvent;
+        state.middlewareDecisions[0]!.iteration = 99;
+        break;
+      case 'explicit start iteration differs':
+        events[events.indexOf(start)] = {
+          ...start,
+          payload: { ...start.payload, iteration: 99 },
+        } as AgentfootprintEvent;
+        break;
+      case 'explicit terminal iteration differs':
+        events[events.indexOf(end)] = {
+          ...end,
+          payload: { ...end.payload, iteration: 99 },
+        } as AgentfootprintEvent;
+        break;
+      case 'native iteration end missing':
+        events = events.filter((e) => e !== iterationEnd);
+        break;
+      case 'native iteration end duplicated':
+        events.splice(events.indexOf(iterationEnd), 0, iterationEnd);
         break;
       case 'competing decision':
         state.middlewareDecisions.push({ ...state.middlewareDecisions[0]!, changed: true });

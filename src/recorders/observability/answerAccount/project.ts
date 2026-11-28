@@ -112,8 +112,14 @@ export function projectEvent(
   event: AgentfootprintEvent,
   budget: number,
   decision?: Readonly<Record<string, unknown>>,
+  captureRewriteIteration = false,
 ): EventEvidence {
-  const fields = Object.hasOwn(leaves, event.type) ? leaves[event.type] : undefined;
+  const fields =
+    captureRewriteIteration && event.type === 'agentfootprint.agent.iteration_end'
+      ? ['iterIndex']
+      : Object.hasOwn(leaves, event.type)
+      ? leaves[event.type]
+      : undefined;
   return copyJson(
     {
       type: event.type,

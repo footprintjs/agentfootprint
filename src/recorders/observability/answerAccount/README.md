@@ -16,7 +16,9 @@ leaves and offered ids are excluded. Each routing list has at most 256 entries.
 A single allowed after-tool rewrite can prove a fresh served result. The
 collector holds a bounded shape provisionally after the accepted decision and links it
 to the accepted decision, committed ledger row and retained tool history under
-the same occurrence. The sealed metadata carries the served channel and original
+the same occurrence. The native start, decision and terminal must share a stage.
+That stage's unique iteration completion must agree with the rewrite, as must
+any tool identity or iteration repeated on the native bracket. The sealed metadata carries the served channel and original
 ledger position. Result bodies and middleware explanations stay out. Additional
 middleware, missing or conflicting evidence and other unsupported families
 still withhold the view and discard provisional rewrite data.
