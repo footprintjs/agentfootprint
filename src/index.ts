@@ -47,8 +47,6 @@ export * from './provider-contract/types.js';
 
 // Injection keys + recorder authoring helpers — needed by anyone writing
 // a custom recorder that switches on injection events.
-export { sealToolEffectContent } from './semantics/sealedToolEffectContent.js';
-
 export {
   INJECTION_KEYS,
   injectionKeyForSlot,
@@ -277,30 +275,8 @@ export {
 // The middleware family: a typed chain around every tool dispatch and around the
 // message boundary. `allow()`, `deny(reason)` and `ask({ question })`, with no arm
 // for a RESULT: the model reads the real tool's output or a refusal.
-export {
-  allow,
-  ask,
-  deny,
-  MessageDeniedError,
-  type AllowOutcome,
-  type AskOutcome,
-  type AskPayload,
-  type DenyOutcome,
-  type MessageDeniedContext,
-  type MessageMiddleware,
-  type MessageMiddlewareContext,
-  type MessageOutcome,
-  type MiddlewareDecision,
-  type ToolCallMiddleware,
-  type ToolMiddleware,
-  type ToolMiddlewareContext,
-  type ToolOutcome,
-  type ToolResultContext,
-  type ToolResultEffectPolicyContext,
-  type ToolResultEffectProposal,
-  type ToolResultMiddleware,
-  type ToolResultOutcome,
-} from './core/agent/middleware/index.js';
+export * from './core/agent/middleware/index.js';
+export { sealToolEffectContent } from './semantics/sealedToolEffectContent.js';
 
 // `.act({ input, beforeTool, afterTool, window, output })` — the five moments
 // of the loop in one block, and the canonical way to say what an agent does
