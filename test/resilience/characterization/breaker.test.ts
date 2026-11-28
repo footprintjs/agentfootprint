@@ -112,3 +112,105 @@ it('does not count a cancelled call toward opening the breaker', async () => {
   await expect(provider.complete({ ...request, signal: controller.signal })).rejects.toBe(outage);
   await expect(provider.complete(request)).resolves.toEqual(reply);
 });
+
+it('defaults to five failures, 30 seconds of cooldown, and two successful probes', async () => {
+  const trace = traceCall();
+  const outage = failure('provider unavailable');
+  const reply = answer('healthy');
+  const primary = scriptedProvider('primary', trace, [
+    ...Array<Error>(5).fill(outage),
+    reply,
+    reply,
+  ]);
+  const provider = withCircuitBreaker(primary);
+  const onResilience = vi.fn();
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await expect(provider.complete(request, { onResilience })).rejects.toBe(outage);
+  }
+  const nextProbe = Date.now() + 30_000;
+  await expect(provider.complete(request)).rejects.toMatchObject({
+    name: 'CircuitOpenError',
+    cause: outage,
+    retryAfter: nextProbe,
+  });
+  await vi.advanceTimersByTimeAsync(29_999);
+  await expect(provider.complete(request)).rejects.toBeInstanceOf(CircuitOpenError);
+  expect(trace.requests).toHaveLength(5);
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(provider.complete(request, { onResilience })).resolves.toBe(reply);
+  expect(onResilience.mock.calls.map(([event]) => event.state)).toEqual(['open', 'half-open']);
+  await expect(provider.complete(request, { onResilience })).resolves.toBe(reply);
+  expect(onResilience.mock.calls.map(([event]) => event.state)).toEqual([
+    'open',
+    'half-open',
+    'closed',
+  ]);
+  expect(trace.requests).toHaveLength(7);
+});
+
+it('resets the consecutive failure count after a normal closed-state success', async () => {
+  const trace = traceCall();
+  const outage = failure('provider unavailable');
+  const reply = answer('healthy');
+  const trip = failure('third consecutive failure after success');
+  const primary = scriptedProvider('primary', trace, [outage, outage, reply, outage, outage, trip]);
+  const provider = withCircuitBreaker(primary, { failureThreshold: 3 });
+
+  await expect(provider.complete(request)).rejects.toBe(outage);
+  await expect(provider.complete(request)).rejects.toBe(outage);
+  await expect(provider.complete(request)).resolves.toBe(reply);
+  await expect(provider.complete(request)).rejects.toBe(outage);
+  await expect(provider.complete(request)).rejects.toBe(outage);
+  await expect(provider.complete(request)).rejects.toBe(trip);
+  await expect(provider.complete(request)).rejects.toMatchObject({
+    name: 'CircuitOpenError',
+    cause: trip,
+  });
+  expect(trace.requests).toHaveLength(6);
+});
+
+it('reopens after a failed half-open probe and restarts its cooldown and success count', async () => {
+  const trace = traceCall();
+  const outage = failure('provider unavailable');
+  const probeFailure = failure('probe failed');
+  const reply = answer('healthy');
+  const primary = scriptedProvider('primary', trace, [outage, reply, probeFailure, reply, reply]);
+  const onStateChange = vi.fn();
+  const provider = withCircuitBreaker(primary, {
+    failureThreshold: 1,
+    cooldownMs: 10,
+    onStateChange,
+  });
+
+  await expect(provider.complete(request)).rejects.toBe(outage);
+  await vi.advanceTimersByTimeAsync(10);
+  await expect(provider.complete(request)).resolves.toBe(reply);
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(provider.complete(request)).rejects.toBe(probeFailure);
+  const nextProbe = Date.now() + 10;
+  await vi.advanceTimersByTimeAsync(9);
+  await expect(provider.complete(request)).rejects.toMatchObject({
+    name: 'CircuitOpenError',
+    cause: probeFailure,
+    retryAfter: nextProbe,
+  });
+  expect(trace.requests).toHaveLength(3);
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(provider.complete(request)).resolves.toBe(reply);
+  expect(onStateChange.mock.calls.map(([state]) => state)).toEqual([
+    'open',
+    'half-open',
+    'open',
+    'half-open',
+  ]);
+  await expect(provider.complete(request)).resolves.toBe(reply);
+  expect(onStateChange.mock.calls.map(([state]) => state)).toEqual([
+    'open',
+    'half-open',
+    'open',
+    'half-open',
+    'closed',
+  ]);
+  expect(trace.steps.map(({ at }) => at)).toEqual([0, 10, 11, 21, 21]);
+});
