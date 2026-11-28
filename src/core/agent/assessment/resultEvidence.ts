@@ -1,3 +1,4 @@
+import { readResultShape, type ToolResultShape } from '../../../semantics/resultShape.js';
 import { readEmptiness, type ValueDeclaration } from '../emptiness.js';
 import type { IssuedPairs } from '../placedTickets.js';
 import { groupOccurrenceEvidence } from '../recordedCalls.js';
@@ -64,6 +65,7 @@ export function readTurnResults(
   opportunities: number,
   g: Gathered,
   legacyReasons = true,
+  resultShapeAt?: (historyIndex: number) => ToolResultShape | undefined,
 ): void {
   const readable: AssessmentPointer[] = [];
   for (const { result, at, rows, own } of reads) {
@@ -74,11 +76,15 @@ export function readTurnResults(
         : undefined;
     const rowsAt =
       result.toolName !== undefined ? declarations?.tools?.[result.toolName]?.rowsAt : undefined;
-    const reading = readEmptiness(result.content, {
-      placement: { toolCallId: result.toolCallId, issued },
-      ...(door !== undefined && { door }),
-      ...(rowsAt !== undefined && { rowsAt }),
-    });
+    const shape = resultShapeAt?.(result.index);
+    const reading =
+      shape !== undefined
+        ? readResultShape(shape, rowsAt)
+        : readEmptiness(result.content, {
+            placement: { toolCallId: result.toolCallId, issued },
+            ...(door !== undefined && { door }),
+            ...(rowsAt !== undefined && { rowsAt }),
+          });
     if (reading.emptiness !== 'unknown') readable.push(at);
     // An empty rowset inside a declared boundary, or an absence no row holds; an absence row fired for itself.
     const fromBytes = legacyReasons || reading.source === 'app';

@@ -25,6 +25,7 @@
 
 import { historyCallForWitness, readHistoryCalls } from '../../core/agent/recordedCalls.js';
 import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
+import { readResultShape } from '../../semantics/resultShape.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
@@ -141,13 +142,14 @@ export function readInView(ctx: ReadContext, currentResults: ReadonlySet<number>
     // TOOL's own bytes (`lib/toolBytes.ts` · `toolBytesOf`): a note the inputs layer appended after
     // a filled call's result is the library's, and read whole it breaks the parse.
     const rowsAt = rowsAtOf(ctx.declarations, toolName);
-    const reading = readEmptiness(
-      toolBytesOf({ content: message.content, toolChars: message.toolChars }),
-      {
-        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
-        ...(rowsAt !== undefined && { rowsAt }),
-      },
-    );
+    const shape = ctx.view.historyToolShape?.(historyIndex);
+    const reading =
+      shape !== undefined
+        ? readResultShape(shape, rowsAt)
+        : readEmptiness(toolBytesOf({ content: message.content, toolChars: message.toolChars }), {
+            placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
+            ...(rowsAt !== undefined && { rowsAt }),
+          });
     reads.push({
       fact: {
         toolName: toolName.slice(0, FACT_TEXT_CHARS),

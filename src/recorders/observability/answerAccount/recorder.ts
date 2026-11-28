@@ -1,0 +1,278 @@
+import type { AgentfootprintEvent } from '../../../events/registry.js';
+import { copyJson, jsonBytes } from '../../../lib/boundedJson.js';
+import { servedUnderPolicy } from '../../../redaction/marker.js';
+import {
+  recordRunWhere,
+  type RecordableRunner,
+  type RecordRunOptions,
+  type RecordingObservation,
+  type RunRecorder,
+} from '../recordRun.js';
+import type {
+  AccountEvidenceGap,
+  AccountEventEvidence,
+  AnswerAccountEvidence,
+  CaptureToolEvidence,
+} from './evidence.js';
+import { CALL_EXPECTATION, TOOL_REWRITE_DECISION } from './evidence.js';
+import { hasAnswerWitnesses, lostObserverEvidence } from './coverage.js';
+import {
+  containsToolHistory,
+  ownValue,
+  projectEvent,
+  projectState,
+  requiresMoreEvidence,
+} from './project.js';
+import { hasInitialRoutingWitnesses } from './routingEvidence.js';
+
+const WRAPPER_BYTES = 512;
+/** Testable limit for the internal collector, separate from production filing and response budgets. */
+const MAX_RAW_BYTES = 16 * 1024 * 1024;
+
+export interface AnswerAccountRecorder {
+  readonly recording: RunRecorder;
+  /** Only a sealed result is handed out. No copy is installed on the normal recording. */
+  toSnapshot(): AnswerAccountEvidence | undefined;
+  /** Serialized footprint of admitted event projections at their high-water mark. */
+  readonly peakRetainedEventBytes: number;
+}
+
+/** Internal opt-in. The native hook is deliberately not a snapshot-producing attachment. */
+export function recordAnswerAccount(
+  runner: RecordableRunner,
+  maxBytes: number,
+  options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
+  keep: (event: AgentfootprintEvent) => boolean = () => true,
+  capture?: CaptureToolEvidence,
+): AnswerAccountRecorder {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= WRAPPER_BYTES || maxBytes > MAX_RAW_BYTES)
+    throw new RangeError('Invalid in-memory explanation budget.');
+
+  const events = new Map<number, { row: Omit<AccountEventEvidence, 'index'>; bytes: number }>();
+  const gaps = new Set<AccountEvidenceGap>();
+  let firstRetainedIndex = 0;
+  let bytes = WRAPPER_BYTES;
+  let peakRetainedEventBytes = 0;
+  let started = false;
+  let committed = false;
+  let finished = false;
+  let hasTerminalAnswer = false;
+  let rewrite: 'none' | 'decision' | Pick<AgentfootprintEvent['meta'], 'runId' | 'runtimeStageId'> =
+    'none';
+  let evidence: AnswerAccountEvidence | undefined;
+  let comparison: string | undefined;
+  let comparisonBytes = 0;
+  let sawExpectation = false;
+
+  const discard = () => {
+    events.clear();
+    comparison = undefined;
+    comparisonBytes = 0;
+    bytes = WRAPPER_BYTES;
+  };
+
+  const finish: RecordingObservation['seal'] = (snapshot, first, recordingIndex) => {
+    if (!canSealUnderFinalPolicy(snapshot, started)) {
+      discard();
+      peakRetainedEventBytes = 0;
+      evidence = Object.freeze({
+        version: 1,
+        gaps: Object.freeze(['redaction'] as const),
+        firstRetainedIndex: 0,
+        events: Object.freeze([]),
+      });
+      return;
+    }
+    if (!started) gaps.add('no-start');
+    if (!finished || !committed || !hasTerminalAnswer || snapshot === undefined)
+      gaps.add('no-terminal-commit');
+    if (first > 0) gaps.add('retained-events-dropped');
+    if (lostObserverEvidence(snapshot?.observerStats)) gaps.add('observer-loss');
+    if (ownValue(ownValue(snapshot, 'initialState'), 'history') !== undefined)
+      gaps.add('resumed-state');
+    if (capture === undefined && containsToolHistory(snapshot)) gaps.add('tool-results');
+    if (gaps.has('no-start') || gaps.has('multiple-runs')) discard();
+    const retained = [...events].flatMap(([ordinal, row]) => {
+      const index = recordingIndex(ordinal);
+      return index === undefined ? [] : [Object.freeze({ index, ...row.row })];
+    });
+    if (gaps.size === 0 && !hasAnswerWitnesses(retained)) gaps.add('missing-answer-evidence');
+    if (gaps.size === 0 && !hasInitialRoutingWitnesses(retained))
+      gaps.add('missing-routing-evidence');
+    let state: AnswerAccountEvidence['state'];
+    let historyResults: AnswerAccountEvidence['historyResults'];
+    let expectationIndex: number | undefined;
+    if (gaps.size === 0) {
+      try {
+        const expectation = capture?.proveExpectation(retained, snapshot);
+        if (expectation?.kind === 'unproven') gaps.add('missing-expectation-evidence');
+        if (expectation?.kind === 'linked') expectationIndex = expectation.index;
+        if (gaps.size === 0) {
+          const projected = projectState(
+            snapshot,
+            maxBytes - bytes,
+            capture,
+            retained,
+            comparison,
+            expectationIndex !== undefined,
+          );
+          if (projected.kind === 'ready') {
+            state = projected.state;
+            historyResults = projected.historyResults;
+          } else gaps.add(projected.kind);
+        }
+      } catch {
+        gaps.add('budget');
+      }
+    }
+    if (state === undefined && rewrite !== 'none') gaps.add('tool-results');
+    evidence = Object.freeze({
+      version: 1,
+      gaps: Object.freeze([...gaps].sort()),
+      firstRetainedIndex: first,
+      events: Object.freeze(
+        retained.map((row) => sealedEvent(row, state !== undefined, expectationIndex)),
+      ),
+      ...(state === undefined ? {} : { state }),
+      ...(historyResults === undefined ? {} : { historyResults }),
+    });
+    discard();
+  };
+
+  const observation: RecordingObservation = {
+    native: {
+      id: 'agentfootprint:answer-account-observation',
+      delivery: 'inline',
+      onRunStart() {
+        if (started) {
+          gaps.add('multiple-runs');
+          discard();
+        }
+        started = true;
+      },
+      onCommit() {
+        committed = true;
+      },
+      onRunEnd() {
+        finished = true;
+      },
+    },
+    accepted(event, ordinal, first) {
+      if (first !== firstRetainedIndex) {
+        firstRetainedIndex = first;
+        for (const [key, row] of events) {
+          if (key >= first) break;
+          events.delete(key);
+          bytes -= row.bytes;
+        }
+      }
+      if (event.type === 'agentfootprint.agent.turn_end') hasTerminalAnswer = true;
+      if (gaps.has('budget') || gaps.has('multiple-runs')) return;
+      if (
+        capture === undefined &&
+        (event.type === 'agentfootprint.stream.tool_start' ||
+          event.type === 'agentfootprint.stream.tool_end')
+      )
+        gaps.add('tool-results');
+      if (event.type === 'agentfootprint.pause.resume') gaps.add('resumed-state');
+      try {
+        const decision =
+          event.type === TOOL_REWRITE_DECISION && typeof rewrite !== 'object' && gaps.size === 0
+            ? capture?.projectDecision(event.payload)
+            : undefined;
+        const expectation =
+          event.type === CALL_EXPECTATION && gaps.size === 0
+            ? capture?.projectExpectation(event.payload)
+            : undefined;
+        // Do not trust a declaration's stage to decide which completion to capture.
+        if (expectation !== undefined) sawExpectation = true;
+        if (
+          requiresMoreEvidence(event.type) &&
+          decision === undefined &&
+          !(event.type === CALL_EXPECTATION && capture !== undefined)
+        )
+          gaps.add('unsupported-evidence');
+        const eventEvidence = projectEvent(
+          event,
+          maxBytes - bytes,
+          decision ?? expectation,
+          sawExpectation ||
+            (typeof rewrite === 'object' &&
+              rewrite.runId === event.meta.runId &&
+              rewrite.runtimeStageId === event.meta.runtimeStageId),
+        );
+        if (decision?.changed === true) rewrite = 'decision';
+        let toolResult: AccountEventEvidence['toolResult'];
+        if (capture !== undefined && event.type === 'agentfootprint.stream.tool_end') {
+          const result = capture.captureEvent(
+            event.payload as unknown as Record<string, unknown>,
+            maxBytes - bytes,
+            rewrite === 'decision' && gaps.size === 0,
+          );
+          if (result.kind === 'ready') {
+            toolResult = copyJson(
+              result.shape,
+              maxBytes - bytes,
+              true,
+            ) as AccountEventEvidence['toolResult'];
+            if (result.shape.view === 'model-result') {
+              const { runId, runtimeStageId } = event.meta;
+              rewrite = { runId, runtimeStageId };
+              comparison = result.comparison;
+              comparisonBytes = jsonBytes(comparison);
+              bytes += comparisonBytes;
+            }
+          } else gaps.add(result.kind);
+        }
+        const row = { event: eventEvidence, ...(toolResult === undefined ? {} : { toolResult }) };
+        const rowBytes = 1 + jsonBytes({ index: ordinal, ...row });
+        if (bytes + rowBytes > maxBytes) throw new RangeError('Explanation event budget reached.');
+        events.set(ordinal, { row, bytes: rowBytes });
+        bytes += rowBytes;
+        peakRetainedEventBytes = Math.max(
+          peakRetainedEventBytes,
+          bytes - WRAPPER_BYTES - comparisonBytes,
+        );
+      } catch {
+        gaps.add('budget');
+        discard();
+      }
+    },
+    seal: finish,
+  };
+  const recording = recordRunWhere(runner, keep, options, undefined, undefined, observation);
+  return {
+    recording,
+    toSnapshot: () => evidence,
+    get peakRetainedEventBytes() {
+      return evidence === undefined ? 0 : peakRetainedEventBytes;
+    },
+  };
+}
+
+function canSealUnderFinalPolicy(snapshot: unknown, started: boolean): boolean {
+  try {
+    return !(started && snapshot === undefined) && !servedUnderPolicy(snapshot);
+  } catch {
+    return false;
+  }
+}
+
+/** Only the original proved expectation and its original coordinate survive. */
+function sealedEvent(
+  row: AccountEventEvidence,
+  ready: boolean,
+  expectationIndex?: number,
+): AccountEventEvidence {
+  const strip =
+    (row.event.type === CALL_EXPECTATION && (!ready || row.index !== expectationIndex)) ||
+    (row.event.type === TOOL_REWRITE_DECISION && !ready);
+  if (strip && Object.keys(row.event.payload).length > 0)
+    return Object.freeze({
+      index: row.index,
+      event: Object.freeze({ ...row.event, payload: Object.freeze({}) }),
+    });
+  if (!ready && row.toolResult?.view === 'model-result')
+    return Object.freeze({ index: row.index, event: row.event });
+  return row;
+}
