@@ -154,11 +154,11 @@ unchanged registry CLI pass, ordinary CI clearance or permission to publish.
 ## Modules and checks
 
 `publishedSetup.mjs` is the pure document constructor for the original source
-with published FootPrint 14.3.0, Foottrace 2.3.2 and ContextFootprint 0.1.1.
+with published FootPrint 14.6.0, Foottrace 2.3.2 and ContextFootprint 0.1.1.
 The source version must agree across the source manifest, lock and package.
 AgentFootprint declares the engine peer/development range `^14.3.0` and the
-Foottrace range `^2.3.2`. FootPrint 14.3.0 declares its own Foottrace peer
-range `^2.3.1`, which the contract checks separately. The temporary roots
+Foottrace range `^2.3.2`. FootPrint 14.6.0 declares its own Foottrace peer
+range `^2.3.1 || ^3.1.0`, which the contract checks separately. The temporary roots
 install the exact cohort versions listed above. Earlier Foottrace versions,
 engine 13, the previous cohort's engine 14.0.0, engine prereleases and other
 stable engine versions are outside this cohort. ContextFootprint stays exactly
@@ -230,3 +230,8 @@ CI runs this real gate on both supported Node versions, retaining complete or
 partial evidence separately from the durable source candidate. Inert fixture
 success is controller proof only. Neither this gate nor a source artifact is
 permission to merge, publish or claim all downstream consumers are compatible.
+
+The separate hosted FootPrint peer-floor check installs the same original package
+in a fresh consumer with exact FootPrint 14.3.0 and Foottrace 2.3.2. It verifies
+the installed pins and runs the existing CJS and ESM public producer probe. The
+floor is separate from the strict cohort and its four installation cases.
