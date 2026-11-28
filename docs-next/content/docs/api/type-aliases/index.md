@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-162 exported from `agentfootprint`.
+163 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -102,6 +102,7 @@ title: Type Aliases
 - [`RagDocument`](/docs/api/type-aliases/RagDocument)
 - [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
 - [`ReadTrackingMode`](/docs/api/type-aliases/ReadTrackingMode)
+- [`RecordedModelInput`](/docs/api/type-aliases/RecordedModelInput)
 - [`RequestMeasurement`](/docs/api/type-aliases/RequestMeasurement)
 - [`ResilienceReport`](/docs/api/type-aliases/ResilienceReport)
 - [`ResumeDecisionRefusal`](/docs/api/type-aliases/ResumeDecisionRefusal)

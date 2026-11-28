@@ -58,3 +58,8 @@ export {
   type ServedRequestOnly,
   type ServedView,
 } from './servedView.js';
+export {
+  readInvocationModelInput,
+  type RecordedModelCall,
+  type RecordedModelInput,
+} from './servedInvocation.js';

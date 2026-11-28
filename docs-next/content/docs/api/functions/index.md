@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-158 exported from `agentfootprint`.
+159 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -118,6 +118,7 @@ title: Functions
 - [`readAskComponent`](/docs/api/functions/readAskComponent)
 - [`readCoverageLedger`](/docs/api/functions/readCoverageLedger)
 - [`readCoverageResult`](/docs/api/functions/readCoverageResult)
+- [`readInvocationModelInput`](/docs/api/functions/readInvocationModelInput)
 - [`readRowset`](/docs/api/functions/readRowset)
 - [`readSemantics`](/docs/api/functions/readSemantics)
 - [`readTimeAxis`](/docs/api/functions/readTimeAxis)
