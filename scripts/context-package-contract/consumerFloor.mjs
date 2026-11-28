@@ -64,7 +64,7 @@ try {
     assert.equal((await readJson(join(consumer, path, 'package.json'))).version, version);
   }
   for (const format of ['cjs', 'esm']) {
-    const probe = `probe.${format}`;
+    const probe = format === 'esm' ? 'probe.mjs' : 'probe.cjs';
     const loadAssert =
       format === 'cjs'
         ? "const assert = require('node:assert/strict');"
