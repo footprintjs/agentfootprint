@@ -25,7 +25,8 @@ this folder imports it yet, and no `package.json` door reaches it.
 | `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, holding numbers with thousands separators or pieces that read two ways, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
 | `build.ts` | the record-time builders, one per kind text enters through (`receiptEntry`, `suppliedEntry`, `noteEntry`, `withdrawalEntry`, `submitEntry`, `deliveredEntry`, `openedEntry`). Each drops the text it was handed once it has the tokens or the digest it keeps, and refuses with `bad-input`, `too-large` or `bad-window` |
 | `tokens.ts` | which tokens of a text are values (rules 1–3 of the evidence extractor's header, as a closed copy; a token is a literal piece of the text, below), the receipt's capped reading (`readTokens`, and `readTokensUpTo` under another cap) and `utf8Bytes` |
-| `window.ts` | the ledger's one instant validator (`instantMs`) and the window on it (`readWindow`) |
+| `window.ts` | the narrow stored timestamp check (`instantMs`) and the window on it (`readWindow`) |
+| `instantParser.ts` | generated from the time layer’s canonical parser, keeping the ledger’s runtime dependency fence closed |
 | `digest.ts` | the folder's one door to Web Crypto: `digestOf` (`sha256:<hex>`) and `randomBytes` |
 | `session.ts` | the session id (`ls_` + 26 Crockford base32 characters, 128 random bits): `isSessionId`, `sessionIdOf`, `mintSessionId` |
 | `store.ts` | the `LedgerStore` port, `LedgerStoreError` and its closed codes, the admission both adapters share (`admitBatch`, `lineBytesOf`, `lineOverheadBytes`), and `withHighWater` (bounded, least recently used out) |
@@ -33,7 +34,7 @@ this folder imports it yet, and no `package.json` door reaches it.
 | `fileStore.ts` | `fileLedgerStore({ dir, key, uid })`: one MAC-chained JSON-lines file per session, every line marked with its batch's end. The only file here that imports Node |
 | `rules/` | the checks port and the three built-in rules (`rules/README.md`) |
 | `reader.ts` | `readerOf`: one loaded log, indexed by seq and kind; held in a stage's closure, never in a run's scope |
-| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons. It never trusts that the value law ran: a subject with no `traceable-values@1` record reads at most `open`, and a submit with no value-law record for its draft reads `not-assessed` at best |
+| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons. It never trusts that the value law ran: a subject with no value-law record reads at most `open`, and a submit with no value-law record for its draft reads `not-assessed` at best |
 | `serve.ts` | the one funnel everything served passes through (`serveReport`, `serveReceipts`, `serveRefusal`); receipt tokens, queries and supplied content are never read by it |
 | `stages.ts` | the stage functions of a call's chart, over one `CallFrame` (the call's closure) |
 | `calls.ts` | `runCall`: the chart of one call, one fresh `FlowChartExecutor`, input `{ call }`, and the one pause |
@@ -140,7 +141,7 @@ so the host passes its own `uid`.
 `deliver` and `report`; the agent's calls `note`, `withdraw`, `ask` and `submit` are bound to one
 session and take no session argument. Every reply is `{ ok: true, … }` or
 `{ ok: false, refused: <word> }`, with `store` beside `store-refused`. A session opened without
-`rules` runs the three built-ins. Every session runs the value law, `traceable-values@1`, on every
+`rules` runs the three built-ins. Every session runs `traceable-values@2` for new checks and preserves earlier `@1` records. It runs on every
 claim and on the draft, whatever it pins: `open` adds it to `opened.rules` and its reply lists the rules.
 
 Each call is ONE short FootprintJS run: a fresh `FlowChartExecutor`, a chart built for the call, and
