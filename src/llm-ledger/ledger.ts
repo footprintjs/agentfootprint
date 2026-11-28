@@ -21,6 +21,7 @@ import { cited } from './rules/cited.js';
 import { registerRules, ruleKey } from './rules/port.js';
 import type { LedgerRule } from './rules/port.js';
 import { timeWindow } from './rules/timeWindow.js';
+import { timeWindowCoverage } from './rules/timeWindowCoverage.js';
 import { traceableValues } from './rules/traceableValues.js';
 import { sessionQueue } from './queue.js';
 import type { LedgerServed } from './serve.js';
@@ -74,7 +75,9 @@ export const BUILT_IN_RULES: readonly LedgerRule[] = Object.freeze([
 
 /** A ledger over `options.store`. */
 export function createLedger(options: LedgerOptions): Ledger {
-  const rules = registerRules(BUILT_IN_RULES, options.rules ?? []);
+  // A second version of the time rule does not use another host-rule registration slot.
+  const rules = new Map(registerRules(BUILT_IN_RULES, options.rules ?? []));
+  for (const [key, rule] of registerRules([timeWindowCoverage])) rules.set(key, rule);
   const ctx = {
     store: options.store,
     rules,

@@ -160,6 +160,8 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
       cites: (v, seq) => seqSet(v, seq, L.maxCites),
     },
     optional: {
+      claimStanding: (v, _seq, note) =>
+        note.noteKind !== 'question' && oneOf(v, ['sure', 'qualified']),
       values: (v) =>
         Array.isArray(v) &&
         v.length >= 1 &&
