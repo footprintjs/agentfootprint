@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { CommitEvent, EmitEvent, FlowSubflowEvent } from 'footprintjs';
-import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { Sequence } from '../../../src/core-flow/Sequence.js';
-import { Agent } from '../../../src/core/Agent.js';
-import { recordRun } from '../../../src/recorders/observability/recordRun.js';
+import { MockProvider } from '../../adapters/llm/MockProvider.js';
+import { Sequence } from '../Sequence.js';
+import { Agent } from '../../core/Agent.js';
+import { recordRun } from '../../recorders/observability/recordRun.js';
 
 describe('native group assessment settlement', () => {
   it('joins the assessment commit under the final branch to the immediate member settlement', async () => {

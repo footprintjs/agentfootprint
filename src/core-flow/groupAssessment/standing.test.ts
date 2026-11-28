@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reduceGroupStanding } from '../../../src/core-flow/groupAssessment/standing.js';
+import { reduceGroupStanding } from './standing.js';
 
 const known = { standing: 'known', coverage: 'complete' } as const;
 

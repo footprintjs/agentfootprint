@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { flowChart, type RedactionPolicy } from 'footprintjs';
-import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { Sequence } from '../../../src/core-flow/Sequence.js';
-import { Agent } from '../../../src/core/Agent.js';
-import { LLMCall } from '../../../src/core/LLMCall.js';
-import { isPaused, pauseHere } from '../../../src/core/pause.js';
-import { recordRun } from '../../../src/recorders/observability/recordRun.js';
-import { absent } from '../../../src/semantics/coverage/absent.js';
-import { defineTool } from '../../../src/tools/tools.js';
+import { MockProvider } from '../../adapters/llm/MockProvider.js';
+import { Sequence } from '../Sequence.js';
+import { Agent } from '../../core/Agent.js';
+import { LLMCall } from '../../core/LLMCall.js';
+import { isPaused, pauseHere } from '../../core/pause.js';
+import { recordRun } from '../../recorders/observability/recordRun.js';
+import { absent } from '../../semantics/coverage/absent.js';
+import { defineTool } from '../../tools/tools.js';
 
 const answer = '{"answerAssessment":{"standing":"ask"}}';
 
