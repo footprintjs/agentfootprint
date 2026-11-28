@@ -36,7 +36,7 @@ export function readNativeCallWitness(
 export function corroboratesNativeCall(
   witness: NativeCallWitness,
   row: Readonly<Record<string, unknown>>,
-  source: 'terminal' | 'decision' | 'history',
+  source: 'terminal' | 'decision' | 'declaration' | 'history',
 ): boolean {
   const name = own(row, 'toolName');
   const iteration = own(row, 'iteration');

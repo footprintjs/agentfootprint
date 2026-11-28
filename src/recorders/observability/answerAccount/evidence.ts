@@ -12,6 +12,8 @@ export interface AccountEventEvidence {
   };
 }
 
+export const CALL_EXPECTATION = 'agentfootprint.findings.declared';
+
 export const TOOL_REWRITE_DECISION = 'agentfootprint.middleware.decision';
 
 export type CommittedToolRewrite =
@@ -23,7 +25,16 @@ export type CommittedToolRewrite =
       readonly decision: Readonly<Record<string, unknown>>;
     };
 
+export type CallExpectationEvidence =
+  | { readonly kind: 'none' | 'unproven' }
+  | { readonly kind: 'linked'; readonly index: number };
+
 export interface CaptureToolEvidence {
+  projectExpectation(payload: object): Readonly<Record<string, unknown>> | undefined;
+  proveExpectation(
+    events: readonly AccountEventEvidence[],
+    snapshot: unknown,
+  ): CallExpectationEvidence;
   captureHistory(value: unknown): ResultShapeCapture;
   captureEvent(
     payload: Readonly<Record<string, unknown>>,
@@ -53,6 +64,7 @@ export type AccountEvidenceGap =
   | 'observer-loss'
   | 'missing-answer-evidence'
   | 'missing-routing-evidence'
+  | 'missing-expectation-evidence'
   | 'redaction'
   | 'tool-results'
   | 'tool-result-key-limit'

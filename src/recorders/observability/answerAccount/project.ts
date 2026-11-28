@@ -57,6 +57,8 @@ const leaves: Readonly<Partial<Record<string, readonly string[]>>> = Object.free
 });
 
 const MAX_HISTORY_ENTRIES = 4_096;
+const MAX_FINDINGS_ROWS = 4_096;
+const MAX_PROPOSALS = 1_000;
 
 const stateKeys = ['turnNumber', 'userMessage', 'history', 'findingsLedger'] as const;
 const toolStateKeys = [
@@ -107,15 +109,27 @@ function pick(value: unknown, names: readonly string[]): Record<string, unknown>
   return Object.fromEntries(fields);
 }
 
+/** Keep the proposal and its argument shape without the duplicate raw
+ * declaration. The original event provides the independently admitted fact. */
+function withoutFindingsArgument(call: unknown): unknown {
+  const args = ownValue(call, 'args');
+  if (typeof args !== 'object' || args === null || !Object.hasOwn(args, '_findings')) return call;
+  const fields = Object.getOwnPropertyDescriptors(args);
+  delete fields._findings;
+  const proposal = Object.getOwnPropertyDescriptors(call as object);
+  proposal.args = { ...proposal.args, value: Object.create(Object.getPrototypeOf(args), fields) };
+  return Object.create(Object.getPrototypeOf(call), proposal);
+}
+
 /** No user data or result is inferred from a projected event. */
 export function projectEvent(
   event: AgentfootprintEvent,
   budget: number,
-  decision?: Readonly<Record<string, unknown>>,
-  captureRewriteIteration = false,
+  admittedPayload?: Readonly<Record<string, unknown>>,
+  captureToolIteration = false,
 ): EventEvidence {
   const fields =
-    captureRewriteIteration && event.type === 'agentfootprint.agent.iteration_end'
+    captureToolIteration && event.type === 'agentfootprint.agent.iteration_end'
       ? ['iterIndex']
       : Object.hasOwn(leaves, event.type)
       ? leaves[event.type]
@@ -125,7 +139,7 @@ export function projectEvent(
       type: event.type,
       meta: pick(event.meta, ['runId', 'sessionId', 'runtimeStageId', 'sourcePosition']),
       payload:
-        decision ??
+        admittedPayload ??
         projectInitialRouting(event.type, event.payload) ??
         pick(event.payload, fields ?? []),
     },
@@ -140,6 +154,7 @@ export function projectState(
   capture: CaptureToolEvidence | undefined,
   events: readonly AccountEventEvidence[],
   comparison: string | undefined,
+  hasLinkedExpectation: boolean,
 ):
   | {
       readonly kind: 'ready';
@@ -151,6 +166,15 @@ export function projectState(
   const state = pick(shared, capture === undefined ? stateKeys : toolStateKeys);
   if (capture === undefined)
     return { kind: 'ready', state: copyJson(state, budget, true) as typeof state };
+  if (hasLinkedExpectation && Object.hasOwn(state, 'findingsLedger')) {
+    const ledger = readOwnList(state.findingsLedger, MAX_FINDINGS_ROWS);
+    if (ledger === undefined || ledger.unread > 0) return { kind: 'budget' };
+    // The declaration is the only source of this fact. Its committed basis
+    // row can also contain free text. Keep other rows at their original indices.
+    state.findingsLedger = ledger.entries.map((row) =>
+      ownValue(row, 'kind') === 'basis' ? null : row,
+    );
+  }
   const list = readOwnList(state.history, MAX_HISTORY_ENTRIES);
   if (list === undefined) return { kind: 'tool-results' };
   if (list.unread > 0) return { kind: 'budget' };
@@ -168,7 +192,22 @@ export function projectState(
   const history = [...list.entries];
   for (let index = 0; index < history.length; index++) {
     const message = history[index];
-    if (ownValue(message, 'role') !== 'tool') continue;
+    const role = ownValue(message, 'role');
+    if (
+      hasLinkedExpectation &&
+      role === 'assistant' &&
+      ownValue(message, 'toolCalls') !== undefined
+    ) {
+      const proposals = readOwnList(ownValue(message, 'toolCalls'), MAX_PROPOSALS);
+      if (proposals === undefined || proposals.unread > 0) return { kind: 'budget' };
+      const fields = Object.getOwnPropertyDescriptors(message as object);
+      fields.toolCalls = {
+        ...fields.toolCalls,
+        value: proposals.entries.map(withoutFindingsArgument),
+      };
+      history[index] = Object.create(Object.getPrototypeOf(message), fields);
+    }
+    if (role !== 'tool') continue;
     if (
       message === null ||
       typeof message !== 'object' ||

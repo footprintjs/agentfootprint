@@ -4,10 +4,13 @@ import { readCallOccurrenceKey } from '../lib/callOccurrence.js';
 import type { CaptureToolEvidence } from '../recorders/observability/answerAccount/evidence.js';
 import { recordAnswerAccount } from '../recorders/observability/answerAccount/recorder.js';
 
+import { projectCallExpectation, proveCallExpectation } from './expectationEvidence.js';
 import { modelResultView } from './resultView.js';
 import { linkToolRewrite, projectToolDecision, rewriteComparison } from './rewriteEvidence.js';
 
 const capture: CaptureToolEvidence = {
+  projectExpectation: projectCallExpectation,
+  proveExpectation: proveCallExpectation,
   projectDecision: projectToolDecision,
   linkRewrite: linkToolRewrite,
   captureHistory: capturePlainResultShape,

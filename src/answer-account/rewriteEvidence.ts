@@ -16,7 +16,8 @@ import {
   type AccountEventEvidence,
   type CommittedToolRewrite,
 } from '../recorders/observability/answerAccount/evidence.js';
-import { MAX_REWRITE_LEDGER, own, readRewriteCommit } from './rewriteCommit.js';
+import { own } from './nativeToolStage.js';
+import { MAX_REWRITE_LEDGER, readRewriteCommit } from './rewriteCommit.js';
 
 const START = 'agentfootprint.stream.tool_start';
 const ITERATION_END = 'agentfootprint.agent.iteration_end';

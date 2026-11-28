@@ -96,6 +96,8 @@ describe('IMPORT-GRAPH FENCE', () => {
     expect(reached).not.toContain('answer-account/recordToolEvidence.ts');
     expect(reached).not.toContain('answer-account/rewriteCommit.ts');
     expect(reached).not.toContain('answer-account/rewriteEvidence.ts');
+    expect(reached).not.toContain('answer-account/expectationEvidence.ts');
+    expect(reached).not.toContain('answer-account/nativeToolStage.ts');
     expect(reached).not.toContain('recorders/observability/answerAccount/recorder.ts');
     // The walk is real: it reaches past the folder (the owners below and what they import).
     expect(reached).toContain('bridge/eventMeta.ts');

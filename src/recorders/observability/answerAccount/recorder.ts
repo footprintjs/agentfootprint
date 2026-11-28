@@ -14,7 +14,7 @@ import type {
   AnswerAccountEvidence,
   CaptureToolEvidence,
 } from './evidence.js';
-import { TOOL_REWRITE_DECISION } from './evidence.js';
+import { CALL_EXPECTATION, TOOL_REWRITE_DECISION } from './evidence.js';
 import { hasAnswerWitnesses, lostObserverEvidence } from './coverage.js';
 import {
   containsToolHistory,
@@ -62,6 +62,7 @@ export function recordAnswerAccount(
   let evidence: AnswerAccountEvidence | undefined;
   let comparison: string | undefined;
   let comparisonBytes = 0;
+  let sawExpectation = false;
 
   const discard = () => {
     events.clear();
@@ -100,13 +101,26 @@ export function recordAnswerAccount(
       gaps.add('missing-routing-evidence');
     let state: AnswerAccountEvidence['state'];
     let historyResults: AnswerAccountEvidence['historyResults'];
+    let expectationIndex: number | undefined;
     if (gaps.size === 0) {
       try {
-        const projected = projectState(snapshot, maxBytes - bytes, capture, retained, comparison);
-        if (projected.kind === 'ready') {
-          state = projected.state;
-          historyResults = projected.historyResults;
-        } else gaps.add(projected.kind);
+        const expectation = capture?.proveExpectation(retained, snapshot);
+        if (expectation?.kind === 'unproven') gaps.add('missing-expectation-evidence');
+        if (expectation?.kind === 'linked') expectationIndex = expectation.index;
+        if (gaps.size === 0) {
+          const projected = projectState(
+            snapshot,
+            maxBytes - bytes,
+            capture,
+            retained,
+            comparison,
+            expectationIndex !== undefined,
+          );
+          if (projected.kind === 'ready') {
+            state = projected.state;
+            historyResults = projected.historyResults;
+          } else gaps.add(projected.kind);
+        }
       } catch {
         gaps.add('budget');
       }
@@ -116,7 +130,9 @@ export function recordAnswerAccount(
       version: 1,
       gaps: Object.freeze([...gaps].sort()),
       firstRetainedIndex: first,
-      events: Object.freeze(state === undefined ? retained.map(withoutUnprovenRewrite) : retained),
+      events: Object.freeze(
+        retained.map((row) => sealedEvent(row, state !== undefined, expectationIndex)),
+      ),
       ...(state === undefined ? {} : { state }),
       ...(historyResults === undefined ? {} : { historyResults }),
     });
@@ -164,15 +180,26 @@ export function recordAnswerAccount(
           event.type === TOOL_REWRITE_DECISION && typeof rewrite !== 'object' && gaps.size === 0
             ? capture?.projectDecision(event.payload)
             : undefined;
-        if (requiresMoreEvidence(event.type) && decision === undefined)
+        const expectation =
+          event.type === CALL_EXPECTATION && gaps.size === 0
+            ? capture?.projectExpectation(event.payload)
+            : undefined;
+        // Do not trust a declaration's stage to decide which completion to capture.
+        if (expectation !== undefined) sawExpectation = true;
+        if (
+          requiresMoreEvidence(event.type) &&
+          decision === undefined &&
+          !(event.type === CALL_EXPECTATION && capture !== undefined)
+        )
           gaps.add('unsupported-evidence');
         const eventEvidence = projectEvent(
           event,
           maxBytes - bytes,
-          decision,
-          typeof rewrite === 'object' &&
-            rewrite.runId === event.meta.runId &&
-            rewrite.runtimeStageId === event.meta.runtimeStageId,
+          decision ?? expectation,
+          sawExpectation ||
+            (typeof rewrite === 'object' &&
+              rewrite.runId === event.meta.runId &&
+              rewrite.runtimeStageId === event.meta.runtimeStageId),
         );
         if (decision?.changed === true) rewrite = 'decision';
         let toolResult: AccountEventEvidence['toolResult'];
@@ -231,14 +258,21 @@ function canSealUnderFinalPolicy(snapshot: unknown, started: boolean): boolean {
   }
 }
 
-/** Candidate contents are never returned when their committed pair did not seal. */
-function withoutUnprovenRewrite(row: AccountEventEvidence): AccountEventEvidence {
-  if (row.event.type === TOOL_REWRITE_DECISION && Object.keys(row.event.payload).length > 0)
+/** Only the original proved expectation and its original coordinate survive. */
+function sealedEvent(
+  row: AccountEventEvidence,
+  ready: boolean,
+  expectationIndex?: number,
+): AccountEventEvidence {
+  const strip =
+    (row.event.type === CALL_EXPECTATION && (!ready || row.index !== expectationIndex)) ||
+    (row.event.type === TOOL_REWRITE_DECISION && !ready);
+  if (strip && Object.keys(row.event.payload).length > 0)
     return Object.freeze({
       index: row.index,
       event: Object.freeze({ ...row.event, payload: Object.freeze({}) }),
     });
-  if (row.toolResult?.view === 'model-result')
+  if (!ready && row.toolResult?.view === 'model-result')
     return Object.freeze({ index: row.index, event: row.event });
   return row;
 }

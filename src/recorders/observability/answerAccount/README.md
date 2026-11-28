@@ -23,3 +23,13 @@ result comparison counts against the capture budget and is discarded at
 seal. Result bodies and middleware explanations never enter the bundle.
 Missing or conflicting facts and unsupported evidence withhold the view.
 Covered or unresolved final policy produces only the constant withheld bundle.
+
+One expectation can keep the model's declared basis and optional rating with
+its original event address. The named run, root invocation, native stage and
+local emit prefix must agree with its selected occurrence and completion.
+The declaration precedes its own admitted start; a proved identical repeat
+never replaces that first pointer. Missing or contradictory witnesses keep the
+view unavailable and discard provisional expectation fields. An argument event
+cannot supply an expectation. The sealed state keeps ledger indices and drops
+duplicate raw basis rows and the reserved findings content in tool proposals.
+Both features use the same final-policy seal.

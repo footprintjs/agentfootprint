@@ -2,24 +2,13 @@ import { commitValueAt, type CommitBundle } from 'foottrace';
 import { pathSegments } from 'foottrace/paths';
 import { measureBoundedJson, readOwnList } from '../lib/boundedJson.js';
 import type { AccountEventEvidence } from '../recorders/observability/answerAccount/evidence.js';
+import { own, rootToolPrefix } from './nativeToolStage.js';
 
 const MAX_COMMITS = 4_096;
 const MAX_WRITES = 4_096;
 const ROOTS = ['history', 'middlewareDecisions'] as const;
 export const MAX_REWRITE_HISTORY = 4_096;
 export const MAX_REWRITE_LEDGER = 4_096;
-
-export function own(value: unknown, key: string): unknown {
-  return value !== null && typeof value === 'object'
-    ? Object.getOwnPropertyDescriptor(value, key)?.value
-    : undefined;
-}
-
-const isRoot = (path: unknown) => Array.isArray(path) && own(path, 'length') === 0;
-
-function positionOf(row: AccountEventEvidence) {
-  return own(row.event.meta, 'sourcePosition');
-}
 
 /** Read two named values from the bracket's unique owning root commit. */
 export function readRewriteCommit(
@@ -29,30 +18,8 @@ export function readRewriteCommit(
   witnesses: readonly AccountEventEvidence[],
   budget: number,
 ) {
-  const position = positionOf(end);
-  const engine = own(position, 'engineRunId');
-  const prefix = own(position, 'committedThroughIdx');
-  const address = own(snapshot, 'logAddress');
-  if (
-    typeof engine !== 'string' ||
-    engine !== own(snapshot, 'runId') ||
-    engine !== own(address, 'logRunId') ||
-    !isRoot(own(address, 'drillPath')) ||
-    typeof prefix !== 'number' ||
-    !Number.isSafeInteger(prefix) ||
-    prefix < -1 ||
-    witnesses.some((row) => {
-      const source = positionOf(row);
-      return (
-        own(source, 'engineRunId') !== engine ||
-        own(source, 'logRunId') !== engine ||
-        !isRoot(own(source, 'drillPath')) ||
-        own(source, 'committedThroughIdx') !== prefix
-      );
-    })
-  )
-    return undefined;
-
+  const prefix = rootToolPrefix(snapshot, end, witnesses);
+  if (prefix === undefined) return undefined;
   const log = readOwnList(own(snapshot, 'commitLog'), MAX_COMMITS);
   if (log === undefined || log.unread !== 0 || log.entries.includes(undefined)) return undefined;
   const index = prefix + 1;
