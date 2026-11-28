@@ -33,7 +33,9 @@ describe('native group assessment settlement', () => {
       },
     });
     try {
-      expect(await sequence.run({ message: 'Use the recorded evidence.' })).toBe(reportedOutput);
+      expect(await sequence.run({ message: 'The attachment status for the morning review.' })).toBe(
+        reportedOutput,
+      );
       expect(events).toHaveLength(4);
       const [assessmentCommit, terminal, finalExit, memberExit] = events as [
         CommitEvent,
