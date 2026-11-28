@@ -4,7 +4,7 @@ title: CompletedTurnNode
 
 # Interface: CompletedTurnNode
 
-Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L14)
+Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L23)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:14](https://gith
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L15)
+Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L24)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:15](https://gith
 
 > `readonly` **logAddress**: `LogAddress`
 
-Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L17)
+Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L26)
 
 ***
 
@@ -28,4 +28,4 @@ Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:17](https://gith
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L16)
+Defined in: [src/core/agent/turnEvidence/completedTurnHandle.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/turnEvidence/completedTurnHandle.ts#L25)
