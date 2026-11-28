@@ -57,9 +57,8 @@
 - **Evicted results.** The recorded settlement keeps the delivery, the call's
   outcome and selected result declarations after `.window()` evicts the model's
   copy. Checks that need the original text or app-provided row paths can say
-  less. A later completion clears a failure only when recorded arguments
-  establish that it is the same call retried. The failure stays when the
-  arguments are unavailable.
+  less. A later completion cannot clear an earlier failure by matching its
+  arguments. The current dispatch records no retry link to the earlier call.
 - **A correction after an evicted call with the same ID.** When a call's result
   is evicted and a later proposal with the same turn, tool and ID gets a
   library correction or another pre-dispatch row, the remaining rows can look

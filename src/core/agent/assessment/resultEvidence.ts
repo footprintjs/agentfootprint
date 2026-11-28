@@ -131,18 +131,12 @@ export function readTurnCalls(
   }
 }
 
-/** Settlement is assessed separately from facts drawn from a served result. */
-export function readCallOutcomes(
-  results: readonly TurnResult[],
-  recovered: ReadonlySet<number>,
-  g: Gathered,
-): void {
+/** Read each outcome from its own occurrence. No current producer proves
+ * recovery of a different occurrence, and this reader has no labelled legacy provenance. */
+export function readCallOutcomes(results: readonly TurnResult[], g: Gathered): void {
   for (const result of results) {
     const at = historyPointer(result);
-    if (
-      (result.outcome !== undefined || result.outcomePath !== undefined) &&
-      !recovered.has(result.index)
-    ) {
+    if (result.outcome !== undefined || result.outcomePath !== undefined) {
       fire(g, 'call-not-completed', {
         ...at,
         path: result.batchRefusal
@@ -151,7 +145,7 @@ export function readCallOutcomes(
           ? '/content'
           : result.outcomePath ?? '/outcome',
       });
-    } else if (result.reportedStatus !== undefined && !recovered.has(result.index)) {
+    } else if (result.reportedStatus !== undefined) {
       fire(g, 'work-not-finished', {
         ...at,
         path: result.rewritten ? '/content' : '/reportedStatus',

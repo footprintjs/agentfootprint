@@ -13,7 +13,6 @@ import {
   readTurnResults,
 } from '../resultEvidence.js';
 import { placeSettledResults, readSettledResults } from '../settledResults.js';
-import { recoveredCallOutcomes } from '../turnResults.js';
 import type { AssessmentDeclarations } from '../types.js';
 import type { PreparedWarning, WarningContext } from '../warningContext.js';
 import { libraryResultReasons } from './library-did/stage.js';
@@ -50,10 +49,8 @@ export function readResultEvidence(
     recorded,
     admission,
     results,
-    history,
     current,
     places,
-    begins,
     coverage,
     reads,
     resultOpportunities,
@@ -62,20 +59,12 @@ export function readResultEvidence(
   }: WarningContext,
   declarations: AssessmentDeclarations | undefined,
   enteredArguments: readonly ArgumentRowRead[],
-  retainedHistory?: (history: readonly unknown[]) => unknown,
 ): void {
   if (admission.settlements === undefined) {
-    readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
+    readCallOutcomes(results, g);
   } else {
     const placed = placeSettledResults(admission.settlements, results, current);
-    const recovered = recoveredCallOutcomes(
-      placed.retained,
-      history,
-      begins,
-      retainedHistory,
-      (index) => placed.byIndex.get(index)?.execution === 'returned',
-    );
-    readSettledResults(admission.settlements, placed, coverage, recovered, PERIOD_REASONS, g);
+    readSettledResults(admission.settlements, placed, coverage, PERIOD_REASONS, g);
   }
   readTurnResults(
     reads,

@@ -693,7 +693,7 @@ describe('recorded settlement across the coordinator window axes', () => {
   );
 
   it.each([false, true])(
-    'clears a prior failure only with arguments linking it to the later completion (evicts=%s)',
+    'keeps the prior failure after an unlinked later completion (evicts=%s)',
     async (evicts) => {
       let calls = 0;
       const { agent } = build(
@@ -710,8 +710,8 @@ describe('recorded settlement across the coordinator window axes', () => {
           !evicts,
         );
         expect(calls).toBe(2);
-        expect(proof.event.reasons).toEqual(evicts ? ['call-not-completed'] : []);
-        if (evicts) expect(proof.returned).toContain('Not sure — a call failed.');
+        expect(proof.event.reasons).toEqual(['call-not-completed']);
+        expect(proof.returned).toContain('Not sure');
       } finally {
         await agent.shutdown();
       }
@@ -783,7 +783,6 @@ describe('recorded settlement across the coordinator window axes', () => {
   ] as const)(
     'default pins preserve $reason after the earlier lookup leaves history',
     async ({ reason, execute }) => {
-      const canRecover = reason === 'call-not-completed' || reason === 'work-not-finished';
       async function run(evicts: boolean) {
         let calls = 0;
         const rule: ToolMiddleware | undefined =
@@ -820,9 +819,8 @@ describe('recorded settlement across the coordinator window axes', () => {
           const proof = await read(agent);
           expect(historyAtRequest.at(-1)?.includes('c1')).toBe(!evicts);
           expect(historyAtRequest.at(-1)).toContain('c2');
-          const reasons = !evicts && canRecover ? [] : [reason];
           expect([...proof.event.reasons].sort()).toEqual(
-            (evicts ? [...reasons, DROP_REASON] : reasons).sort(),
+            (evicts ? [reason, DROP_REASON] : [reason]).sort(),
           );
           if (evicts) {
             const kept = historyAtRequest.at(-1)!;

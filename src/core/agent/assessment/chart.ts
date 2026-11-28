@@ -17,7 +17,6 @@ export function foldState(
   recorded: Readonly<Record<string, unknown>>,
   declarations: AssessmentDeclarations | undefined,
   served: boolean,
-  retainedHistory?: (history: readonly unknown[]) => unknown,
   declarationAddresses?: ReadonlyMap<number, number>,
   legacyEvents?: unknown,
   retain: RetainedReasonState = (_key, value) => value,
@@ -32,7 +31,7 @@ export function foldState(
   const enteredArguments = readInputs(state, argumentVerdicts, resolveCurrent, admission, g);
   readResultsCoverage(gathered);
   readContingentRows(state, places, g);
-  readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
+  readResultEvidence(gathered, declarations, enteredArguments);
   readAnswerRows(state, g, served, retain);
   const integrity = readIntegrityFindings(state, g);
   const consultation =
