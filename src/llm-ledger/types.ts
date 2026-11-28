@@ -35,6 +35,7 @@ export type LedgerKind =
 
 /** What a note says it is. */
 export type LedgerNoteKind = 'claim' | 'ruled-out' | 'question';
+export type LedgerClaimStanding = 'sure' | 'qualified';
 
 /** Who supplied a value the agent did not read. */
 export type LedgerSupplier = 'person' | 'app' | 'system';
@@ -149,6 +150,7 @@ export interface LedgerSupplied extends LedgerEntryBase<'supplied'> {
 /** What the agent noted, and which receipts it cites. */
 export interface LedgerNote extends LedgerEntryBase<'note'> {
   readonly noteKind: LedgerNoteKind;
+  readonly claimStanding?: LedgerClaimStanding;
   readonly text: string;
   readonly values?: readonly string[];
   readonly window?: LedgerWindow;

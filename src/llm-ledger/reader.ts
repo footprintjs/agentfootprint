@@ -9,7 +9,9 @@
  * Emits:   N/A.
  */
 import { LEDGER_LIMITS as L } from './limits.js';
+import { LedgerStoreError } from './store.js';
 import type { LedgerLog } from './store.js';
+import { COVERAGE_RULE_KEY, mixesTimeWindowVersions } from './entries.js';
 import type {
   LedgerCheck,
   LedgerDelivered,
@@ -36,6 +38,8 @@ export interface LedgerReader {
   note(seq: number): LedgerNote | undefined;
   /** The withdrawal of `note`, when there is one. */
   withdrawalOf(note: number): LedgerWithdrawal | undefined;
+  readonly entries: readonly LedgerEntry[];
+  readonly admitsClaimStanding: boolean;
   readonly receipts: readonly LedgerReceipt[];
   readonly supplied: readonly LedgerSupplied[];
   readonly notes: readonly LedgerNote[];
@@ -62,6 +66,13 @@ export function readerOf(log: LedgerLog): LedgerReader {
   const submits = byKind('submit');
   const delivered = byKind('delivered');
   const first = entries[0];
+  const opened = first?.kind === 'opened' ? first : undefined;
+  if (opened !== undefined && mixesTimeWindowVersions(opened.rules))
+    throw new LedgerStoreError('malformed', 'rules');
+  const admitsClaimStanding = opened?.rules.includes(COVERAGE_RULE_KEY) === true;
+  const notes = byKind('note');
+  if (!admitsClaimStanding && notes.some((note) => note.claimStanding !== undefined))
+    throw new LedgerStoreError('malformed', 'claimStanding');
   const entry = (seq: number): LedgerEntry | undefined =>
     Number.isSafeInteger(seq) && seq >= 1 ? entries[seq - 1] : undefined;
   const as =
@@ -72,7 +83,9 @@ export function readerOf(log: LedgerLog): LedgerReader {
     };
   return Object.freeze({
     seq: log.seq,
-    opened: first?.kind === 'opened' ? first : undefined,
+    opened,
+    admitsClaimStanding,
+    entries,
     full: log.seq >= L.maxEntries,
     entry,
     receipt: as('receipt'),
@@ -80,7 +93,7 @@ export function readerOf(log: LedgerLog): LedgerReader {
     withdrawalOf: (note: number) => withdrawals.get(note),
     receipts,
     supplied: byKind('supplied'),
-    notes: byKind('note'),
+    notes,
     lastSubmit: submits[submits.length - 1],
     checksOf: (submit: number) => checks.get(submit) ?? [],
     releasedOf: (submit: number) => released.get(submit),

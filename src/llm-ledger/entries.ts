@@ -92,6 +92,12 @@ const tokenList = (v: unknown, max: number): boolean =>
 /** A rule name as a check record and `opened.rules` store it: `id@version`. */
 export const isRuleName = (v: unknown): v is string =>
   typeof v === 'string' && (BUILT_IN_RULE.test(v) || HOST_RULE.test(v));
+export const COVERAGE_RULE_KEY = 'time-window@2';
+
+/** A session may run only one version of the time-window rule. */
+export const mixesTimeWindowVersions = (rules: readonly string[]): boolean =>
+  rules.includes('time-window@1') && rules.includes(COVERAGE_RULE_KEY);
+
 const exactly = (v: unknown, keys: readonly string[]): v is Record<string, unknown> =>
   isObject(v) && Object.keys(v).length === keys.length && keys.every((k) => Object.hasOwn(v, k));
 
@@ -111,7 +117,8 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
         Array.isArray(v) &&
         v.length <= L.maxRules &&
         v.every(isRuleName) &&
-        new Set(v).size === v.length,
+        new Set(v).size === v.length &&
+        !mixesTimeWindowVersions(v),
       confirm: bool,
       askRunsRules: bool,
     },
@@ -160,6 +167,8 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
       cites: (v, seq) => seqSet(v, seq, L.maxCites),
     },
     optional: {
+      claimStanding: (v, _seq, note) =>
+        note.noteKind !== 'question' && oneOf(v, ['sure', 'qualified']),
       values: (v) =>
         Array.isArray(v) &&
         v.length >= 1 &&
@@ -281,15 +290,21 @@ export function entryFault(value: unknown): string | undefined {
  * host masked values, or when its row limit was hit.
  */
 export function isIncomplete(receipt: LedgerReceipt): boolean {
-  const cut = receipt.cut;
   return (
-    (cut !== undefined && (cut.tokensDropped > 0 || cut.bytesUnread > 0)) ||
+    isCut(receipt) ||
     (receipt.groupedNumbers ?? 0) > 0 ||
     (receipt.escapedPieces ?? 0) > 0 ||
     (receipt.hidden ?? 0) > 0 ||
-    receipt.limit?.hit === true
+    isLimited(receipt)
   );
 }
+
+export function isCut(receipt: LedgerReceipt): boolean {
+  const cut = receipt.cut;
+  return cut !== undefined && (cut.tokensDropped > 0 || cut.bytesUnread > 0);
+}
+
+export const isLimited = (receipt: LedgerReceipt): boolean => receipt.limit?.hit === true;
 
 /**
  * Why `cites` cannot stand in this session's `log` (entries 1…n, in order),

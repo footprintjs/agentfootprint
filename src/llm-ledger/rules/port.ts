@@ -193,7 +193,9 @@ export function registerRules(
   host: readonly LedgerRule[] = [],
 ): ReadonlyMap<string, LedgerRule> {
   if (!Array.isArray(host)) throw new LedgerRuleError('bad-rule');
-  if (builtIns.length + host.length > L.maxRegisteredRules)
+  // Historical versions of a built-in share its registration slot.
+  const builtInNames = new Set(builtIns.map((rule) => rule?.id));
+  if (builtInNames.size + host.length > L.maxRegisteredRules)
     throw new LedgerRuleError('too-many-rules');
   const rules = new Map<string, LedgerRule>();
   for (const [rule, builtIn] of [
