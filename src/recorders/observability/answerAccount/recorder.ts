@@ -60,14 +60,18 @@ export function recordAnswerAccount(
   let rewrite: 'none' | 'decision' | Pick<AgentfootprintEvent['meta'], 'runId' | 'runtimeStageId'> =
     'none';
   let evidence: AnswerAccountEvidence | undefined;
+  let comparison: string | undefined;
+  let comparisonBytes = 0;
 
   const discard = () => {
     events.clear();
+    comparison = undefined;
+    comparisonBytes = 0;
     bytes = WRAPPER_BYTES;
   };
 
   const finish: RecordingObservation['seal'] = (snapshot, first, recordingIndex) => {
-    if (servedUnderPolicy(snapshot)) {
+    if (!canSealUnderFinalPolicy(snapshot, started)) {
       discard();
       peakRetainedEventBytes = 0;
       evidence = Object.freeze({
@@ -98,7 +102,7 @@ export function recordAnswerAccount(
     let historyResults: AnswerAccountEvidence['historyResults'];
     if (gaps.size === 0) {
       try {
-        const projected = projectState(snapshot, maxBytes - bytes, capture, retained);
+        const projected = projectState(snapshot, maxBytes - bytes, capture, retained, comparison);
         if (projected.kind === 'ready') {
           state = projected.state;
           historyResults = projected.historyResults;
@@ -157,7 +161,7 @@ export function recordAnswerAccount(
       if (event.type === 'agentfootprint.pause.resume') gaps.add('resumed-state');
       try {
         const decision =
-          event.type === TOOL_REWRITE_DECISION && rewrite === 'none' && gaps.size === 0
+          event.type === TOOL_REWRITE_DECISION && typeof rewrite !== 'object' && gaps.size === 0
             ? capture?.projectDecision(event.payload)
             : undefined;
         if (requiresMoreEvidence(event.type) && decision === undefined)
@@ -170,7 +174,7 @@ export function recordAnswerAccount(
             rewrite.runId === event.meta.runId &&
             rewrite.runtimeStageId === event.meta.runtimeStageId,
         );
-        if (decision !== undefined) rewrite = 'decision';
+        if (decision?.changed === true) rewrite = 'decision';
         let toolResult: AccountEventEvidence['toolResult'];
         if (capture !== undefined && event.type === 'agentfootprint.stream.tool_end') {
           const result = capture.captureEvent(
@@ -187,6 +191,9 @@ export function recordAnswerAccount(
             if (result.shape.view === 'model-result') {
               const { runId, runtimeStageId } = event.meta;
               rewrite = { runId, runtimeStageId };
+              comparison = result.comparison;
+              comparisonBytes = jsonBytes(comparison);
+              bytes += comparisonBytes;
             }
           } else gaps.add(result.kind);
         }
@@ -195,7 +202,10 @@ export function recordAnswerAccount(
         if (bytes + rowBytes > maxBytes) throw new RangeError('Explanation event budget reached.');
         events.set(ordinal, { row, bytes: rowBytes });
         bytes += rowBytes;
-        peakRetainedEventBytes = Math.max(peakRetainedEventBytes, bytes - WRAPPER_BYTES);
+        peakRetainedEventBytes = Math.max(
+          peakRetainedEventBytes,
+          bytes - WRAPPER_BYTES - comparisonBytes,
+        );
       } catch {
         gaps.add('budget');
         discard();
@@ -211,6 +221,14 @@ export function recordAnswerAccount(
       return evidence === undefined ? 0 : peakRetainedEventBytes;
     },
   };
+}
+
+function canSealUnderFinalPolicy(snapshot: unknown, started: boolean): boolean {
+  try {
+    return !(started && snapshot === undefined) && !servedUnderPolicy(snapshot);
+  } catch {
+    return false;
+  }
 }
 
 /** Candidate contents are never returned when their committed pair did not seal. */

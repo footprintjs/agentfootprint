@@ -139,6 +139,7 @@ export function projectState(
   budget: number,
   capture: CaptureToolEvidence | undefined,
   events: readonly AccountEventEvidence[],
+  comparison: string | undefined,
 ):
   | {
       readonly kind: 'ready';
@@ -154,13 +155,13 @@ export function projectState(
   if (list === undefined) return { kind: 'tool-results' };
   if (list.unread > 0) return { kind: 'budget' };
 
-  const rewrite = capture.linkRewrite(
-    events,
-    ownValue(shared, 'middlewareDecisions'),
-    list.entries,
-  );
+  const rewrite = capture.linkRewrite(events, snapshot, list.entries, comparison, budget);
   if (rewrite.kind === 'unproven') return { kind: 'tool-results' };
-  if (rewrite.kind === 'linked') state.middlewareDecisions = [rewrite.decision];
+  if (rewrite.kind === 'linked') {
+    // Earlier slots are not needed by the final-winner reducer. Keep their
+    // positions without retaining their contents or relocating the pointer.
+    state.middlewareDecisions = [...Array<null>(rewrite.ledgerIndex).fill(null), rewrite.decision];
+  }
 
   let remaining = budget;
   const historyResults: AccountHistoryResult[] = [];

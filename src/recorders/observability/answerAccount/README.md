@@ -13,12 +13,13 @@ Other skill events, rules-only graphs without that verdict and incomplete witnes
 still withhold. Graph descriptions and edges, scorer details outside the consumed
 leaves and offered ids are excluded. Each routing list has at most 256 entries.
 
-A single allowed after-tool rewrite can prove a fresh served result. The
-collector holds a bounded shape provisionally after the accepted decision and links it
-to the accepted decision, committed ledger row and retained tool history under
-the same occurrence. The native start, decision and terminal must share a stage.
-That stage's unique iteration completion must agree with the rewrite, as must
-any tool identity or iteration repeated on the native bracket. The sealed metadata carries the served channel and original
-ledger position. Result bodies and middleware explanations stay out. Additional
-middleware, missing or conflicting evidence and other unsupported families
-still withhold the view and discard provisional rewrite data.
+A single completed tool occurrence can prove a served rewrite. The native
+start, decisions, terminal and iteration completion must agree on their run,
+stage and call identity. The unique next root commit must write both history
+and the ledger. Its returned result supplies the witness even after history
+eviction. The sealed ledger supplies the final winner at its original index,
+and the accepted decisions must match the recorded order. The transient
+result comparison counts against the capture budget and is discarded at
+seal. Result bodies and middleware explanations never enter the bundle.
+Missing or conflicting facts and unsupported evidence withhold the view.
+Covered or unresolved final policy produces only the constant withheld bundle.

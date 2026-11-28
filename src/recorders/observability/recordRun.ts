@@ -391,13 +391,18 @@ export function recordRunWhere(
         // too: a reused runner's later log is never paired with these events.
         let failure: { readonly error: unknown } | undefined;
         try {
-          stoppedSnapshot = runner.getLastSnapshot({ contextShapes: false });
-          if (observation) {
-            const first = tail.firstRetainedIndex;
-            const afterLast = first + tail.count;
-            observation.seal(stoppedSnapshot, first, (ordinal) =>
-              ordinal >= first && ordinal < afterLast ? ordinal - first : undefined,
-            );
+          try {
+            stoppedSnapshot = runner.getLastSnapshot({ contextShapes: false });
+          } finally {
+            // An observer guarding a final serving policy must also seal when
+            // the native read fails, without borrowing any prior snapshot.
+            if (observation) {
+              const first = tail.firstRetainedIndex;
+              const afterLast = first + tail.count;
+              observation.seal(stoppedSnapshot, first, (ordinal) =>
+                ordinal >= first && ordinal < afterLast ? ordinal - first : undefined,
+              );
+            }
           }
         } catch (error) {
           failure = { error };

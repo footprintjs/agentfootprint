@@ -18,7 +18,8 @@ export type CommittedToolRewrite =
   | { readonly kind: 'none' | 'unproven' }
   | {
       readonly kind: 'linked';
-      readonly historyIndex: number;
+      readonly historyIndex?: number;
+      readonly ledgerIndex: number;
       readonly decision: Readonly<Record<string, unknown>>;
     };
 
@@ -28,12 +29,14 @@ export interface CaptureToolEvidence {
     payload: Readonly<Record<string, unknown>>,
     budget: number,
     admitsRewrite: boolean,
-  ): ResultShapeCapture;
+  ): ResultShapeCapture & { readonly comparison?: string };
   projectDecision(payload: unknown): Readonly<Record<string, unknown>> | undefined;
   linkRewrite(
     events: readonly AccountEventEvidence[],
-    ledger: unknown,
+    snapshot: unknown,
     history: readonly unknown[],
+    comparison: string | undefined,
+    budget: number,
   ): CommittedToolRewrite;
 }
 

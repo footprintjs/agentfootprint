@@ -1,3 +1,4 @@
+import { commitValueAt } from 'foottrace';
 import { describe, expect, it } from 'vitest';
 import { Agent, allow, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
@@ -6,6 +7,7 @@ import { validateDeclarations } from '../../src/answer-account/declarations.js';
 import { bundleView } from '../../src/answer-account/bundleView.js';
 import { recordAnswerAccountWithTools } from '../../src/answer-account/recordToolEvidence.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
+import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
 import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
@@ -17,10 +19,22 @@ const ITERATION_END = 'agentfootprint.agent.iteration_end';
 const END = 'agentfootprint.stream.tool_end';
 const BUDGET = 128 * 1024;
 
-async function record(rows: number, delivery: 'inline' | 'deferred', covered = false) {
-  const runner = Agent.create({
+async function record(
+  rows: number,
+  delivery: 'inline' | 'deferred',
+  covered = false,
+  commitValues?: 'full' | 'delta',
+  earlierRewrite = false,
+) {
+  const data = (count: number, text: string) => ({
+    datasets: {
+      disks: { ref: 'art_0000000000000000000001', rows: count, sourceField: 'disks', text },
+    },
+  });
+  const builder = Agent.create({
     model: 'mock',
     observerDelivery: delivery,
+    ...(commitValues && { commitValues }),
     ...(covered && { redact: { keys: ['userMessage'] } }),
     provider: mock({
       replies: [
@@ -28,20 +42,41 @@ async function record(rows: number, delivery: 'inline' | 'deferred', covered = f
         { content: 'The lookup completed.' },
       ],
     }),
-  })
-    .tool(
-      defineTool({
-        name: 'lookup_data',
-        description: 'Read a fixture.',
-        inputSchema: { type: 'object' },
-        execute: () => ({ rows: ['original-a', 'original-b', 'original-c'] }),
-      }),
-    )
-    .toolMiddleware({
-      name: 'projection-rule',
-      onToolResult: () => allow({ rows: rows ? ['served-sentinel'] : [] }, 'Synthetic rewrite'),
-    })
-    .build();
+  }).tool(
+    defineTool({
+      name: 'lookup_data',
+      description: 'Read a fixture.',
+      inputSchema: { type: 'object' },
+      execute: () =>
+        commitValues
+          ? data(200, 'original-sentinel')
+          : { rows: ['original-a', 'original-b', 'original-c'] },
+    }),
+  );
+  if (commitValues) {
+    builder.toolMiddleware({
+      name: 'last-unchanged',
+      onToolCall: () => allow(),
+      onToolResult: () => allow(),
+    });
+  }
+  builder.toolMiddleware({
+    name: 'projection-rule',
+    onToolResult: () =>
+      allow(
+        commitValues ? data(rows, 'served-sentinel') : { rows: rows ? ['served-sentinel'] : [] },
+        'Synthetic rewrite',
+      ),
+  });
+  if (commitValues) {
+    builder.toolMiddleware({
+      name: 'first-rule',
+      onToolCall: () => allow(),
+      onToolResult: () =>
+        earlierRewrite ? allow(data(1, 'earlier-sentinel'), 'Superseded rewrite') : allow(),
+    });
+  }
+  const runner = builder.build();
   const observed = recordAnswerAccountWithTools(runner, BUDGET);
   try {
     await runner.run('Read the fixture.');
@@ -59,7 +94,11 @@ type Snapshot = NonNullable<
   ReturnType<Parameters<typeof recordAnswerAccountWithTools>[0]['getLastSnapshot']>
 >;
 
-function replay(events: readonly AgentfootprintEvent[], snapshot: Snapshot) {
+function replay(
+  events: readonly AgentfootprintEvent[],
+  snapshot: Snapshot | undefined,
+  failedPolicy = false,
+) {
   const attachers: Parameters<Parameters<typeof recordAnswerAccountWithTools>[0]['attach']>[0][] =
     [];
   let listener: ((event: AgentfootprintEvent) => void) | undefined;
@@ -74,7 +113,10 @@ function replay(events: readonly AgentfootprintEvent[], snapshot: Snapshot) {
         return () => {};
       },
       getCommitCount: () => 0,
-      getLastSnapshot: () => snapshot,
+      getLastSnapshot: () => {
+        if (failedPolicy) throw new Error('Final serving policy unavailable');
+        return snapshot;
+      },
       getSpec: () =>
         ({} as ReturnType<Parameters<typeof recordAnswerAccountWithTools>[0]['getSpec']>),
     },
@@ -87,7 +129,9 @@ function replay(events: readonly AgentfootprintEvent[], snapshot: Snapshot) {
   for (const event of events) listener!(event);
   hooks.onCommit?.({} as never);
   hooks.onRunEnd?.({} as never);
-  observed.recording.stop();
+  if (failedPolicy)
+    expect(() => observed.recording.stop()).toThrow('Final serving policy unavailable');
+  else observed.recording.stop();
   return observed.toSnapshot()!;
 }
 
@@ -137,6 +181,72 @@ describe('one bounded in-memory rewritten result', () => {
   );
 
   it.each([
+    ['inline', 'full'],
+    ['inline', 'delta'],
+    ['deferred', 'full'],
+    ['deferred', 'delta'],
+  ] as const)('preserves the winning and served addresses in %s / %s', async (delivery, mode) => {
+    const { source, bundle } = await record(200, delivery, false, mode);
+    const state = (source.snapshot as Snapshot).sharedState as State;
+    const winner = state.middlewareDecisions.findIndex((row) => row.changed === true);
+    expect(winner).toBeGreaterThan(0);
+    expect(state.middlewareDecisions[winner - 1]).toMatchObject({
+      moment: 'after-tool',
+      changed: false,
+    });
+    expect(state.middlewareDecisions[winner + 1]).toMatchObject({
+      moment: 'after-tool',
+      changed: false,
+    });
+    expect(state.middlewareDecisions.filter((row) => row.changed)).toHaveLength(1);
+
+    const declarations = { tools: { lookup_data: { rowsAt: 'disks' } } };
+    const reference = accountForAnswer(source, declarations);
+    expect(reference.facts.calls[0]).toMatchObject({
+      view: 'model-result',
+      rows: 200,
+      rewrittenBy: 'projection-rule',
+    });
+    expect(reference.facts.calls[0]!.pointers).toContainEqual({
+      kind: 'state',
+      key: 'middlewareDecisions',
+      path: `/${winner}/middleware`,
+    });
+    expect(Object.values(showLeaves(reference, source, declarations))).toContainEqual({
+      rows: 200,
+      at: '/modelResult/datasets/disks/rows',
+    });
+    expect(Object.values(showLeaves(reference, source, declarations))).toContainEqual({
+      withheld: 'not-shown-here',
+    });
+    expect(accountForAnswer(source).facts.calls[0]).toMatchObject({
+      emptiness: 'unknown',
+      view: 'model-result',
+    });
+    expect(accountForAnswer(source).facts.calls[0]?.rows).toBeUndefined();
+    expect(bundle.gaps).toEqual([]);
+    const view = bundleView(JSON.parse(JSON.stringify(bundle)));
+    expect(view).toBeDefined();
+    for (const decl of [undefined, declarations]) {
+      const whole = accountForAnswer(source, decl);
+      const projected = buildAccountFromView(view!, validateDeclarations(decl));
+      expect(projected).toEqual(whole);
+      expect(showLeaves(projected, source, decl)).toEqual(showLeaves(whole, source, decl));
+    }
+  });
+
+  it('credits the final changed decision after an earlier replacement', async () => {
+    const { source, bundle } = await record(200, 'inline', false, 'delta', true);
+    expect(bundle.gaps).toEqual([]);
+    const state = (source.snapshot as Snapshot).sharedState as State;
+    expect(state.middlewareDecisions.filter((row) => row.changed)).toHaveLength(2);
+    const declarations = { tools: { lookup_data: { rowsAt: 'disks' } } };
+    const account = buildAccountFromView(bundleView(bundle)!, validateDeclarations(declarations));
+    expect(account.facts.calls[0]).toMatchObject({ rewrittenBy: 'projection-rule', rows: 200 });
+    expect(account).toEqual(accountForAnswer(source, declarations));
+  });
+
+  it.each([
     'decision filtered',
     'foreign decision',
     'committed row missing',
@@ -154,8 +264,18 @@ describe('one bounded in-memory rewritten result', () => {
     'native iteration end duplicated',
     'competing decision',
     'later blocked decision',
+    'later unreadable decision',
     'record-only model projection',
     'history different',
+    'earlier commit coordinate',
+    'duplicate stage commit',
+    'inherited rather than written history',
+    'untracked write witness',
+    'same shape but different committed result',
+    'wrong log owner',
+    'removed commit',
+    'oversized retained commit',
+    'completion before terminal',
     'unreturned history',
   ] as const)('withholds the pair and its provisional data when %s', async (missing) => {
     const { source } = await record(1, 'inline');
@@ -248,6 +368,9 @@ describe('one bounded in-memory rewritten result', () => {
       case 'later blocked decision':
         state.middlewareDecisions.push({ ...state.middlewareDecisions[0]!, outcome: 'deny' });
         break;
+      case 'later unreadable decision':
+        state.middlewareDecisions.push({ ...state.middlewareDecisions[0]!, outcome: undefined });
+        break;
       case 'record-only model projection':
         if (end.type !== END) throw new Error('missing tool end');
         events[events.indexOf(end)] = {
@@ -257,6 +380,76 @@ describe('one bounded in-memory rewritten result', () => {
         break;
       case 'history different':
         history.content = '{"rows":[]}';
+        break;
+      case 'earlier commit coordinate':
+        events[events.indexOf(end)] = {
+          ...end,
+          meta: {
+            ...end.meta,
+            sourcePosition: {
+              ...end.meta.sourcePosition!,
+              committedThroughIdx: end.meta.sourcePosition!.committedThroughIdx - 1,
+            },
+          },
+        };
+        break;
+      case 'duplicate stage commit': {
+        const commit = snapshot.commitLog.find(
+          (row) => row.runtimeStageId === end.meta.runtimeStageId,
+        )!;
+        snapshot.commitLog.push({ ...commit, idx: snapshot.commitLog.length });
+        break;
+      }
+      case 'inherited rather than written history': {
+        const index = snapshot.commitLog.findIndex(
+          (row) => row.runtimeStageId === end.meta.runtimeStageId,
+        );
+        const commit = snapshot.commitLog[index]!;
+        const previous = snapshot.commitLog[index - 1]!;
+        previous.overwrite.history = commitValueAt(snapshot.commitLog, index, 'history');
+        previous.trace = [
+          ...previous.trace.filter(({ path }) => path !== 'history'),
+          { path: 'history', verb: 'set' },
+        ];
+        commit.trace = commit.trace.filter(({ path }) => path !== 'history');
+        break;
+      }
+      case 'untracked write witness': {
+        const commit = snapshot.commitLog.find(
+          (row) => row.runtimeStageId === end.meta.runtimeStageId,
+        )!;
+        commit.untrackedSources = ['silent'];
+        break;
+      }
+      case 'same shape but different committed result':
+        if (end.type !== END) throw new Error('missing tool end');
+        events[events.indexOf(end)] = {
+          ...end,
+          payload: { ...end.payload, modelResult: { rows: ['different-value-same-count'] } },
+        };
+        break;
+      case 'wrong log owner':
+        Object.assign(snapshot, {
+          logAddress: { ...snapshot.logAddress, logRunId: 'different-log' },
+        });
+        break;
+      case 'removed commit':
+        snapshot.commitLog.splice(
+          snapshot.commitLog.findIndex((row) => row.runtimeStageId === end.meta.runtimeStageId),
+          1,
+        );
+        break;
+      case 'oversized retained commit': {
+        const commit = snapshot.commitLog.find(
+          (row) => row.runtimeStageId === end.meta.runtimeStageId,
+        )!;
+        const rows = commit.overwrite.history as unknown[];
+        commit.overwrite.history = [...rows, { role: 'user', content: 'x'.repeat(BUDGET) }];
+        break;
+      }
+      case 'completion before terminal':
+        events.splice(events.indexOf(iterationEnd), 1);
+        events.splice(events.indexOf(end), 0, iterationEnd);
         break;
       case 'unreturned history':
         history.toolResultExecution = 'returned-unserved';
@@ -271,6 +464,66 @@ describe('one bounded in-memory rewritten result', () => {
     );
     expect(bundle.state).toBeUndefined();
   });
+
+  it('uses the owning commit when final history has dropped the result', async () => {
+    const { source } = await record(200, 'deferred', false, 'delta');
+    const snapshot = structuredClone(source.snapshot) as Snapshot & { sharedState: State };
+    snapshot.sharedState.history = snapshot.sharedState.history.filter(
+      (row) => row.role !== 'tool',
+    );
+    const withoutHistory = { ...source, snapshot };
+    const bundle = replay(source.events, snapshot);
+    expect(bundle.gaps).toEqual([]);
+    const view = bundleView(bundle);
+    expect(view).toBeDefined();
+    const declarations = { tools: { lookup_data: { rowsAt: 'disks' } } };
+    const whole = accountForAnswer(withoutHistory, declarations);
+    const projected = buildAccountFromView(view!, validateDeclarations(declarations));
+    expect(projected).toEqual(whole);
+    expect(showLeaves(projected, withoutHistory, declarations)).toEqual(
+      showLeaves(whole, withoutHistory, declarations),
+    );
+  });
+
+  it.each(['result', 'attribution', 'both', 'late', 'unresolved', 'failed'] as const)(
+    'erases provisional evidence when the final policy is %s',
+    async (policy) => {
+      const samples = await Promise.all([record(0, 'inline'), record(1, 'inline')]);
+      const cases = samples.map(({ source }, variant) => {
+        const snapshot = structuredClone(source.snapshot) as Snapshot & { sharedState: State };
+        const events = source.events.map((event) => {
+          if (event.type === DECISION && variant === 1) {
+            return {
+              ...event,
+              payload: { ...event.payload, middleware: 'different-concealed-name' },
+            };
+          }
+          if (event.type === END && (policy === 'result' || policy === 'both')) {
+            return { ...event, payload: { ...event.payload, modelResult: 'REDACTED' } };
+          }
+          return event;
+        });
+        if (policy === 'attribution' || policy === 'both') {
+          snapshot.sharedState.middlewareDecisions[0]!.middleware = '[REDACTED]';
+        }
+        if (policy === 'unresolved' || policy === 'failed') {
+          return replay(events, undefined, policy === 'failed');
+        }
+        Object.assign(snapshot, {
+          recorders: [...(snapshot.recorders ?? []), { id: REDACTION_MARKER_ID }],
+        });
+        return replay(events, snapshot);
+      });
+      expect(JSON.stringify(cases[0])).toBe(JSON.stringify(cases[1]));
+      expect(cases[0]).toEqual({
+        version: 1,
+        gaps: ['redaction'],
+        firstRetainedIndex: 0,
+        events: [],
+      });
+      expect(cases.map(bundleView)).toEqual([undefined, undefined]);
+    },
+  );
 
   it('bounds the two transient input copies together', async () => {
     const { source } = await record(1, 'inline');

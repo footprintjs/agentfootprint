@@ -5,10 +5,10 @@ import type { CaptureToolEvidence } from '../recorders/observability/answerAccou
 import { recordAnswerAccount } from '../recorders/observability/answerAccount/recorder.js';
 
 import { modelResultView } from './resultView.js';
-import { linkToolRewrite, projectRewriteDecision } from './rewriteEvidence.js';
+import { linkToolRewrite, projectToolDecision, rewriteComparison } from './rewriteEvidence.js';
 
 const capture: CaptureToolEvidence = {
-  projectDecision: projectRewriteDecision,
+  projectDecision: projectToolDecision,
   linkRewrite: linkToolRewrite,
   captureHistory: capturePlainResultShape,
   captureEvent(payload, budget, admitsRewrite) {
@@ -38,7 +38,11 @@ const capture: CaptureToolEvidence = {
     if (modelResultView(original, served) !== 'model-result') return { kind: 'tool-results' };
     const result = capturePlainResultShape(served);
     return result.kind === 'ready'
-      ? { kind: 'ready', shape: { ...result.shape, view: 'model-result' } }
+      ? {
+          kind: 'ready',
+          shape: { ...result.shape, view: 'model-result' },
+          comparison: rewriteComparison(served, budget),
+        }
       : result;
   },
 };
