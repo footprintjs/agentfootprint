@@ -521,6 +521,22 @@ dev mode warns you about the missing marker so the miss is never silent:
 
 <CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="tool-effects" title="examples/context-engineering/17-brains-and-tool-effects.ts (region: tool-effects)" />
 
+When a result hook withholds the returned content, the framework also
+suppresses its typed proposals. Rewritten content only keeps the proposals
+that one trusted `admitToolResultEffects` policy explicitly selects. Return
+the proposal references from that callback, in place of creating new ones.
+An approved proposal still goes through the graph or instruction lease
+rules. This does not reverse an external operation the tool already ran.
+
+An unchanged scalar or JSON prepared with `sealToolEffectContent` can keep
+its typed proposals through a pass-through hook. The helper takes bounded
+JSON text and returns immutable data. Use a replacement when a result hook
+needs to edit it. The framework cannot use an arbitrary unowned object to
+prove that a hook left it unchanged. Effect admission remains separate from
+the result's visibility and from evidence that the effect later took hold.
+
+<CodeFile path="examples/context-engineering/17-brains-and-tool-effects.ts" region="result-effect-policy" title="Keep one approved instruction after a rewrite" />
+
 **Two effect kinds, deliberately:**
 
 - **`{ kind: 'propose-transition', targetSkillId, reason }`** — the typed

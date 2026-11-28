@@ -24,10 +24,35 @@
  * each call, the status-routed hop, and the effect events.
  */
 
-import { Agent, defineTool, type LLMProvider } from '../../src/index.js';
+import {
+  Agent,
+  allow,
+  defineTool,
+  type LLMProvider,
+  type ToolMiddleware,
+} from '../../src/index.js';
 import { defineInstruction, defineSkill, skillGraph } from '../../src/doors/context.js';
 import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
+
+// #region result-effect-policy
+export const refundResultPolicy: ToolMiddleware = {
+  name: 'refund-result-policy',
+  onToolResult: ({ toolName, result }) => {
+    if (toolName !== 'issue_refund') return allow();
+    return result === 'refund refused: order is outside the 30-day window (policy P-12)'
+      ? allow('Refund refused: outside the return window.', 'Serve the customer-facing summary.')
+      : allow();
+  },
+  admitToolResultEffects: ({ content, proposals }) => {
+    if (content !== 'Refund refused: outside the return window.') return [];
+    return proposals.filter(
+      ({ effect }) =>
+        effect.kind === 'require-instruction' && effect.instructionId === 'denial-playbook',
+    );
+  },
+};
+// #endregion result-effect-policy
 
 export const meta: ExampleMeta = {
   id: 'context-engineering/17-brains-and-tool-effects',
@@ -123,6 +148,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     .route(triage, refund, { onToolReturn: 'check_account' })
     // Route on MEANING: only a DENIED issue_refund moves to the desk.
     .route(refund, escalation, { onToolReturn: 'issue_refund', onToolStatus: 'denied' })
+    .toolMiddleware(refundResultPolicy)
     .build();
   // #endregion define-brains
 

@@ -37,6 +37,8 @@ type DispatchContext = ReturnType<
   ReturnType<typeof buildDispatchContext>['prepareDispatchContext']
 >;
 
+import { settledEffects } from '../decorators/effectAdmission.js';
+
 interface LandCallResultFrame {
   readonly delivery: CallDelivery;
   readonly execution: CallExecution;
@@ -136,8 +138,9 @@ export function landCallResult(
   // truth, the step-suffix precedent); accepted effects speak through
   // what they do — the cursor move, the delivered instruction — and
   // through `tools.effect` on the record.
+  const effectEnvelope = settledEffects(frame.outcome.toolEnvelope, frame.delivery.effectAdmission);
   if (
-    frame.outcome.toolEnvelope !== undefined &&
+    effectEnvelope !== undefined &&
     frame.execution.executed &&
     !frame.outcome.error &&
     !frame.execution.denied
@@ -145,7 +148,7 @@ export function landCallResult(
     frame.delivery.resultStr += frame.applyToolEffects(
       scope,
       { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
-      frame.outcome.toolEnvelope,
+      effectEnvelope,
       frame.transitionState,
     );
   }

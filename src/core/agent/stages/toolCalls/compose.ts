@@ -229,8 +229,9 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
   // procedure must not advance on a call whose contract the model read from
   // somebody else (recorded-not-built, entry 3).
   const frameworkSkipStep = deps.stepPlanFor ? registryByName.get(SKIP_STEP_TOOL_NAME) : undefined;
-  const { afterMoment } = buildToolMiddlewareOperations(deps);
+  const { afterMoment, observesResult } = buildToolMiddlewareOperations(deps);
   const { resolveCredentialAndExecute } = buildResumedInvocation(deps, {
+    observesResult,
     dispatchRoster,
     unmountedRules,
     parkedNow,
@@ -377,6 +378,7 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
     applySkipStep,
     applyPresent,
     afterMoment,
+    observesResult,
     placeResults,
     noticeEmptyLookup,
     capResults,

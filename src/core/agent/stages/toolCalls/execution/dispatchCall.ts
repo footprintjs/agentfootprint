@@ -336,6 +336,7 @@ export function buildCallDispatch(
         }
         if (!authorization.credentialBlocked && !wanted.wantsBlocked) {
           const pause = await invokeInitialTool(scope, deps, {
+            observesResult: operations.observesResult,
             tool,
             resolved,
             tc,
@@ -462,18 +463,24 @@ export function buildCallDispatch(
         if (!presented.ok) outcome.error = true;
       }
 
-      const { capped, modelResult, modelResultCapped, toolResultDisposition, toolSkillBody } =
-        await finalizeCallResult(scope, operations, {
-          tool,
-          tc,
-          batch,
-          callArguments,
-          execution,
-          outcome,
-          skillRejected: skillRoute.skillRejected,
-          sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
-          libraryBody: listedSkillReader,
-        });
+      const {
+        capped,
+        modelResult,
+        modelResultCapped,
+        toolResultDisposition,
+        toolSkillBody,
+        effectAdmission,
+      } = await finalizeCallResult(scope, operations, {
+        tool,
+        tc,
+        batch,
+        callArguments,
+        execution,
+        outcome,
+        skillRejected: skillRoute.skillRejected,
+        sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
+        libraryBody: listedSkillReader,
+      });
 
       const durationMs = Date.now() - startMs;
       recordCallSettlement(scope, {
@@ -496,6 +503,7 @@ export function buildCallDispatch(
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
         modelResultCapped,
         toolResultDisposition,
+        effectAdmission,
         ...(toolSkillBody !== undefined && { toolSkillBody }),
       };
       recordServedLimits(

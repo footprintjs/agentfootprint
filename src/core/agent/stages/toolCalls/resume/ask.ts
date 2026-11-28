@@ -1,3 +1,4 @@
+import { settledEffects, type EffectAdmission } from '../decorators/effectAdmission.js';
 import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
@@ -111,6 +112,7 @@ export function buildResumeAsk(
     /** What the model reads. Differs from `result` only when a rule at the
      *  after-tool moment transformed or withheld it. */
     let modelResult: unknown;
+    let effectAdmission: EffectAdmission;
     let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** The call REALLY ran, clean — the step-advance eligibility this
@@ -222,24 +224,28 @@ export function buildResumeAsk(
         // last word here too — a rule about results cannot be skipped by
         // routing a call through a human.
         if (dispatched.executed === true) {
-          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
-            returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
-            ...occurrence,
-            ...(tool && { tool }),
-            toolName,
-            toolCallId,
-            iteration,
-            args: runArgs,
-            result,
-            negativeResultId,
-            ...(scriptSeen.resultFinalizer && {
-              onSourceWithheld: scriptSeen.resultFinalizer.withheld,
-            }),
-            ...(error === true && { error: true }),
-            history: [...(scope.history as readonly LLMMessage[])],
-            ...(scope.runIdentity && { identity: scope.runIdentity }),
-            ...(env.signal && { signal: env.signal }),
-          }));
+          ({ modelResult, toolResultDisposition, effectAdmission } = await links.afterMoment(
+            scope,
+            {
+              returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
+              ...occurrence,
+              ...(tool && { tool }),
+              toolName,
+              toolCallId,
+              iteration,
+              args: runArgs,
+              result,
+              effectEnvelope: resumeEnvelope,
+              negativeResultId,
+              ...(scriptSeen.resultFinalizer && {
+                onSourceWithheld: scriptSeen.resultFinalizer.withheld,
+              }),
+              ...(error === true && { error: true }),
+              history: [...(scope.history as readonly LLMMessage[])],
+              ...(scope.runIdentity && { identity: scope.runIdentity }),
+              ...(env.signal && { signal: env.signal }),
+            },
+          ));
         }
       }
 
@@ -275,6 +281,7 @@ export function buildResumeAsk(
         askCapped = finalized.values;
         modelResult = askCapped.modelResult;
         if (finalized.refused) {
+          if (effectAdmission !== undefined) effectAdmission = null;
           result = askCapped.result;
           stepToolRan = false;
           resumeEnvelope = { content: result, effects: [], status: 'invalid', malformed: [] };
@@ -308,12 +315,13 @@ export function buildResumeAsk(
       }
       // Typed tool effects (9.19.0) — a resumed call's envelope is judged
       // exactly as an inline one's (fresh single-call batch state).
-      if (resumeEnvelope !== undefined) {
+      const effectEnvelope = settledEffects(resumeEnvelope, effectAdmission);
+      if (effectEnvelope !== undefined) {
         const askTransition: TransitionBatchState = { losers: [] };
         askResultStr += links.applyToolEffects(
           scope,
           { toolName, toolCallId, iteration, ...occurrence },
-          resumeEnvelope,
+          effectEnvelope,
           askTransition,
         );
         links.emitTransitionConflict(scope, iteration, askTransition);

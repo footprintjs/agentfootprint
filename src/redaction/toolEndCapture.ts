@@ -1,20 +1,9 @@
+import { nativeIsProxy } from '../lib/nativeProxyCheck.js';
 import type { ToolEndPayload } from '../events/payloads.js';
 
 const OMIT = Symbol();
 const OPAQUE = new Error('Result is not own data');
 const MAX_DEPTH = 64;
-
-function nodeProxyCheck(): ((value: unknown) => boolean) | undefined {
-  try {
-    const host = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } })
-      .process;
-    return (host?.getBuiltinModule?.('node:util') as typeof import('node:util') | undefined)?.types
-      .isProxy;
-  } catch {
-    return undefined;
-  }
-}
-const isProxy = nodeProxyCheck();
 
 /** Only the native clone-capture path needs a projection of a tool result. */
 export function prepareNativeEmit(type: string, served: unknown, clones?: boolean): unknown {
@@ -59,7 +48,7 @@ function captureData(value: unknown, depth: number, inspected: WeakMap<object, o
   const ready = inspected.get(value);
   if (ready === OPAQUE || depth >= MAX_DEPTH) throw OPAQUE;
   if (ready !== undefined) return ready;
-  if (isProxy?.(value)) throw OPAQUE;
+  if (nativeIsProxy?.(value)) throw OPAQUE;
   const proto: unknown = Object.getPrototypeOf(value);
   const array = Array.isArray(value);
   if (array ? proto !== Array.prototype : proto !== Object.prototype && proto !== null)

@@ -74,6 +74,7 @@ export async function finalizeCallResult(
         iteration: batch.iteration,
         args: callArguments.callArgs,
         result: outcome.result,
+        effectEnvelope: outcome.toolEnvelope,
         returned:
           execution.toolResultExecution === 'returned' &&
           !outcome.error &&
@@ -162,6 +163,10 @@ export async function finalizeCallResult(
     modelResult,
     modelResultCapped,
     toolResultDisposition: delivery?.toolResultDisposition,
+    effectAdmission:
+      delivery?.effectAdmission !== undefined && refusal !== undefined
+        ? null
+        : delivery?.effectAdmission,
     toolSkillBody:
       landedSkillBody &&
       originalBody !== undefined &&

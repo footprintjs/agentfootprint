@@ -23,6 +23,7 @@ export interface MeasuredToolFailure extends ToolFailureDeclaration {
 
 /** A tool return admitted by the invocation and kept off the provider wire. */
 export type ExecutedToolResultEnvelope = ReadToolResultEnvelope & {
+  readonly effectAuthority?: import('../decorators/effectAdmission.js').EffectAuthority;
   readonly outputCounts?: LLMMessage['toolOutputCounts'];
   readonly declaredFailure?: MeasuredToolFailure;
 };
@@ -80,6 +81,7 @@ export interface CallSkillRoute {
 }
 
 export interface CallDelivery {
+  readonly effectAdmission?: import('../decorators/effectAdmission.js').EffectAdmission;
   resultStr: string;
   modelResultCapped: boolean;
   toolResultDisposition?: LLMMessage['toolResultDisposition'];

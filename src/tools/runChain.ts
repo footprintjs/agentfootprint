@@ -303,6 +303,7 @@ export interface ToolAfterChainInput {
 export async function runToolAfterChain(
   chain: readonly ToolMiddleware[],
   input: ToolAfterChainInput,
+  observeResult?: (value: unknown, replaced: boolean) => void,
 ): Promise<ToolAfterChainResult> {
   const decisions: MiddlewareDecision[] = [];
   const real = input.result;
@@ -367,6 +368,10 @@ export async function runToolAfterChain(
       return { kind: 'deny', reason, middleware: mw.name, result: real, decisions };
     }
 
+    observeResult?.(
+      outcome.value === undefined ? result : outcome.value,
+      outcome.value !== undefined,
+    );
     if (outcome.value !== undefined) {
       const before = result;
       result = outcome.value;

@@ -362,10 +362,13 @@ export function buildResumedInvocation(
         ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
         ...(status !== undefined && { status }),
       });
-      // The typed effects channel (9.19.0) — same unwrap as the batch loop,
-      // at this path's own execute boundary, so a resumed call's envelope is
-      // judged exactly as an inline one's.
-      const envelope = readExecutedResult(tool, result, codeRunSlot, declaredFailure);
+      const envelope = readExecutedResult(
+        tool,
+        result,
+        codeRunSlot,
+        declaredFailure,
+        links.observesResult ? seen?.callOccurrenceKey : undefined,
+      );
       if (envelope !== undefined) {
         // Coverage (this release) before the ceiling, for the same reason the
         // effects are judged even when the payload is refused: the boundary a

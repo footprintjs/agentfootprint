@@ -1,3 +1,4 @@
+import { settledEffects, type EffectAdmission } from '../decorators/effectAdmission.js';
 import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
@@ -107,9 +108,10 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
+      let effectAdmission: EffectAdmission;
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+        ({ modelResult, toolResultDisposition, effectAdmission } = await links.afterMoment(scope, {
           returned:
             scriptSeen.toolResultExecution === 'returned' &&
             error !== true &&
@@ -121,6 +123,7 @@ export function buildResumeCredential(
           iteration,
           args,
           result,
+          effectEnvelope: dispatched.envelope,
           negativeResultId: dispatched.negativeResultId,
           ...(scriptSeen.resultFinalizer && {
             onSourceWithheld: scriptSeen.resultFinalizer.withheld,
@@ -165,6 +168,7 @@ export function buildResumeCredential(
         consentCapped = finalized.values;
         modelResult = consentCapped.modelResult;
         if (finalized.refused) {
+          if (effectAdmission !== undefined) effectAdmission = null;
           result = consentCapped.result;
           dispatched.ceilingRefused = true;
           dispatched.envelope = { content: result, effects: [], status: 'invalid', malformed: [] };
@@ -207,12 +211,13 @@ export function buildResumeCredential(
           consentResultStr,
         );
       }
-      if (consentEnvelope !== undefined) {
+      const effectEnvelope = settledEffects(consentEnvelope, effectAdmission);
+      if (effectEnvelope !== undefined) {
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(
           scope,
           { toolName, toolCallId, iteration, ...occurrence },
-          consentEnvelope,
+          effectEnvelope,
           consentTransition,
         );
         links.emitTransitionConflict(scope, iteration, consentTransition);

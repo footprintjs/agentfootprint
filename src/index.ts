@@ -47,6 +47,8 @@ export * from './provider-contract/types.js';
 
 // Injection keys + recorder authoring helpers — needed by anyone writing
 // a custom recorder that switches on injection events.
+export { sealToolEffectContent } from './semantics/sealedToolEffectContent.js';
+
 export {
   INJECTION_KEYS,
   injectionKeyForSlot,
@@ -294,6 +296,8 @@ export {
   type ToolMiddlewareContext,
   type ToolOutcome,
   type ToolResultContext,
+  type ToolResultEffectPolicyContext,
+  type ToolResultEffectProposal,
   type ToolResultMiddleware,
   type ToolResultOutcome,
 } from './core/agent/middleware/index.js';

@@ -1,3 +1,4 @@
+import type { ProposedEffect } from '../../../semantics/toolEffects.js';
 import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 /**
  * middleware/types — PUBLIC. The shape of a governance chain.
@@ -248,7 +249,23 @@ export interface MessageMiddlewareContext {
 // ─── The middlewares ─────────────────────────────────────────────────
 
 /** What both arms of {@link ToolMiddleware} carry. */
+/** An occurrence-local reference. Return the supplied reference to admit it. */
+export interface ToolResultEffectProposal {
+  readonly effect: ProposedEffect;
+}
+
+/** Final policy input for an effect-bearing rewritten result. */
+export interface ToolResultEffectPolicyContext {
+  readonly content: unknown;
+  readonly proposals: readonly ToolResultEffectProposal[];
+}
+
 interface ToolMiddlewareIdentity {
+  /** Approve exact original proposals against bounded, final rewritten content. */
+  admitToolResultEffects?(
+    result: ToolResultEffectPolicyContext,
+  ): readonly ToolResultEffectProposal[] | Promise<readonly ToolResultEffectProposal[]>;
+
   /** Identifies this middleware in every ledger row and event it produces. */
   readonly name: string;
 }
@@ -325,6 +342,11 @@ export interface MessageMiddleware {
  */
 export interface MiddlewareDecision {
   readonly callOccurrenceKey?: CallOccurrenceKey;
+  /** Settlement's private handoff of typed proposals to the graph/lease owners.
+   * This result-policy decision does not assert that any proposal took effect. */
+  readonly resultEffects?:
+    | { readonly disposition: 'suppressed' }
+    | { readonly disposition: 'admitted'; readonly proposalOrdinals: readonly number[] };
   /** The middleware's `name`. */
   readonly middleware: string;
   /**

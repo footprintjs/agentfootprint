@@ -33,6 +33,8 @@ export type {
   ToolMiddlewareContext,
   ToolOutcome,
   ToolResultContext,
+  ToolResultEffectPolicyContext,
+  ToolResultEffectProposal,
   ToolResultMiddleware,
   ToolResultOutcome,
 } from './types.js';

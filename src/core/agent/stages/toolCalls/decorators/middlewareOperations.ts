@@ -5,12 +5,15 @@ import { servedToModel } from '../../../../../semantics/coverage/read.js';
 import { recordDecisions } from '../../../middleware/ledger.js';
 import { readToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
 import { isJsonFaithful } from '../../../../../lib/jsonFaithful.js';
+import { observeEffectContent } from './effectAdmission.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
 
 /** Compose the existing middleware callbacks once for this handler. */
 export function buildToolMiddlewareOperations(
   deps: Pick<ToolCallsHandlerDeps, 'negativeClaimsArmed' | 'toolMiddleware'>,
 ): ToolMiddlewareOperations {
+  const chain = deps.toolMiddleware ?? [];
+  const observesResult = chain.some((entry) => typeof entry.onToolResult === 'function');
   /**
    * The after-tool moment: the chain's last word, on a call that RAN.
    *
@@ -51,26 +54,49 @@ export function buildToolMiddlewareOperations(
     if (deps.negativeClaimsArmed === true && call.error)
       captureNegativeRefusal(scope, call.toolName, call.result, call.args);
     const served = servedToModel(call.result);
-    const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return { modelResult: served };
-    const verdict = await runToolAfterChain(chain, {
-      toolName: call.toolName,
-      ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
-      toolCallId: call.toolCallId,
-      iteration: call.iteration,
-      args: call.args,
-      result: served,
-      ...(call.error === true && { error: true as const }),
-      history: call.history,
-      ...(call.identity && { identity: call.identity }),
-      ...(call.signal && { signal: call.signal }),
-    });
-    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
+    if (!observesResult) return { modelResult: served };
+    const envelope = call.effectEnvelope;
+    const proof =
+      envelope && envelope.effects.length + envelope.malformed.length > 0
+        ? observeEffectContent(envelope.effectAuthority, call.callOccurrenceKey, served)
+        : undefined;
+    const verdict = await runToolAfterChain(
+      chain,
+      {
+        toolName: call.toolName,
+        ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        args: call.args,
+        result: served,
+        ...(call.error === true && { error: true as const }),
+        history: call.history,
+        ...(call.identity && { identity: call.identity }),
+        ...(call.signal && { signal: call.signal }),
+      },
+      proof?.observe,
+    );
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
+    const effectAdmission = proof
+      ? verdict.kind === 'deny'
+        ? null
+        : await proof.settle(delivered, chain, call.signal)
+      : undefined;
+    const last = verdict.decisions.at(-1);
+    if (effectAdmission !== undefined && last && call.callOccurrenceKey !== undefined) {
+      verdict.decisions[verdict.decisions.length - 1] = {
+        ...last,
+        resultEffects:
+          effectAdmission && effectAdmission.effects.length > 0
+            ? { disposition: 'admitted', proposalOrdinals: effectAdmission.originalOrdinals }
+            : { disposition: 'suppressed' },
+      };
+    }
+    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.
     // A guessed handle must not make the final composer disclose it again.
@@ -85,16 +111,20 @@ export function buildToolMiddlewareOperations(
         captureNegativeRefusal(scope, call.toolName, delivered, call.args);
     }
     if (verdict.kind === 'deny') {
-      if (!call.returned) return { modelResult: delivered };
-      return { modelResult: delivered, toolResultDisposition: 'withheld' };
+      return {
+        modelResult: delivered,
+        ...(proof && { effectAdmission: null }),
+        ...(call.returned && { toolResultDisposition: 'withheld' }),
+      };
     }
     return {
       modelResult: delivered,
+      ...(effectAdmission !== undefined && { effectAdmission }),
       ...(verdict.decisions.some((decision) => decision.changed) && {
         toolResultDisposition: 'rewritten',
       }),
     };
   };
 
-  return { afterMoment };
+  return { afterMoment, observesResult };
 }
