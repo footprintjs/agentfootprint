@@ -38,6 +38,7 @@ export const words1 = {
   'identity-mismatch': true,
   idle: true,
   in: true,
+  incomplete: true,
   'incomplete-identity': true,
   'incomplete-stream': true,
   'init-failed': true,
@@ -299,5 +300,4 @@ export const words1 = {
   'source-not-consulted': true,
   'source-over-bound': true,
   'sources-conflict': true,
-  spelling: true,
 } as const;

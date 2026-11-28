@@ -26,8 +26,11 @@ import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
 import { carryVerdict, childOutcome, raiseChildVerdict } from './childOutcome.js';
+import { sequenceAssessment } from './groupAssessment/sequence.js';
 
 export interface SequenceOptions {
+  /** Record group standing and coverage for a directly run Sequence, with zero witness examples. */
+  readonly groupAssessment?: true;
   /** Human-friendly name for events + topology. Default: 'Sequence'. */
   readonly name?: string;
   /** Stable id used for topology + events. Default: 'sequence'. */
@@ -98,7 +101,11 @@ interface SequenceState {
   [k: string]: unknown;
 }
 
-export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
+interface SequenceValues extends RunnerCoreValues {
+  groupAssessment?: ReturnType<typeof sequenceAssessment>;
+}
+
+export class Sequence extends RunnerBase<SequenceInput, SequenceOutput, SequenceValues> {
   readonly name: string;
   readonly id: string;
   private readonly steps: readonly StepEntry[];
@@ -175,7 +182,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       const request = requestOf(options, 'Sequence.run');
       const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
       this.prepareCompositionRun(invocation, runInput.identity, request, 'Sequence.run');
-      const prepared = this.compositionRunSetup(invocation);
+      const prepared = this.sequenceRunSetup(invocation, false);
       const result = await invocation.execute(
         { kind: 'run', options: { ...options, input: { message: runInput.message } } },
         prepared.setup,
@@ -195,7 +202,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
       const request = requestOf(options, 'Sequence.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Sequence.resume');
       const resumeLeg = this.emitPauseResume(checkpoint, input);
-      const prepared = this.compositionRunSetup(invocation, resumeLeg);
+      const prepared = this.sequenceRunSetup(invocation, true, resumeLeg);
       const result = await invocation.execute(
         { kind: 'resume', mode: 'fresh', checkpoint, input, options },
         prepared.setup,
@@ -205,8 +212,31 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     });
   }
 
+  private sequenceRunSetup(
+    invocation: RunnerInvocation<SequenceValues>,
+    hasScopeGap: boolean,
+    resumeLeg?: ReturnType<Sequence['emitPauseResume']>,
+  ) {
+    if (this.opts.groupAssessment !== true) return this.compositionRunSetup(invocation, resumeLeg);
+    const assessment = sequenceAssessment(
+      this.steps.map(({ id }) => id),
+      hasScopeGap,
+      {
+        runId: () => invocation.context().runId,
+        authored: (event) =>
+          invocation.value.redaction?.turnMetaAt(event.name, event.runtimeStageId)?.mountedTurn ===
+          true,
+        snapshot: () => invocation.view.snapshot({ redact: true }),
+      },
+    );
+    invocation.value.groupAssessment = assessment;
+    const prepared = this.compositionRunSetup(invocation, resumeLeg, [assessment.recorder]);
+    invocation.value.redaction?.trackMountedTurns();
+    return prepared;
+  }
+
   private finalizeResult(
-    invocation: RunnerInvocation<RunnerCoreValues>,
+    invocation: RunnerInvocation<SequenceValues>,
     result: unknown,
   ): SequenceOutput | RunnerPauseOutcome {
     const paused = this.detectPause(invocation, result);
@@ -287,12 +317,15 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
         // The LAST step ended on a verdict — no next step's hand-off to raise it.
         raiseChildVerdict((key) => scope.$getValue(key));
         const current = (scope.current as string) ?? '';
+        const run = this.runExecution().forScope(scope);
+        const groupAssessment = run.value.groupAssessment?.summarize();
         typedEmit(scope, 'agentfootprint.composition.exit', {
           kind: 'Sequence',
           id: compositionId,
           name: compositionName,
           status: 'ok',
-          durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
+          durationMs: Date.now() - run.context.runStartMs,
+          ...(groupAssessment !== undefined && { groupAssessment }),
         });
         return current;
       },

@@ -254,6 +254,7 @@ export const fields0 = {
   generation: true,
   got: true,
   grain: true,
+  groupAssessment: true,
   guard: true,
   guardsClosed: true,
   hasProposition: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   keyword: true,
   kind: true,
   label: true,
-  language: true,
 } as const;

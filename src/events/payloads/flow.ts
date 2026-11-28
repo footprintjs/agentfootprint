@@ -1,3 +1,4 @@
+import type { AnswerAssessmentPayload } from './answer.js';
 import type { CompositionKind } from './dependencyTypes.js';
 
 // ─── Tier 1+2: Core Domain (library-emitted) ──────────────────────────
@@ -22,6 +23,11 @@ export interface CompositionExitPayload {
   readonly name?: string;
   readonly status: 'ok' | 'err' | 'break' | 'budget_exhausted';
   readonly durationMs: number;
+  /** Standing and coverage recorded by an opted-in composition. */
+  readonly groupAssessment?: {
+    readonly standing: AnswerAssessmentPayload['standing'];
+    readonly coverage: 'complete' | 'incomplete';
+  };
 }
 
 export interface ParallelForkStartPayload {
