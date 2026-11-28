@@ -1,20 +1,16 @@
 /** The opt-in time rule limits what a sure note can say about incomplete cited reads. */
+import { isCut, isLimited } from '../entries.js';
 import type { LedgerReceipt } from '../types.js';
 import { timeWindow } from './timeWindow.js';
 import type { LedgerTableRule } from './port.js';
 
 function coverageFacts(receipts: readonly LedgerReceipt[]) {
   return {
-    cut: receipts.filter(
-      (receipt) =>
-        receipt.cut !== undefined && (receipt.cut.tokensDropped > 0 || receipt.cut.bytesUnread > 0),
-    ).length,
-    limited: receipts.filter((receipt) => receipt.limit?.hit === true).length,
+    cut: receipts.filter(isCut).length,
+    limited: receipts.filter(isLimited).length,
     nothingFound: receipts.filter((receipt) => receipt.nothingFound).length,
   };
 }
-
-export const COVERAGE_RULE_KEY = 'time-window@2';
 
 export function createTimeWindowCoverage(): LedgerTableRule {
   return {

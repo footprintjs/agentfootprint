@@ -75,9 +75,7 @@ export const BUILT_IN_RULES: readonly LedgerRule[] = Object.freeze([
 
 /** A ledger over `options.store`. */
 export function createLedger(options: LedgerOptions): Ledger {
-  // A second version of the time rule does not use another host-rule registration slot.
-  const rules = new Map(registerRules(BUILT_IN_RULES, options.rules ?? []));
-  for (const [key, rule] of registerRules([createTimeWindowCoverage()])) rules.set(key, rule);
+  const rules = registerRules([...BUILT_IN_RULES, createTimeWindowCoverage()], options.rules ?? []);
   const ctx = {
     store: options.store,
     rules,

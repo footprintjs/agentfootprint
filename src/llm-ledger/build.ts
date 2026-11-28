@@ -40,6 +40,7 @@ import {
   hasControl,
   isObject,
   isRuleName,
+  mixesTimeWindowVersions,
   oneOf,
   positive,
   wellFormed,
@@ -173,7 +174,11 @@ export function openedEntry(
   return built(() => {
     const f = fieldsOf(input, ['rules', 'confirm', 'askRunsRules']);
     const rules = f.rules === undefined ? [] : listField(f.rules, L.maxRules);
-    if (!rules.every(isRuleName) || new Set(rules).size !== rules.length)
+    if (
+      !rules.every(isRuleName) ||
+      new Set(rules).size !== rules.length ||
+      mixesTimeWindowVersions(rules)
+    )
       throw new Refusal('bad-input');
     for (const flag of [f.confirm, f.askRunsRules])
       if (flag !== undefined && !bool(flag)) throw new Refusal('bad-input');

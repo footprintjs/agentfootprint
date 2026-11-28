@@ -11,7 +11,7 @@
 import { LEDGER_LIMITS as L } from './limits.js';
 import { LedgerStoreError } from './store.js';
 import type { LedgerLog } from './store.js';
-import { COVERAGE_RULE_KEY } from './rules/timeWindowCoverage.js';
+import { COVERAGE_RULE_KEY, mixesTimeWindowVersions } from './entries.js';
 import type {
   LedgerCheck,
   LedgerDelivered,
@@ -67,6 +67,8 @@ export function readerOf(log: LedgerLog): LedgerReader {
   const delivered = byKind('delivered');
   const first = entries[0];
   const opened = first?.kind === 'opened' ? first : undefined;
+  if (opened !== undefined && mixesTimeWindowVersions(opened.rules))
+    throw new LedgerStoreError('malformed', 'rules');
   const admitsClaimStanding = opened?.rules.includes(COVERAGE_RULE_KEY) === true;
   const notes = byKind('note');
   if (!admitsClaimStanding && notes.some((note) => note.claimStanding !== undefined))

@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 
 import { createLedger } from './ledger.js';
 import { memoryLedgerStore } from './memoryStore.js';
+import type { LedgerEntry } from './types.js';
 
 const clock = () => '2026-11-27T10:00:00Z';
 const rules = ['cited@1', 'traceable-values@2', 'time-window@2'];
@@ -182,4 +183,67 @@ it.each([
       }),
     ]),
   );
+});
+
+it('refuses a session pinning both time rules before writing a log', async () => {
+  const store = memoryLedgerStore();
+  const ledger = createLedger({ store, clock });
+  expect(await ledger.host.open({ rules: [...rules, 'time-window@1'] })).toMatchObject({
+    ok: false,
+    refused: 'bad-input',
+  });
+});
+
+it.each([
+  { kind: 'question', claimStanding: 'sure' },
+  { kind: 'claim', claimStanding: 'unknown' },
+])('refuses $kind with standing $claimStanding at both admission doors', async (input) => {
+  const store = memoryLedgerStore();
+  const ledger = createLedger({ store, clock });
+  const opened = await ledger.host.open({ rules });
+  const session = opened.session as string;
+  const agent = ledger.agentFor(session);
+  const fields = { text: 'id-1234', cites: [] };
+  expect(await agent.note({ ...fields, ...input })).toMatchObject({
+    ok: false,
+    refused: 'bad-input',
+  });
+  await expect(
+    store.append(session, 1, [
+      {
+        ...fields,
+        kind: 'note',
+        noteKind: input.kind,
+        claimStanding: input.claimStanding,
+        v: 1,
+        by: 'agent',
+        how: 'observed',
+        seq: 2,
+        at: clock(),
+      } as unknown as LedgerEntry,
+    ]),
+  ).rejects.toMatchObject({ code: 'malformed', field: 'claimStanding' });
+  expect((await store.load(session)).seq).toBe(1);
+});
+
+it('cannot replace a pinned coverage rule through the host registry', async () => {
+  const store = memoryLedgerStore();
+  const ledger = createLedger({ store, clock });
+  const opened = await ledger.host.open({ rules });
+  const stored = await store.load(opened.session as string);
+  expect(stored.entries[0]).toMatchObject({ rules: expect.arrayContaining(['time-window@2']) });
+  expect(() =>
+    createLedger({
+      store,
+      clock,
+      rules: [
+        {
+          id: 'time-window',
+          version: 2,
+          appliesTo: ['claim'],
+          decide: () => ({ outcome: 'checked-pass', restsOn: [] }),
+        },
+      ],
+    }),
+  ).toThrow('bad-id');
 });
