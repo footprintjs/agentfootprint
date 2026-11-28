@@ -1,6 +1,9 @@
 /** Named, served inputs to the existing explanation readers. Raw requests and tool bodies stay out. */
 import type { AgentfootprintEvent } from '../../../events/registry.js';
-import { copyJson } from '../../../lib/boundedJson.js';
+import { copyJson, jsonBytes, readOwnList } from '../../../lib/boundedJson.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
+import { toolBytesOf } from '../../../lib/toolBytes.js';
+import type { AccountHistoryResult, CaptureToolEvidence } from './evidence.js';
 
 type EventEvidence = import('./evidence.js').AccountEventEvidence['event'];
 
@@ -38,6 +41,7 @@ const leaves: Readonly<Partial<Record<string, readonly string[]>>> = Object.free
     'iteration',
     'callOccurrenceKey',
     'status',
+    'error',
     'entered',
     'notExecuted',
     'notDispatched',
@@ -46,7 +50,42 @@ const leaves: Readonly<Partial<Record<string, readonly string[]>>> = Object.free
   'agentfootprint.pause.resume': [],
 });
 
+const MAX_HISTORY_ENTRIES = 4_096;
+
 const stateKeys = ['turnNumber', 'userMessage', 'history', 'findingsLedger'] as const;
+const toolStateKeys = [
+  ...stateKeys,
+  'enteredToolCalls',
+  'enteredToolCallsComplete',
+  'settledToolCalls',
+  'settledToolCallsComplete',
+  'middlewareDecisions',
+  'coverageDeclared',
+  'placedTickets',
+  'stoppedEarly',
+  'libraryResultLimits',
+  'libraryResultLimitsIncomplete',
+  'sourceConsultation',
+  'answerValidation',
+  'answerCitations',
+  'integrityFindingRows',
+  'unsupportedValues',
+  'llmLatestContent',
+  'llmLatestStopReason',
+] as const;
+const toolMessageKeys = [
+  'role',
+  'toolCallId',
+  'toolName',
+  'callOccurrenceKey',
+  'toolChars',
+  'toolResultOrigin',
+  'toolResultExecution',
+  'toolResultDisposition',
+  'outcome',
+  'reportedStatus',
+  'notDispatched',
+] as const;
 
 export function ownValue(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null
@@ -77,11 +116,57 @@ export function projectEvent(event: AgentfootprintEvent, budget: number): EventE
   ) as EventEvidence;
 }
 
-export function projectState(snapshot: unknown, budget: number): Readonly<Record<string, unknown>> {
-  return copyJson(pick(ownValue(snapshot, 'sharedState'), stateKeys), budget, true) as Record<
-    string,
-    unknown
-  >;
+export function projectState(
+  snapshot: unknown,
+  budget: number,
+  capture: CaptureToolEvidence | undefined,
+):
+  | {
+      readonly kind: 'ready';
+      readonly state: Readonly<Record<string, unknown>>;
+      readonly historyResults?: readonly AccountHistoryResult[];
+    }
+  | { readonly kind: 'budget' | 'tool-results' | 'tool-result-key-limit' } {
+  const shared = ownValue(snapshot, 'sharedState');
+  const state = pick(shared, capture === undefined ? stateKeys : toolStateKeys);
+  if (capture === undefined)
+    return { kind: 'ready', state: copyJson(state, budget, true) as typeof state };
+  const list = readOwnList(state.history, MAX_HISTORY_ENTRIES);
+  if (list === undefined) return { kind: 'tool-results' };
+  if (list.unread > 0) return { kind: 'budget' };
+
+  let remaining = budget;
+  const historyResults: AccountHistoryResult[] = [];
+  const history = [...list.entries];
+  for (let index = 0; index < history.length; index++) {
+    const message = history[index];
+    if (ownValue(message, 'role') !== 'tool') continue;
+    if (
+      message === null ||
+      typeof message !== 'object' ||
+      typeof readCallOccurrenceKey(message) !== 'string' ||
+      ownValue(message, 'toolResultDisposition') === 'rewritten'
+    )
+      return { kind: 'tool-results' };
+    const result = capture.captureHistory(
+      toolBytesOf({
+        content: ownValue(message, 'content'),
+        toolChars: ownValue(message, 'toolChars'),
+      }),
+    );
+    if (result.kind !== 'ready') return result;
+    const row = copyJson({ index, shape: result.shape }, remaining, true) as AccountHistoryResult;
+    remaining -= 1 + jsonBytes(row);
+    if (remaining <= 0) return { kind: 'budget' };
+    historyResults.push(row);
+    history[index] = pick(message, toolMessageKeys);
+  }
+  state.history = history;
+  return {
+    kind: 'ready',
+    state: copyJson(state, remaining, true) as typeof state,
+    ...(historyResults.length > 0 && { historyResults: Object.freeze(historyResults) }),
+  };
 }
 
 /** Until their fact inputs are projected, these events prevent a complete account. */
@@ -93,7 +178,8 @@ export function requiresMoreEvidence(type: string): boolean {
     type.startsWith('agentfootprint.permission.') ||
     type.startsWith('agentfootprint.checkin.') ||
     type.startsWith('agentfootprint.artifacts.') ||
-    type.startsWith('agentfootprint.tools.')
+    (type.startsWith('agentfootprint.tools.') && type !== 'agentfootprint.tools.offered') ||
+    type === 'agentfootprint.validation.args_invalid'
   );
 }
 

@@ -42,6 +42,7 @@ import {
   type HistoryCall,
 } from '../../core/agent/recordedCalls.js';
 import { strip } from '../../semantics/coverage/read.js';
+import { readResultShape } from '../../semantics/resultShape.js';
 import { deliveredDeclarationDoor } from '../../core/agent/emptiness.js';
 import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
@@ -374,18 +375,20 @@ function readOne(
   // there — `view.ts` · `keptOut`) is not judged: whether it was empty cannot be
   // read, and the account says why instead of reading the placeholder.
   const resultKeptOut = judged && resultIsKeptOut(end);
+  const evidence = end === undefined ? undefined : ctx.view.toolEventShape?.(end.index);
+  const rowsAt = rowsAtOf(ctx.declarations, toolName);
   const emptiness: EmptinessReading = resultKeptOut
     ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
     : judged
-    ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
-        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
-        ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
-          rowsAt: rowsAtOf(ctx.declarations, toolName),
-        }),
-        // A served record's rows key holding the placeholder is kept out, never "no list".
-        ...(ctx.view.servedUnderPolicy && { keptOut: isKeptOut }),
-        ...(declarationDoor !== undefined && { door: declarationDoor }),
-      })
+    ? evidence !== undefined
+      ? readResultShape(evidence, rowsAt)
+      : readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
+          placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
+          ...(rowsAt !== undefined && { rowsAt }),
+          // A served record's rows key holding the placeholder is kept out, never "no list".
+          ...(ctx.view.servedUnderPolicy && { keptOut: isKeptOut }),
+          ...(declarationDoor !== undefined && { door: declarationDoor }),
+        })
     : { emptiness: 'unknown', undeclaredShape: false };
   const findings = eventsOf('findings.declared')[0];
   const basis = str(findings?.payload.basis);
@@ -412,7 +415,8 @@ function readOne(
     ...countedFields(emptiness),
     ...(emptiness.described !== undefined && { described: emptiness.described }),
     ...(emptiness.bounded === true && { bounded: true as const }),
-    ...(judged && !resultKeptOut && { view: viewOf(end) }),
+    ...(judged &&
+      !resultKeptOut && { view: evidence === undefined ? viewOf(end) : ('result' as const) }),
     ...(coverage !== undefined && {
       coverage: {
         kind: coverage.kind,

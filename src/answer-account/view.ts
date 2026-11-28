@@ -42,6 +42,7 @@
  * An unredacted recording is read through no guard at all.
  */
 
+import type { ToolResultShape } from '../semantics/resultShape.js';
 import { recordedOmissions } from '../time-travel/selectionWitness.js';
 import { issuedTicketsOf, type IssuedPairs } from '../core/agent/placedTickets.js';
 import { eventBelongsToRun } from '../bridge/eventMeta.js';
@@ -112,7 +113,12 @@ function asViewEvent(event: RawEvent): ViewEvent {
   return view;
 }
 
-export interface RecordingView {
+interface ToolShapeView {
+  toolEventShape?(recordingIndex: number): ToolResultShape | undefined;
+  historyToolShape?(historyIndex: number): ToolResultShape | undefined;
+}
+
+export interface RecordingView extends ToolShapeView {
   /** This run's events, in recording order. */
   readonly events: readonly ViewEvent[];
   /** The run id the filter keyed on (absent when `scope` is `'unfiltered'`). */
@@ -283,7 +289,7 @@ export function recordingView(
 }
 
 /** The evidence the existing fact readers need, regardless of how it was captured. */
-export interface ViewEvidence {
+export interface ViewEvidence extends ToolShapeView {
   readonly events: unknown;
   readonly served: boolean;
   readonly state?: unknown;
@@ -352,6 +358,8 @@ export function viewFromEvidence(
     ...(state !== undefined && { state }),
     stateKeptOut,
     checkOmission: evidence.checkOmission,
+    toolEventShape: evidence.toolEventShape,
+    historyToolShape: evidence.historyToolShape,
     issuedPlacements: issuedTicketsOf(stripped?.placedTickets),
     isStateKeptOut: (key) => {
       noteName(ASKED, stateOwner, key);

@@ -1,5 +1,5 @@
 import type { AgentfootprintEvent } from '../../../events/registry.js';
-import { jsonBytes } from '../../../lib/boundedJson.js';
+import { copyJson, jsonBytes } from '../../../lib/boundedJson.js';
 import { servedUnderPolicy } from '../../../redaction/marker.js';
 import {
   recordRunWhere,
@@ -12,6 +12,7 @@ import type {
   AccountEvidenceGap,
   AccountEventEvidence,
   AnswerAccountEvidence,
+  CaptureToolEvidence,
 } from './evidence.js';
 import { hasAnswerWitnesses, lostObserverEvidence } from './coverage.js';
 import {
@@ -40,11 +41,12 @@ export function recordAnswerAccount(
   maxBytes: number,
   options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
   keep: (event: AgentfootprintEvent) => boolean = () => true,
+  capture?: CaptureToolEvidence,
 ): AnswerAccountRecorder {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= WRAPPER_BYTES || maxBytes > MAX_RAW_BYTES)
     throw new RangeError('Invalid in-memory explanation budget.');
 
-  const events = new Map<number, { event: AccountEventEvidence['event']; bytes: number }>();
+  const events = new Map<number, { row: Omit<AccountEventEvidence, 'index'>; bytes: number }>();
   const gaps = new Set<AccountEvidenceGap>();
   let firstRetainedIndex = 0;
   let bytes = WRAPPER_BYTES;
@@ -79,17 +81,22 @@ export function recordAnswerAccount(
     if (lostObserverEvidence(snapshot?.observerStats)) gaps.add('observer-loss');
     if (ownValue(ownValue(snapshot, 'initialState'), 'history') !== undefined)
       gaps.add('resumed-state');
-    if (containsToolHistory(snapshot)) gaps.add('tool-results');
+    if (capture === undefined && containsToolHistory(snapshot)) gaps.add('tool-results');
     if (gaps.has('no-start') || gaps.has('multiple-runs')) discard();
     const retained = [...events].flatMap(([ordinal, row]) => {
       const index = recordingIndex(ordinal);
-      return index === undefined ? [] : [Object.freeze({ index, event: row.event })];
+      return index === undefined ? [] : [Object.freeze({ index, ...row.row })];
     });
     if (gaps.size === 0 && !hasAnswerWitnesses(retained)) gaps.add('missing-answer-evidence');
     let state: AnswerAccountEvidence['state'];
+    let historyResults: AnswerAccountEvidence['historyResults'];
     if (gaps.size === 0) {
       try {
-        state = projectState(snapshot, maxBytes - bytes);
+        const projected = projectState(snapshot, maxBytes - bytes, capture);
+        if (projected.kind === 'ready') {
+          state = projected.state;
+          historyResults = projected.historyResults;
+        } else gaps.add(projected.kind);
       } catch {
         gaps.add('budget');
       }
@@ -100,6 +107,7 @@ export function recordAnswerAccount(
       firstRetainedIndex: first,
       events: Object.freeze(retained),
       ...(state === undefined ? {} : { state }),
+      ...(historyResults === undefined ? {} : { historyResults }),
     });
     discard();
   };
@@ -134,18 +142,31 @@ export function recordAnswerAccount(
       if (event.type === 'agentfootprint.agent.turn_end') hasTerminalAnswer = true;
       if (gaps.has('budget') || gaps.has('multiple-runs')) return;
       if (
-        event.type === 'agentfootprint.stream.tool_start' ||
-        event.type === 'agentfootprint.stream.tool_end'
+        capture === undefined &&
+        (event.type === 'agentfootprint.stream.tool_start' ||
+          event.type === 'agentfootprint.stream.tool_end')
       )
         gaps.add('tool-results');
       if (event.type === 'agentfootprint.pause.resume') gaps.add('resumed-state');
       else if (requiresMoreEvidence(event.type)) gaps.add('unsupported-evidence');
 
       try {
-        const projected = projectEvent(event, maxBytes - bytes);
-        const rowBytes = 1 + jsonBytes({ index: ordinal, event: projected });
+        const eventEvidence = projectEvent(event, maxBytes - bytes);
+        let toolResult: AccountEventEvidence['toolResult'];
+        if (capture !== undefined && event.type === 'agentfootprint.stream.tool_end') {
+          const result = capture.captureEvent(event.payload as unknown as Record<string, unknown>);
+          if (result.kind === 'ready')
+            toolResult = copyJson(
+              result.shape,
+              maxBytes - bytes,
+              true,
+            ) as AccountEventEvidence['toolResult'];
+          else gaps.add(result.kind);
+        }
+        const row = { event: eventEvidence, ...(toolResult === undefined ? {} : { toolResult }) };
+        const rowBytes = 1 + jsonBytes({ index: ordinal, ...row });
         if (bytes + rowBytes > maxBytes) throw new RangeError('Explanation event budget reached.');
-        events.set(ordinal, { event: projected, bytes: rowBytes });
+        events.set(ordinal, { row, bytes: rowBytes });
         bytes += rowBytes;
         peakRetainedEventBytes = Math.max(peakRetainedEventBytes, bytes - WRAPPER_BYTES);
       } catch {

@@ -1,3 +1,4 @@
+import type { ToolResultShape } from '../../../../semantics/resultShape.js';
 import { issuedTicketsOf } from '../../placedTickets.js';
 import { retentionRefusalsOf } from '../../../../time/retentionRefusals.js';
 import type { ArgumentRowRead } from '../argumentRows.js';
@@ -63,6 +64,7 @@ export function readResultEvidence(
   declarations: AssessmentDeclarations | undefined,
   enteredArguments: readonly ArgumentRowRead[],
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  resultShapeAt?: (historyIndex: number) => ToolResultShape | undefined,
 ): void {
   if (admission.settlements === undefined) {
     readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
@@ -84,6 +86,7 @@ export function readResultEvidence(
     resultOpportunities,
     g,
     admission.settlements === undefined,
+    resultShapeAt,
   );
   readPeriodVerdicts(
     periodRows(state, (row) => callIndexOf(row, resolveCurrent), admission.declaredResult),

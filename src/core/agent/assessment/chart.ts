@@ -1,3 +1,4 @@
+import type { ToolResultShape } from '../../../semantics/resultShape.js';
 import type { OmissionCheck } from '../honesty/sourceOmission.js';
 import { readAnswerRows } from './answer/stage.js';
 import { readSourceConsultation } from './choose/sourceConsultation.js';
@@ -22,6 +23,7 @@ export function foldState(
   legacyEvents?: unknown,
   retain: RetainedReasonState = (_key, value) => value,
   checkOmission?: OmissionCheck,
+  resultShapeAt?: (historyIndex: number) => ToolResultShape | undefined,
 ): AnswerAssessment {
   const prepared = prepareWarning(recorded, served, declarationAddresses, legacyEvents);
   readInitialResults(prepared);
@@ -32,7 +34,7 @@ export function foldState(
   const enteredArguments = readInputs(state, argumentVerdicts, resolveCurrent, admission, g);
   readResultsCoverage(gathered);
   readContingentRows(state, places, g);
-  readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
+  readResultEvidence(gathered, declarations, enteredArguments, retainedHistory, resultShapeAt);
   readAnswerRows(state, g, served, retain);
   const integrity = readIntegrityFindings(state, g);
   const consultation =
