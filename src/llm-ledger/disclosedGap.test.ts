@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { entryFault } from './entries.js';
 import { fileLedgerStore } from './fileStore.js';
 import { createLedger } from './ledger.js';
+import { LEDGER_LIMITS } from './limits.js';
 import { memoryLedgerStore } from './memoryStore.js';
 import type { LedgerServed } from './serve.js';
 import type { LedgerEntry } from './types.js';
@@ -241,4 +242,83 @@ it('rejects stored gap standing before checking a report', async () => {
       store: 'malformed',
     });
   }
+});
+
+it('rechecks the persisted opt-in when a note append retries after conflict', async () => {
+  const store = memoryLedgerStore();
+  const host = createLedger({ store, clock: () => at }).host;
+  const session = accepted(await host.open({ disclosedGaps: true })).session as string;
+  const first = (await store.load(session)).entries[0];
+  if (first?.kind !== 'opened') throw new Error('Fixture was not opened.');
+  const { disclosedGaps, ...legacy } = first;
+  expect(disclosedGaps).toBe(true);
+  let attempts = 0;
+  const agent = createLedger({
+    store: {
+      load: async () => ({ seq: 1, entries: [attempts === 0 ? first : legacy] }),
+      append: async () => {
+        attempts++;
+        return 'conflict';
+      },
+    },
+    clock: () => at,
+  }).agentFor(session);
+  expect(await agent.note({ ...gap, cites: [] })).toMatchObject({
+    ok: false,
+    refused: 'bad-input',
+  });
+  expect(attempts).toBe(1);
+});
+
+it('serves equal redacted gap reports for equal visible shapes', async () => {
+  async function reportFor(token: string) {
+    const ledger = createLedger({
+      store: memoryLedgerStore(),
+      clock: () => at,
+      redaction: { keys: ['secret'] },
+    });
+    const session = accepted(await ledger.host.open({ disclosedGaps: true })).session as string;
+    await ledger.host.record(session, { source: 'fixture', text: token, window: observed });
+    const agent = ledger.agentFor(session);
+    const text = 'Collector gap for ' + token;
+    const note = accepted(await agent.note({ ...gap, text, cites: [2] })).note;
+    const report = accepted(await agent.submit({ draft: 'Collector gap', claims: [note] })).report;
+    expect(JSON.stringify(report)).not.toContain(token);
+    return report;
+  }
+
+  const first = await reportFor('secret-1234');
+  const second = await reportFor('secret-5678');
+  expect(first).toEqual(second);
+});
+
+it('checks a gap at the existing citation and value caps without joining windows', async () => {
+  const ledger = createLedger({ store: memoryLedgerStore(), clock: () => at });
+  const session = accepted(await ledger.host.open({ disclosedGaps: true, askRunsRules: true }))
+    .session as string;
+  const cites: LedgerServed[] = [];
+  for (let i = 0; i < LEDGER_LIMITS.maxCites; i++) {
+    const receipt = accepted(
+      await ledger.host.record(session, {
+        source: 'fixture',
+        text: 'port-1234',
+        window: observed,
+      }),
+    );
+    cites.push(receipt.receipt);
+  }
+  const values = Array.from({ length: LEDGER_LIMITS.maxValues }, () => 'port-1234');
+  const agent = ledger.agentFor(session);
+  const note = accepted(await agent.note({ ...gap, cites, values })).note;
+  expect(await agent.ask()).toMatchObject({
+    report: {
+      claims: [
+        {
+          note,
+          verdict: 'open',
+          checks: [{ rule: 'cited@1', restsOn: cites }, { rule: 'traceable-values@2' }],
+        },
+      ],
+    },
+  });
 });
