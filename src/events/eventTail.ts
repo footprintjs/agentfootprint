@@ -115,7 +115,14 @@ export interface EventTail {
  *                  Non-finite or non-positive values fall back to the default
  *                  rather than producing a tail that keeps nothing.
  */
-export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
+export function eventTail(
+  maxEvents: number = DEFAULT_MAX_EVENTS,
+  onAppend?: (
+    retained: AgentfootprintEvent,
+    acceptedIndex: number,
+    firstRetainedIndex: number,
+  ) => void,
+): EventTail {
   const cap =
     Number.isFinite(maxEvents) && maxEvents > 0 ? Math.floor(maxEvents) : DEFAULT_MAX_EVENTS;
   // Slots and repeats together — the memory bound (see the module header).
@@ -144,12 +151,11 @@ export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
   return {
     push: (event) => {
       const original = event.type === ANNOUNCEMENT ? announcements.find(event.payload) : undefined;
-      if (original !== undefined) {
-        events.push({ ...event, payload: original } as AgentfootprintEvent);
-        slot.push(false);
-      } else {
-        events.push(event);
-        slot.push(true);
+      const retained =
+        original === undefined ? event : ({ ...event, payload: original } as AgentfootprintEvent);
+      events.push(retained);
+      slot.push(original === undefined);
+      if (original === undefined) {
         held += 1;
         if (event.type === ANNOUNCEMENT) announcements.hold(event.payload);
       }
@@ -159,6 +165,7 @@ export function eventTail(maxEvents: number = DEFAULT_MAX_EVENTS): EventTail {
         slot.splice(0, start);
         start = 0;
       }
+      onAppend?.(retained, dropped + events.length - start - 1, dropped);
     },
     get count() {
       return events.length - start;

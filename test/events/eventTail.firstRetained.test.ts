@@ -50,3 +50,31 @@ describe('unit: the retained window is a stated range', () => {
     expect(snap.firstRetainedIndex + snap.events.length).toBe(10);
   });
 });
+
+it('reports retained envelopes and absolute positions after sharing and eviction', () => {
+  const observed: { event: AgentfootprintEvent; index: number; first: number }[] = [];
+  const tail = eventTail(2, (event, index, first) => observed.push({ event, index, first }));
+  const announcement = (index: number) =>
+    ({
+      type: 'agentfootprint.context.injected',
+      payload: { slot: 'system', contentHash: 'one', rawContent: 'shared' },
+      meta: { runId: 'r', runtimeStageId: `s#${index}`, timestamp: index },
+    } as AgentfootprintEvent);
+  const original = announcement(1);
+  const repeat = announcement(2);
+  tail.push(original);
+  tail.push(repeat);
+  tail.push(ev(3));
+  tail.push(ev(4));
+
+  expect(observed.map(({ index, first }) => [index, first])).toEqual([
+    [0, 0],
+    [1, 0],
+    [2, 0],
+    [3, 1],
+  ]);
+  expect(observed[0]?.event).toBe(original);
+  expect(observed[1]?.event.meta).toBe(repeat.meta);
+  expect(observed[1]?.event.payload).toBe(original.payload);
+  expect(observed.slice(1).map(({ event }) => event)).toEqual(tail.snapshot().events);
+});

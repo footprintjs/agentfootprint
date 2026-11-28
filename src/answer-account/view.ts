@@ -214,11 +214,13 @@ function withoutPlaceholders(record: Record<string, unknown>): Record<string, un
 function narrow(
   events: unknown,
   served: boolean,
+  recordingIndex: (offset: number) => number,
 ): { readonly raw: RawEvent[]; readonly unread: number } {
   const raw: RawEvent[] = [];
   let unread = 0;
   if (!Array.isArray(events)) return { raw, unread };
-  events.forEach((event: unknown, index) => {
+  events.forEach((event: unknown, offset) => {
+    const index = recordingIndex(offset);
     if (!isRecord(event) || typeof event.type !== 'string') {
       unread += 1;
       return;
@@ -268,9 +270,37 @@ export function recordingView(
   options: { readonly runId?: string } = {},
 ): RecordingView {
   const snapshot = isRecord(recording.snapshot) ? recording.snapshot : undefined;
-  // A placeholder is KEPT OUT only in a record a policy covered — the snapshot says so.
-  const served = servedUnderPolicy(snapshot);
-  const { raw, unread } = narrow(recording.events, served);
+  return viewFromEvidence(
+    {
+      events: recording.events,
+      served: servedUnderPolicy(snapshot),
+      state: snapshot?.sharedState,
+      initialState: snapshot?.initialState,
+      checkOmission: recordedOmissions(snapshot),
+    },
+    options,
+  );
+}
+
+/** The evidence the existing fact readers need, regardless of how it was captured. */
+export interface ViewEvidence {
+  readonly events: unknown;
+  readonly served: boolean;
+  readonly state?: unknown;
+  readonly initialState?: unknown;
+  readonly checkOmission?: ReturnType<typeof recordedOmissions>;
+  readonly recordingIndex?: (keptOffset: number) => number;
+}
+
+const atOffset = (offset: number): number => offset;
+
+export function viewFromEvidence(
+  evidence: ViewEvidence,
+  options: { readonly runId?: string } = {},
+): RecordingView {
+  // The recording, or its trusted in-memory projection, owns the policy marker and positions.
+  const { served } = evidence;
+  const { raw, unread } = narrow(evidence.events, served, evidence.recordingIndex ?? atOffset);
   const runId = chooseRunId(raw, options.runId);
   const sessionId =
     runId === undefined
@@ -299,7 +329,7 @@ export function recordingView(
   }
   const full = (type: string): string => (type.startsWith(PREFIX) ? type : `${PREFIX}${type}`);
   const ofType = (type: string): readonly ViewEvent[] => byType.get(full(type)) ?? [];
-  const recorded = snapshot && isRecord(snapshot.sharedState) ? snapshot.sharedState : undefined;
+  const recorded = isRecord(evidence.state) ? evidence.state : undefined;
   const stateKeptOut = recorded !== undefined && served ? placeholderFields(recorded) : [];
   // The state's guard is noted on this object (`TOUCHED` / `ASKED`), as an event's is on the event.
   const stateOwner = {};
@@ -309,7 +339,7 @@ export function recordingView(
     stripped !== undefined && stateKeptOut.length > 0
       ? guarded(stateOwner, stripped, (key) => stateKeptOut.includes(key))
       : stripped;
-  const initial = snapshot && isRecord(snapshot.initialState) ? snapshot.initialState : undefined;
+  const initial = isRecord(evidence.initialState) ? evidence.initialState : undefined;
   const pausedWith = initial !== undefined && Array.isArray(initial.history) ? initial : undefined;
   return {
     events: own,
@@ -321,7 +351,7 @@ export function recordingView(
     servedUnderPolicy: served,
     ...(state !== undefined && { state }),
     stateKeptOut,
-    checkOmission: recordedOmissions(snapshot),
+    checkOmission: evidence.checkOmission,
     issuedPlacements: issuedTicketsOf(stripped?.placedTickets),
     isStateKeptOut: (key) => {
       noteName(ASKED, stateOwner, key);

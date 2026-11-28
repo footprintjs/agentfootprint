@@ -59,6 +59,8 @@
  * engine attachment. Its bundle is overlaid only when exporting a recording.
  */
 
+import type { CombinedRecorder } from 'footprintjs';
+
 import type { Runner } from '../../core/runner.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
@@ -240,6 +242,23 @@ function disposeSubscriptions(
   if (firstFailure) throw firstFailure.error;
 }
 
+/** The existing recording boundary used by the optional internal observers. */
+export type RecordableRunner = Pick<
+  Runner,
+  'attach' | 'on' | 'getCommitCount' | 'getLastSnapshot' | 'getSpec'
+>;
+
+/** Internal observer of the already admitted native recording. */
+export interface RecordingObservation {
+  readonly native: CombinedRecorder;
+  accepted(event: AgentfootprintEvent, ordinal: number, firstRetainedIndex: number): void;
+  seal(
+    snapshot: unknown,
+    firstRetainedIndex: number,
+    recordingIndex: (ordinal: number) => number | undefined,
+  ): void;
+}
+
 /**
  * {@link recordRun} with a timeline that keeps only the events `keep` admits —
  * the Agent's own per-run recording (`artifacts: { recordings: true }`) passes
@@ -253,11 +272,12 @@ function disposeSubscriptions(
  * narrow the events its caller-supplied trust recorder receives.
  */
 export function recordRunWhere(
-  runner: Runner,
+  runner: RecordableRunner,
   keep: (event: AgentfootprintEvent) => boolean,
   options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
   trust?: TrustBoundaryRecorder,
   keepTrust?: (event: AgentfootprintEvent) => boolean,
+  observation?: RecordingObservation,
 ): RunRecorder {
   const subscriptions: Unsubscribe[] = [];
   try {
@@ -280,7 +300,11 @@ export function recordRunWhere(
     //    (cap + drop count) is the shared `eventTail` helper, so a
     //    recording and the self-explaining agent's evidence keep the same
     //    amount and report a shortfall the same way.
-    const tail = eventTail(options.maxEvents ?? DEFAULT_MAX_EVENTS);
+    const tail = eventTail(
+      options.maxEvents ?? DEFAULT_MAX_EVENTS,
+      observation && ((event, ordinal, first) => observation.accepted(event, ordinal, first)),
+    );
+    if (observation) subscriptions.push(runner.attach(observation.native));
     const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
       if (keep(event)) {
         tail.push(event);
@@ -368,6 +392,13 @@ export function recordRunWhere(
         let failure: { readonly error: unknown } | undefined;
         try {
           stoppedSnapshot = runner.getLastSnapshot({ contextShapes: false });
+          if (observation) {
+            const first = tail.firstRetainedIndex;
+            const afterLast = first + tail.count;
+            observation.seal(stoppedSnapshot, first, (ordinal) =>
+              ordinal >= first && ordinal < afterLast ? ordinal - first : undefined,
+            );
+          }
         } catch (error) {
           failure = { error };
         }

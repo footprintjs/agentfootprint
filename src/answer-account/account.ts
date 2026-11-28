@@ -26,7 +26,6 @@ import type {
   AnswerAccountDeclarations,
   Chip,
   AccountFact,
-  BeforePauseFact,
   FactStatus,
   LimitsDataFact,
   RecordPointer,
@@ -48,9 +47,7 @@ import {
 } from './view.js';
 import {
   at,
-  countedFields,
   derived,
-  FACT_TEXT_CHARS,
   makeSay,
   stateAt,
   type AccountInternals,
@@ -62,8 +59,9 @@ import { MAX_CALLS, readCalls } from './facts/calls.js';
 import { errorCounts, NO_ERRORS } from './facts/errorCounts.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readCheckedRows } from './facts/checked.js';
-import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
-import { beforePausePointers, readFoundRow } from './facts/found.js';
+import { readPausedLeg } from './facts/pausedLeg.js';
+import { beforePauseFact } from './facts/beforePauseFact.js';
+import { readFoundRow } from './facts/found.js';
 import { readHowSure } from './facts/howSure.js';
 import { appendedStandingLine } from './facts/standing.js';
 import { runChecks, summaryOf, wrongLines } from './signals.js';
@@ -499,31 +497,6 @@ function notToldAccount(
   };
 }
 
-/** One call answered before the pause, as the facts list it (read from the committed state). */
-function beforePauseFact(c: BeforePauseCall): BeforePauseFact {
-  const reading = c.reading;
-  const coverage = c.coverage;
-  return {
-    toolName: c.toolName.slice(0, FACT_TEXT_CHARS),
-    toolCallId: c.toolCallId.slice(0, FACT_TEXT_CHARS),
-    emptiness: reading.emptiness,
-    ...countedFields(reading),
-    ...(coverage !== undefined && {
-      coverage: {
-        kind: coverage.kind,
-        ...(coverage.lookedFor !== undefined && {
-          lookedFor: coverage.lookedFor.text.slice(0, FACT_TEXT_CHARS),
-        }),
-        checked: coverage.items.filter((i) => i.section === 'checked').length,
-        notChecked: coverage.items.filter((i) => i.section === 'notChecked').length,
-        cannotCover: coverage.items.filter((i) => i.section === 'cannotCover').length,
-        kinds: coverage.items.filter((i) => i.kind !== undefined).length,
-      },
-    }),
-    pointers: beforePausePointers(c),
-  };
-}
-
 /** @internal — the account with test hooks (`failTemplate`). The public door is `accountForAnswer`. */
 export function buildAccount(
   recording: unknown,
@@ -537,7 +510,19 @@ export function buildAccount(
     );
   }
   const decl = validateDeclarations(declarations);
-  const view = recordingView(recording as { events?: unknown; snapshot?: unknown }, options);
+  return buildAccountFromView(
+    recordingView(recording as { events?: unknown; snapshot?: unknown }, options),
+    decl,
+    internals,
+  );
+}
+
+/** Shared account interpretation after its evidence and declarations have been admitted. */
+export function buildAccountFromView(
+  view: RecordingView,
+  decl: ReturnType<typeof validateDeclarations>,
+  internals?: AccountInternals,
+): AnswerAccount {
   let unread = view.unread;
   const say = makeSay(internals, () => {
     unread += 1;
