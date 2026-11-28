@@ -4,6 +4,7 @@ import { copyJson, jsonBytes, readOwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import type { AccountHistoryResult, CaptureToolEvidence } from './evidence.js';
+import { isInitialRoutingEvent, projectInitialRouting } from './routingEvidence.js';
 
 type EventEvidence = import('./evidence.js').AccountEventEvidence['event'];
 
@@ -27,6 +28,7 @@ const leaves: Readonly<Partial<Record<string, readonly string[]>>> = Object.free
   'agentfootprint.context.slot_composed': ['slot', 'iteration', 'sourceBreakdown'],
   'agentfootprint.context.injected': [
     'slot',
+    'asRole',
     'source',
     'sourceId',
     'callOccurrenceKey',
@@ -109,7 +111,8 @@ export function projectEvent(event: AgentfootprintEvent, budget: number): EventE
     {
       type: event.type,
       meta: pick(event.meta, ['runId', 'sessionId', 'runtimeStageId', 'sourcePosition']),
-      payload: pick(event.payload, fields ?? []),
+      payload:
+        projectInitialRouting(event.type, event.payload) ?? pick(event.payload, fields ?? []),
     },
     budget,
     true,
@@ -172,7 +175,7 @@ export function projectState(
 /** Until their fact inputs are projected, these events prevent a complete account. */
 export function requiresMoreEvidence(type: string): boolean {
   return (
-    type.startsWith('agentfootprint.skill.') ||
+    (type.startsWith('agentfootprint.skill.') && !isInitialRoutingEvent(type)) ||
     type.startsWith('agentfootprint.middleware.') ||
     type.startsWith('agentfootprint.findings.') ||
     type.startsWith('agentfootprint.permission.') ||

@@ -22,6 +22,7 @@ import {
   projectState,
   requiresMoreEvidence,
 } from './project.js';
+import { hasInitialRoutingWitnesses } from './routingEvidence.js';
 
 const WRAPPER_BYTES = 512;
 /** Testable limit for the internal collector, separate from production filing and response budgets. */
@@ -88,6 +89,8 @@ export function recordAnswerAccount(
       return index === undefined ? [] : [Object.freeze({ index, ...row.row })];
     });
     if (gaps.size === 0 && !hasAnswerWitnesses(retained)) gaps.add('missing-answer-evidence');
+    if (gaps.size === 0 && !hasInitialRoutingWitnesses(retained))
+      gaps.add('missing-routing-evidence');
     let state: AnswerAccountEvidence['state'];
     let historyResults: AnswerAccountEvidence['historyResults'];
     if (gaps.size === 0) {

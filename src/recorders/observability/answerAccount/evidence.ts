@@ -29,6 +29,7 @@ export type AccountEvidenceGap =
   | 'retained-events-dropped'
   | 'observer-loss'
   | 'missing-answer-evidence'
+  | 'missing-routing-evidence'
   | 'redaction'
   | 'tool-results'
   | 'tool-result-key-limit'
