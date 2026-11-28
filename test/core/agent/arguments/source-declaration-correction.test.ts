@@ -233,7 +233,7 @@ describe('failure-first: native source declaration correction is an explicit inp
     ]);
     try {
       expect(await f.agent.run({ message: QUESTION })).toBe(
-        'Done.\n\n---\n\nNot sure — a call was refused.',
+        'Done.\n\n---\n\nNot sure — calls were refused.',
       );
       expect(f.atRequest).toEqual([0, 0, 2]);
       expect(f.executions.map((entry) => entry.tool)).toEqual(['write_synthetic_marker', TOOL]);
